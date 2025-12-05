@@ -427,6 +427,11 @@ namespace osu.Game.Tournament.Components
                 mods = LegacyMods.FreeMod;
             }
 
+            if (roundBeatmap.Mods == "TB")
+            {
+                return "TB";
+            }
+
             var typeArray = Ladder.CurrentMatch.Value!.Round.Value.Beatmaps.Where(b => b.MapType == roundBeatmap.MapType).ToArray();
 
             if (typeArray.Length == 1)
