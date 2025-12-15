@@ -14,7 +14,6 @@ using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Online.API;
 using osu.Game.Overlays;
 using osu.Game.Rulesets;
-using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.IPC.MemoryIPC;
 using osuTK;
 
@@ -26,9 +25,6 @@ namespace osu.Game.Tournament.Screens.Setup
 
         private LoginOverlay? loginOverlay;
         private ResolutionSelector resolution = null!;
-
-        [Resolved]
-        private MatchIPCInfo ipc { get; set; } = null!;
 
         [Resolved]
         private IAPIProvider api { get; set; } = null!;
@@ -68,22 +64,26 @@ namespace osu.Game.Tournament.Screens.Setup
             };
 
             api.LocalUser.BindValueChanged(_ => Schedule(reload));
-            var memoryBasedIPC = ipc as MemoryBasedIPC;
+            var memoryBasedIPC = IPC as MemoryBasedIPC;
             memoryBasedIPC?.Available.BindValueChanged(_ => Schedule(reload));
             reload();
         }
 
         private void reload()
         {
-            var memoryBasedIPC = ipc as MemoryBasedIPC;
+            var memoryBasedIPC = IPC as MemoryBasedIPC;
             fillFlow.Children = new Drawable[]
             {
                 new ActionableInfo
                 {
                     Label = "内存读取状态",
-                    Value = memoryBasedIPC?.Available.Value == true ? "已连接" : "未启动tourney或正在初始化",
+                    Value = memoryBasedIPC?.Available.Value == true ? "已连接，如果你确信数据有误可以点击重置刷新" : "未启动tourney或正在初始化",
                     Failing = memoryBasedIPC?.Available.Value != true,
-                    HideButton = true
+                    ButtonText = "重置",
+                    Action = () =>
+                    {
+                        memoryBasedIPC?.Reset();
+                    }
                 },
                 new ActionableInfo
                 {

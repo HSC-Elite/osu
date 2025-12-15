@@ -47,8 +47,8 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             MaxValue = 4,
         };
 
-        private readonly StableMemoryReader[] readers;
-        private readonly TourneyManagerMemoryReader tourneyManagerMemoryReader;
+        private StableMemoryReader[] readers;
+        private TourneyManagerMemoryReader tourneyManagerMemoryReader;
 
         public MemoryBasedIPC()
         {
@@ -74,6 +74,19 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
         private const int update_hz = 5;
         private double lastUpdateTime;
+
+        public void Reset()
+        {
+            foreach (var reader in readers)
+            {
+                reader.Dispose();
+            }
+
+            readers = Enumerable.Range(0, 8).Select(i => new StableMemoryReader()).ToArray();
+
+            tourneyManagerMemoryReader.Dispose();
+            tourneyManagerMemoryReader = new TourneyManagerMemoryReader();
+        }
 
         private void updateTourneyData()
         {
@@ -123,7 +136,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                 }
 
                 ChatChannel.Value = (int)reader.GetChannelId();
-                updateMessageList(reader.GetTourneyChat() ?? new List<Message>());
+                updateMessageList(reader.GetTourneyChat(TourneyChatChannel.Value.Messages.Count) ?? new List<Message>());
             }
             catch (InvalidOperationException)
             {
@@ -139,14 +152,26 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
         private void updateMessageList(List<Message> tourneyChatItems)
         {
+            var takenChat = tourneyChatItems.TakeLast(Channel.MAX_HISTORY).ToArray();
+
             var channel = TourneyChatChannel.Value;
 
-            var toRemove = channel.Messages.Except(tourneyChatItems).ToList();
+            var toRemove = channel.Messages.Except(takenChat).ToArray();
             foreach (var item in toRemove)
                 channel.Messages.Remove(item);
 
-            var toAdd = tourneyChatItems.Except(channel.Messages).ToArray();
+            if (toRemove.Length > 0)
+            {
+                Logger.Log($"memory: deleted {toRemove.Length} message items");
+            }
+
+            var toAdd = takenChat.Except(channel.Messages).ToArray();
             channel.AddNewMessages(toAdd);
+
+            if (toAdd.Length > 0)
+            {
+                Logger.Log($"memory: add {toAdd.Length} message items");
+            }
         }
 
         protected override void Update()
@@ -168,6 +193,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                     break;
 
                 case AttachStatus.Initializing:
+                    available.Value = false;
                     break;
 
                 case AttachStatus.Attached:

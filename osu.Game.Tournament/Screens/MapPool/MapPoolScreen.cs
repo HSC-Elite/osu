@@ -461,7 +461,7 @@ namespace osu.Game.Tournament.Screens.MapPool
                         totalRows++;
                         flowCount = 1;
 
-                        if (g[b.MapType] % 3 == 1)
+                        if (g[b.MapType] % 3 == 1 && g[b.MapType] < 10)
                         {
                             mapFlows.Add(currentFlow = new FillFlowContainer
                             {

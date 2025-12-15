@@ -12,7 +12,6 @@ using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Primitives;
 using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Sprites;
-using osu.Framework.Graphics.Textures;
 using osu.Framework.Localisation;
 using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.Legacy;
@@ -96,9 +95,6 @@ namespace osu.Game.Tournament.Components
 
         // Todo: This is a hack for https://github.com/ppy/osu-framework/issues/3617 since this container is at the very edge of the screen and potentially initially masked away.
         protected override bool ComputeIsMaskedAway(RectangleF maskingBounds) => false;
-
-        [Resolved]
-        private TextureStore store { get; set; } = null!;
 
         [BackgroundDependencyLoader]
         private void load()
@@ -427,12 +423,14 @@ namespace osu.Game.Tournament.Components
                 mods = LegacyMods.FreeMod;
             }
 
-            if (roundBeatmap.Mods == "TB")
+            var modArray = Ladder.CurrentMatch.Value!.Round.Value!.Beatmaps.Where(b => b.Mods == roundBeatmap.Mods).ToArray();
+
+            if (modArray.Length == 1)
             {
                 return "TB";
             }
 
-            var typeArray = Ladder.CurrentMatch.Value!.Round.Value.Beatmaps.Where(b => b.MapType == roundBeatmap.MapType).ToArray();
+            var typeArray = Ladder.CurrentMatch.Value!.Round.Value!.Beatmaps.Where(b => b.MapType == roundBeatmap.MapType).ToArray();
 
             if (typeArray.Length == 1)
             {
@@ -571,15 +569,18 @@ namespace osu.Game.Tournament.Components
                     }
                 };
 
-                return new[]
+                return new (Drawable heading, Drawable content)[]
                 {
-                    (createText("星级", true) as Drawable, createText($"{sr:0.00}", false) as Drawable),
-                    (createText("谱面位置", true) as Drawable, modSection as Drawable),
+                    (createText("星级", true), createText($"{sr:0.00}", false)),
+                    (createText("谱面位置", true), modSection),
                 };
             }
 
             TournamentSpriteText createText(string text, bool bold) => new TournamentSpriteText
-                { Text = text, Font = OsuFont.Torus.With(weight: bold ? FontWeight.Bold : FontWeight.Regular, size: 15) };
+            {
+                Text = text,
+                Font = OsuFont.Torus.With(weight: bold ? FontWeight.Bold : FontWeight.Regular, size: 15)
+            };
         }
 
         public partial class DiffPiece : FillFlowContainer
