@@ -34,7 +34,6 @@ jobs:
       matrix:
         os:
           - { prettyname: Windows, fullname: windows-latest }
-          - { prettyname: Linux, fullname: ubuntu-latest }
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -48,22 +47,17 @@ jobs:
           repository: shanden-tournament/osu-framework
           path: osu-framework
           ref: shanden-custom
-
-      - name: Update version number (Linux)
-        if: ${{ matrix.os.fullname == 'ubuntu-latest' }}
-        run: |
-          chmod +x ./SetProjectVersion.sh
-          ./SetProjectVersion.sh ${{ inputs.version }}
-
-      - name: Update version number (Windows)
-        if: ${{ matrix.os.fullname == 'windows-latest' }}
-        run: pwsh -ExecutionPolicy Bypass -File ./SetProjectVersion.ps1 ${{ inputs.version }}
+      
+      - name: Install .NET 8.0.x
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
 
       - name: Compile
-        run: dotnet build -c ${{inputs.profile}} osu.Desktop.slnf
+        run: dotnet publish -f net8.0-windows -r win-x64 -c ${{inputs.profile}} -o ${{ github.workspace }}/osu/Release /p:Version=${{ inputs.version }} ${{ github.workspace }}/osu/osu.Desktop/osu.Desktop.csproj
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: osu-build-${{inputs.profile}}-${{inputs.version}}@${{matrix.os.fullname}}
-          path: ./osu.Desktop/bin/${{ inputs.profile }}/*
+          path: ${{ github.workspace }}/osu/Release/**
