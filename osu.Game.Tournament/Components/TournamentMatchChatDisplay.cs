@@ -65,6 +65,15 @@ namespace osu.Game.Tournament.Components
             Logger.Log($"Join Channel {Channel.Value}");
         }
 
+        public bool PostMessage(string message)
+        {
+            if (Channel.Value == null)
+                return false;
+
+            manager.PostMessage(message.Trim(), target: Channel.Value);
+            return true;
+        }
+
         public void Expand() => this.FadeIn(300);
 
         public void Contract() => this.FadeOut(200);
