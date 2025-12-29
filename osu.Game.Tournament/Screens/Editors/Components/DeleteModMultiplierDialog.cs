@@ -3,15 +3,14 @@
 
 using System;
 using osu.Game.Overlays.Dialog;
-using osu.Game.Tournament.Models;
 
 namespace osu.Game.Tournament.Screens.Editors.Components
 {
-    public partial class DeleteModColorDialog : DeletionDialog
+    public partial class DeleteModMultiplierDialog : DeletionDialog
     {
-        public DeleteModColorDialog(ModColor color, Action action)
+        public DeleteModMultiplierDialog(Action action)
         {
-            HeaderText = color.ModName.Length > 0 ? $@"Delete mod ""{color.ModName}"" color?" : @"Delete unnamed mod color?";
+            HeaderText = @"Delete mod multiplier?";
             DangerousAction = action;
         }
     }

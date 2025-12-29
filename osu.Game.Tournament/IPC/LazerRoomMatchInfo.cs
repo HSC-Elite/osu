@@ -16,6 +16,7 @@ using osu.Game.Database;
 using osu.Game.Online.Multiplayer;
 using osu.Game.Online.Rooms;
 using osu.Game.Rulesets;
+using osu.Game.Rulesets.Mods;
 using osu.Game.Screens.OnlinePlay;
 using osu.Game.Screens.OnlinePlay.Multiplayer;
 using osu.Game.Screens.Select.Leaderboards;
@@ -158,6 +159,8 @@ namespace osu.Game.Tournament.IPC
         private void onLoadRequested()
         {
             leaderboardProvider = null;
+            userModsCache.Clear();
+            teamIdsCache.Clear();
 
             Scheduler.AddOnce(() =>
             {
@@ -374,15 +377,51 @@ namespace osu.Game.Tournament.IPC
             return leaderboardProvider!.Scores.Where(u => teamIds.Any(t => t == u.User.OnlineID));
         }
 
+        private Dictionary<TeamColour, int[]> teamIdsCache = new Dictionary<TeamColour, int[]>();
+
         protected int[] GetTeamIds(TeamColour colour)
         {
-            return Ladder.CurrentMatch.Value?.GetTeamByColor(colour)?.Players.Select(p => p.OnlineID).ToArray() ??
-                   Array.Empty<int>();
+            if (teamIdsCache.TryGetValue(colour, out int[]? ids))
+            {
+                return ids;
+            }
+
+            return teamIdsCache[colour] = Ladder.CurrentMatch.Value?.GetTeamByColor(colour)?.Players.Select(p => p.OnlineID).ToArray() ??
+                                          Array.Empty<int>();
         }
 
-        protected long CalculateModMultiplier(GameplayLeaderboardScore s)
+        private readonly Dictionary<int, Mod[]> userModsCache = new Dictionary<int, Mod[]>();
+        private readonly Dictionary<int, double> userMultiplierCache = new Dictionary<int, double>();
+
+        protected long CalculateModMultiplier(GameplayLeaderboardScore score)
         {
-            return s.TotalScore.Value;
+            double multiplier;
+
+            if (!userMultiplierCache.TryGetValue(score.User.OnlineID, out multiplier))
+            {
+                Mod[] mods = getUserMod(score.User.OnlineID);
+
+                multiplier = userMultiplierCache[score.User.OnlineID] = mods.Aggregate(
+                    1.0,
+                    (acc, mod) =>
+                        acc *
+                        (Ladder.ModMultiplierSettings
+                               .FirstOrDefault(s => s.ModAcronym.Value == mod.Acronym)
+                               ?.Multiplier.Value
+                         ?? 1.0));
+            }
+
+            return (long)multiplier * score.TotalScore.Value;
+        }
+
+        private Mod[] getUserMod(int userId)
+        {
+            if (userModsCache.TryGetValue(userId, out Mod[]? mods))
+            {
+                return mods;
+            }
+
+            return userModsCache[userId] = leaderboardProvider?.GetPlayerMods(userId) ?? Array.Empty<Mod>();
         }
     }
 }

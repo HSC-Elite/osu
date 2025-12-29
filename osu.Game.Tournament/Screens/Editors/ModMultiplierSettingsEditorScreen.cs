@@ -1,15 +1,17 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
+using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
-using osu.Game.Beatmaps.Legacy;
 using osu.Game.Graphics;
 using osu.Game.Graphics.UserInterfaceV2;
+using osu.Game.Overlays;
 using osu.Game.Overlays.Settings;
 using osu.Game.Tournament.Models;
+using osu.Game.Tournament.Screens.Editors.Components;
 using osuTK;
 
 namespace osu.Game.Tournament.Screens.Editors
@@ -22,6 +24,12 @@ namespace osu.Game.Tournament.Screens.Editors
 
         public partial class ModMultiplierSettingsRow : CompositeDrawable, IModelBacked<ModMultiplierSetting>
         {
+            [Resolved]
+            private LadderInfo ladderInfo { get; set; } = null!;
+
+            [Resolved]
+            private IDialogOverlay? dialogOverlay { get; set; }
+
             public ModMultiplierSetting Model { get; }
 
             public ModMultiplierSettingsRow(ModMultiplierSetting model)
@@ -49,11 +57,11 @@ namespace osu.Game.Tournament.Screens.Editors
                         AutoSizeAxes = Axes.Y,
                         Children = new Drawable[]
                         {
-                            new LabelledEnumDropdown<LegacyMods>
+                            new LabelledTextBox
                             {
                                 Width = 0.3f,
                                 Label = "Mod",
-                                Current = Model.Mods,
+                                Current = Model.ModAcronym,
                             },
                             new SettingsSlider<double>
                             {
@@ -63,6 +71,19 @@ namespace osu.Game.Tournament.Screens.Editors
                                 KeyboardStep = 0.1f,
                             },
                         }
+                    },
+                    new DangerousSettingsButton
+                    {
+                        Anchor = Anchor.CentreRight,
+                        Origin = Anchor.CentreRight,
+                        RelativeSizeAxes = Axes.None,
+                        Width = 200,
+                        Text = "Delete Mod Multiplier",
+                        Action = () => dialogOverlay?.Push(new DeleteModMultiplierDialog(() =>
+                        {
+                            Expire();
+                            ladderInfo.ModMultiplierSettings.Remove(Model);
+                        }))
                     }
                 };
             }
