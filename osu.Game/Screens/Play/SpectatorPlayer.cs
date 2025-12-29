@@ -29,19 +29,6 @@ namespace osu.Game.Screens.Play
             this.score = score;
         }
 
-        [BackgroundDependencyLoader]
-        private void load()
-        {
-            AddInternal(new OsuSpriteText
-            {
-                Text = $"Watching {score.ScoreInfo.User.Username} playing live!",
-                Font = OsuFont.Default.With(size: 30),
-                Y = 100,
-                Anchor = Anchor.TopCentre,
-                Origin = Anchor.TopCentre,
-            });
-        }
-
         protected override void LoadComplete()
         {
             base.LoadComplete();
