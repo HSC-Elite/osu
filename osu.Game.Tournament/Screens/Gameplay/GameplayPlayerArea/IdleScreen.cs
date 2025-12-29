@@ -61,14 +61,20 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                 {
                     var stack = new OsuScreenStack();
                     container.Child = stack;
-                    stack.Push(new IdlePlayerScreen(redIndex++, TeamColour.Red));
+                    stack.Push(new IdlePlayerScreen(redIndex++, TeamColour.Red)
+                    {
+                        SmallOsuLogo = playerPerTeam.Value > 2
+                    });
                 }
 
                 foreach (var container in blueTeamContainer.Children.OfType<Container>())
                 {
                     var stack = new OsuScreenStack();
                     container.Child = stack;
-                    stack.Push(new IdlePlayerScreen(blueIndex++, TeamColour.Blue));
+                    stack.Push(new IdlePlayerScreen(blueIndex++, TeamColour.Blue)
+                    {
+                        SmallOsuLogo = playerPerTeam.Value > 2
+                    });
                 }
             });
             playerPerTeam.BindTo(ladder.PlayersPerTeam);

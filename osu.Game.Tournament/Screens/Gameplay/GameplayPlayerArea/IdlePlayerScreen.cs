@@ -29,6 +29,20 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         [Resolved]
         private LazerRoomMatchInfo lazerRoomMatchInfo { get; set; } = null!;
 
+        private OsuLogo logo;
+
+        private static readonly Vector2 small_logo_size = new Vector2(0.35f);
+        private static readonly Vector2 medium_logo_size = new Vector2(0.5f);
+
+        public bool SmallOsuLogo
+        {
+            get => logo.Scale == small_logo_size;
+            set => Scheduler.Add(() =>
+            {
+                logo.Scale = value ? small_logo_size : medium_logo_size;
+            });
+        }
+
         public IdlePlayerScreen(int index, TeamColour colour)
         {
             this.index = index;
@@ -37,9 +51,9 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
             InternalChildren = new Drawable[]
             {
-                new OsuLogo
+                logo = new OsuLogo
                 {
-                    Scale = new Vector2(0.5f),
+                    Scale = medium_logo_size,
                     Anchor = Anchor.Centre,
                     Origin = Anchor.Centre
                 },
