@@ -30,6 +30,8 @@ namespace osu.Game.Screens.OnlinePlay.Multiplayer.Spectate
         [Cached(typeof(IGameplayLeaderboardProvider))]
         private readonly EmptyGameplayLeaderboardProvider leaderboardProvider = new EmptyGameplayLeaderboardProvider();
 
+        protected override bool CheckModsAllowFailure() => false;
+
         /// <summary>
         /// Creates a new <see cref="MultiSpectatorPlayer"/>.
         /// </summary>
