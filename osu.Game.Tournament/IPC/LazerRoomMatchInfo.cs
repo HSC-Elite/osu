@@ -148,6 +148,7 @@ namespace osu.Game.Tournament.IPC
             if (State.Value == TourneyState.Playing && client.Room?.State != MultiplayerRoomState.Playing)
             {
                 State.Value = TourneyState.Ranking;
+                Logger.Log("Switching to ranking");
             }
         });
 
@@ -301,7 +302,7 @@ namespace osu.Game.Tournament.IPC
         }
 
         private double waitingForIdle;
-        private const int time_to_idle_from_ranking = 15 * 1000;
+        private const int time_to_idle_from_ranking = 25 * 1000;
 
         private void updateUsers() => Scheduler.AddOnce(() =>
         {
