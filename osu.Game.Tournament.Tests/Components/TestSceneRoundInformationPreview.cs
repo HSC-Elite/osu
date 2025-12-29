@@ -23,15 +23,15 @@ namespace osu.Game.Tournament.Tests.Components
                 Origin = Anchor.Centre,
                 Anchor = Anchor.Centre,
             }));
-            AddStep("Add a red pick", () => AddChoice(TeamColour.Red, ChoiceType.Pick));
-            AddStep("Add a blue pick", () => AddChoice(TeamColour.Blue, ChoiceType.Pick));
-            AddStep("Add a red protected", () => AddChoice(TeamColour.Red, ChoiceType.Protected));
-            AddStep("Add a blue pick", () => AddChoice(TeamColour.Blue, ChoiceType.Protected));
-            AddStep("Add a red ban", () => AddChoice(TeamColour.Red, ChoiceType.Ban));
-            AddStep("Add a blue ban", () => AddChoice(TeamColour.Blue, ChoiceType.Ban));
+            AddStep("Add a red pick", () => addChoice(TeamColour.Red, ChoiceType.Pick));
+            AddStep("Add a blue pick", () => addChoice(TeamColour.Blue, ChoiceType.Pick));
+            AddStep("Add a red protected", () => addChoice(TeamColour.Red, ChoiceType.Protected));
+            AddStep("Add a blue pick", () => addChoice(TeamColour.Blue, ChoiceType.Protected));
+            AddStep("Add a red ban", () => addChoice(TeamColour.Red, ChoiceType.Ban));
+            AddStep("Add a blue ban", () => addChoice(TeamColour.Blue, ChoiceType.Ban));
         }
 
-        private void AddChoice(TeamColour colour, ChoiceType type)
+        private void addChoice(TeamColour colour, ChoiceType type)
         {
             Ladder.CurrentMatch.Value!.PicksBans.Add(new BeatmapChoice
             {
