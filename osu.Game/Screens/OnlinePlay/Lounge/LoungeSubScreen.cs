@@ -265,7 +265,6 @@ namespace osu.Game.Screens.OnlinePlay.Lounge
         protected virtual FilterCriteria CreateFilterCriteria() => new FilterCriteria
         {
             SearchString = searchTextBox.Current.Value,
-            Ruleset = ruleset.Value,
             Mode = StatusDropdown.Current.Value
         };
 
