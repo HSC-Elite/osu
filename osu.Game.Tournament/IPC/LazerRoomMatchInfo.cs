@@ -121,6 +121,11 @@ namespace osu.Game.Tournament.IPC
             currentRoom.BindValueChanged(onRoomUpdated);
             beatmapAvailabilityTracker.Availability.BindValueChanged(onBeatmapAvailabilityChanged, true);
 
+            Ladder.CurrentMatch.BindValueChanged(_ =>
+            {
+                teamIdsCache.Clear();
+            });
+
             client.RoomUpdated += onRoomUpdated;
             client.SettingsChanged += onSettingsChanged;
             client.ItemChanged += onItemChanged;
@@ -162,8 +167,7 @@ namespace osu.Game.Tournament.IPC
         private void onLoadRequested()
         {
             leaderboardProvider = null;
-            userModsCache.Clear();
-            teamIdsCache.Clear();
+            userMultiplierCache.Clear();
 
             Scheduler.AddOnce(() =>
             {
@@ -393,7 +397,7 @@ namespace osu.Game.Tournament.IPC
             return leaderboardProvider!.Scores.Where(u => teamIds.Any(t => t == u.User.OnlineID));
         }
 
-        private Dictionary<TeamColour, int[]> teamIdsCache = new Dictionary<TeamColour, int[]>();
+        private readonly Dictionary<TeamColour, int[]> teamIdsCache = new Dictionary<TeamColour, int[]>();
 
         protected int[] GetTeamIds(TeamColour colour)
         {
@@ -406,7 +410,6 @@ namespace osu.Game.Tournament.IPC
                                           Array.Empty<int>();
         }
 
-        private readonly Dictionary<int, Mod[]> userModsCache = new Dictionary<int, Mod[]>();
         private readonly Dictionary<int, double> userMultiplierCache = new Dictionary<int, double>();
 
         protected long CalculateModMultiplier(GameplayLeaderboardScore score)
@@ -432,12 +435,7 @@ namespace osu.Game.Tournament.IPC
 
         private Mod[] getUserMod(int userId)
         {
-            if (userModsCache.TryGetValue(userId, out Mod[]? mods))
-            {
-                return mods;
-            }
-
-            return userModsCache[userId] = leaderboardProvider?.GetPlayerMods(userId) ?? Array.Empty<Mod>();
+            return leaderboardProvider?.GetPlayerMods(userId) ?? Array.Empty<Mod>();
         }
     }
 }
