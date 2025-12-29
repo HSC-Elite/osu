@@ -159,23 +159,36 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             }
         }
 
+        private int redIndex = 0;
+        private int blueIndex = 0;
+
         public bool AddRedPlayer(Drawable player)
         {
-            var emptyContainer = redTeamContainer.ChildrenOfType<Container>().FirstOrDefault(c => c.Children.Count == 0);
+            if (redIndex > redTeamContainer.Count)
+                return false;
+
+            var emptyContainer = redTeamContainer[redIndex] as Container;
             if (emptyContainer == null)
                 return false;
 
             emptyContainer.Add(player.With(p => p.RelativeSizeAxes = Axes.Both));
+
+            redIndex++;
             return true;
         }
 
         public bool AddBluePlayer(Drawable player)
         {
-            var emptyContainer = blueTeamContainer.ChildrenOfType<Container>().FirstOrDefault(c => c.Children.Count == 0);
+            if (blueIndex > blueTeamContainer.Count)
+                return false;
+
+            var emptyContainer = blueTeamContainer[blueIndex] as Container;
             if (emptyContainer == null)
                 return false;
 
             emptyContainer.Add(player.With(p => p.RelativeSizeAxes = Axes.Both));
+
+            blueIndex++;
             return true;
         }
     }

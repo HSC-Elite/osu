@@ -266,7 +266,7 @@ namespace osu.Game.Screens.Ranking.Expanded
                         }
 
                         scoreCounter.Current.Value = (long)(s.NewValue * score.Mods.Aggregate(1.0, (acc, mod) => acc * (modMultiplierProvider.GetModMultiplierFromMod(mod) / mod.ScoreMultiplier ?? 1.0)));
-                    });
+                    }, true);
 
                     double delay = 0;
 

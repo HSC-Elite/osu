@@ -11,6 +11,7 @@ using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Sprites;
 using osu.Framework.Graphics.Textures;
+using osu.Framework.Logging;
 using osu.Framework.Screens;
 using osu.Framework.Threading;
 using osu.Game.Graphics.UserInterface;
@@ -428,6 +429,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
                         int[] userIds = client.CurrentMatchPlayingUserIds.ToArray();
                         MultiplayerRoomUser[] users = userIds.Select(id => client.Room.Users.First(u => u.UserID == id)).ToArray();
+                        Logger.Log($"start spec {users}");
 
                         if (userIds.Length == 0)
                             break;

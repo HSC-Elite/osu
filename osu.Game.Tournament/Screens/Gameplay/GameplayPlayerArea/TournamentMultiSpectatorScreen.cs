@@ -150,6 +150,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
         private void onRanking()
         {
+            Logger.Log("go ranking");
+
             Scheduler.AddDelayed(() =>
             {
                 foreach (var instance in instances)
