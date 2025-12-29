@@ -9,11 +9,12 @@ namespace osu.Game.Tournament.Models
     {
         public Bindable<string> ModAcronym { get; set; } = new Bindable<string>();
 
-        public BindableDouble Multiplier { get; set; } = new BindableDouble
+        public BindableDouble Multiplier { get; set; } = new BindableDouble(1)
         {
             MinValue = 0,
             MaxValue = 10,
             Precision = 0.1,
+            Default = 1,
         };
     }
 }
