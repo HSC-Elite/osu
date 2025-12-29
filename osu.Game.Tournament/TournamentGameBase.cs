@@ -21,10 +21,12 @@ using osu.Game.Database;
 using osu.Game.Graphics;
 using osu.Game.Online;
 using osu.Game.Online.API.Requests;
+using osu.Game.Rulesets.Mods;
 using osu.Game.Screens.OnlinePlay;
 using osu.Game.Tournament.IO;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.Models;
+using osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea;
 using osu.Game.Users;
 using osuTK.Input;
 
@@ -49,6 +51,8 @@ namespace osu.Game.Tournament
         protected Task BracketLoadTask => bracketLoadTaskCompletionSource.Task;
 
         private readonly TaskCompletionSource<bool> bracketLoadTaskCompletionSource = new TaskCompletionSource<bool>();
+
+        private ModMultiplierProvider modMultiplierProvider = null!;
 
         protected override IReadOnlyDependencyContainer CreateChildDependencies(IReadOnlyDependencyContainer parent)
         {
@@ -229,6 +233,10 @@ namespace osu.Game.Tournament
                 dependencies.CacheAs((LazerRoomMatchInfo)ipc);
                 dependencies.CacheAs(ipc);
                 Add(ipc);
+
+                modMultiplierProvider = new ModMultiplierProvider();
+                dependencies.CacheAs<IModMultiplierProvider>(modMultiplierProvider);
+                Add(modMultiplierProvider);
 
                 bracketLoadTaskCompletionSource.SetResult(true);
 

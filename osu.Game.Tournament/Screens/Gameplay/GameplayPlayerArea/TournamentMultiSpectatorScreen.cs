@@ -12,7 +12,6 @@ using osu.Framework.Logging;
 using osu.Game.Graphics;
 using osu.Game.Online.Multiplayer;
 using osu.Game.Online.Spectator;
-using osu.Game.Rulesets.Mods;
 using osu.Game.Screens.OnlinePlay.Multiplayer.Spectate;
 using osu.Game.Screens.Play;
 using osu.Game.Screens.Play.HUD;
@@ -60,9 +59,6 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
         [Cached(typeof(IGameplayLeaderboardProvider))]
         private MultiSpectatorLeaderboardProvider leaderboardProvider { get; set; }
-
-        [Cached(typeof(IModMultiplierProvider))]
-        private ModMultiplierProvider modMultiplierProvider { get; set; } = new ModMultiplierProvider();
 
         private readonly Bindable<TourneyState> tourneyState = new Bindable<TourneyState>();
 
@@ -144,8 +140,6 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                 if (s.OldValue == TourneyState.Playing && s.NewValue == TourneyState.Ranking)
                     onRanking();
             });
-
-            AddInternal(modMultiplierProvider);
         }
 
         private void onRanking()
