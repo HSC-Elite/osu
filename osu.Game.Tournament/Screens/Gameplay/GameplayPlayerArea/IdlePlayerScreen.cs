@@ -3,6 +3,7 @@
 
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
+using osu.Framework.Extensions.Color4Extensions;
 using osu.Framework.Graphics;
 using osu.Game.Graphics;
 using osu.Game.Online.Multiplayer;
@@ -12,7 +13,6 @@ using osu.Game.Screens.Menu;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.Models;
 using osuTK;
-using osuTK.Graphics;
 
 namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 {
@@ -49,8 +49,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                 {
                     Anchor = Anchor.BottomRight,
                     Origin = Anchor.BottomRight,
-                    Font = OsuFont.Default.With(size: 30),
-                    Colour = colour == TeamColour.Red ? Color4.Pink : Color4.Blue
+                    Font = OsuFont.Default.With(size: 60),
+                    Colour = colour == TeamColour.Red ? Color4Extensions.FromHex("#FB8B96") : Color4Extensions.FromHex("#AFF0F7")
                 }
             };
         }
