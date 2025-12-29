@@ -13,6 +13,8 @@ using osu.Framework.Extensions.ExceptionExtensions;
 using osu.Framework.Logging;
 using osu.Game.Beatmaps;
 using osu.Game.Database;
+using osu.Game.Online;
+using osu.Game.Online.API.Requests.Responses;
 using osu.Game.Online.Multiplayer;
 using osu.Game.Online.Rooms;
 using osu.Game.Rulesets;
@@ -222,7 +224,20 @@ namespace osu.Game.Tournament.IPC
                 var mod = rulesetInstance.CreateModFromAcronym(modStr);
 
                 Mods.Value = mod != null ? rulesetInstance.ConvertToLegacyMods(new[] { mod }) : rulesetInstance.ConvertToLegacyMods(itemMods);
+                return;
             }
+
+            beatmapLookupCache.GetBeatmapAsync(gameplayBeatmapId).ContinueWith(t =>
+            {
+                Scheduler.Add(() =>
+                {
+                    APIBeatmap? beatmapSet = t.GetResultSafely();
+                    if (beatmapSet == null)
+                        return;
+
+                    Beatmap.Value = new TournamentBeatmap(beatmapSet);
+                });
+            });
         }
 
         private CancellationTokenSource? downloadCheckCancellation;
@@ -235,7 +250,7 @@ namespace osu.Game.Tournament.IPC
 
             client.ChangeBeatmapAvailability(e.NewValue).FireAndForget();
 
-            if (e.NewValue == BeatmapAvailability.LocallyAvailable())
+            if (e.NewValue.State == DownloadState.LocallyAvailable)
             {
                 updateGameplayState();
 
@@ -244,7 +259,7 @@ namespace osu.Game.Tournament.IPC
                     onLoadRequested();
             }
 
-            if (e.NewValue == BeatmapAvailability.NotDownloaded())
+            if (e.NewValue.State == DownloadState.NotDownloaded)
             {
                 MultiplayerPlaylistItem item = client.Room.CurrentPlaylistItem;
 
