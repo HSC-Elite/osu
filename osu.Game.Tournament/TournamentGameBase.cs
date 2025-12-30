@@ -77,7 +77,7 @@ namespace osu.Game.Tournament
 
         private TournamentSpriteText initialisationText = null!;
 
-        private Bindable<string> configSkin = new Bindable<string>();
+        private readonly Bindable<string> configSkin = new Bindable<string>();
 
         [BackgroundDependencyLoader]
         private void load(Storage baseStorage)
