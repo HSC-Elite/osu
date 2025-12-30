@@ -95,7 +95,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                 {
                     ReadyToStart = performInitialSeek,
                 },
-                new PlayerSettingsOverlay()
+                //new PlayerSettingsOverlay()
             };
 
             int[] team1Users = Users.Where(u => lazerRoomInfo.RedTeamUser.Any(p => p.UserID == u)).Take(playerPerTeam).ToArray();
