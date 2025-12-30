@@ -134,6 +134,11 @@ namespace osu.Game.Tournament.IPC
             client.UserJoined += _ => updateUsers();
             client.UserLeft += _ => updateUsers();
             client.UserKicked += _ => updateUsers();
+            client.UserStateChanged += (_, s) =>
+            {
+                if (s == MultiplayerUserState.Idle || s == MultiplayerUserState.Spectating)
+                    updateUsers();
+            };
         }
 
         private void onRoomUpdated() => Scheduler.AddOnce(() =>
@@ -328,7 +333,7 @@ namespace osu.Game.Tournament.IPC
             if (client.Room == null || client.LocalUser == null)
                 return;
 
-            var currentUser = client.Room.Users;
+            var currentUser = client.Room.Users.Where(p => p.State != MultiplayerUserState.Spectating);
 
             roomUser.AddRange(currentUser.Except(roomUser));
             var toRemove = roomUser.Except(currentUser).ToArray();

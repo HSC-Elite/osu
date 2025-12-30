@@ -98,11 +98,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                 new PlayerSettingsOverlay()
             };
 
-            var team1Player = ladderInfo.CurrentMatch.Value?.GetTeamByColor(TeamColour.Red);
-            var team2Player = ladderInfo.CurrentMatch.Value?.GetTeamByColor(TeamColour.Blue);
-
-            int[] team1Users = Users.Where(u => team1Player == null || team1Player.Players.Any(p => p.OnlineID == u)).Take(playerPerTeam).ToArray();
-            int[] team2Users = Users.Except(team1Users).Where(u => team2Player == null || team2Player.Players.Any(p => p.OnlineID == u)).Take(playerPerTeam).ToArray();
+            int[] team1Users = Users.Where(u => lazerRoomInfo.RedTeamUser.Any(p => p.UserID == u)).Take(playerPerTeam).ToArray();
+            int[] team2Users = Users.Except(team1Users).Where(u => lazerRoomInfo.BlueTeamUser.Any(p => p.UserID == u)).Take(playerPerTeam).ToArray();
 
             for (int i = 0; i < team1Users.Length; i++)
             {
@@ -122,6 +119,13 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                 {
                     instances.Add(player);
                 }
+            }
+
+            var usersToRemove = Users.Except(instances.Select(i => i.UserId));
+
+            foreach (int user in usersToRemove)
+            {
+                RemoveUser(user);
             }
 
             LoadComponentAsync(leaderboardProvider, _ =>
