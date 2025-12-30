@@ -67,7 +67,7 @@ namespace osu.Game.Tournament.Components
 
         public bool PostMessage(string message)
         {
-            if (Channel.Value == null)
+            if (Channel.Value == null || string.IsNullOrWhiteSpace(message))
                 return false;
 
             manager.PostMessage(message.Trim(), target: Channel.Value);

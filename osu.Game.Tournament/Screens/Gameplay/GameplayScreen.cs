@@ -15,6 +15,7 @@ using osu.Framework.Logging;
 using osu.Framework.Screens;
 using osu.Framework.Threading;
 using osu.Game.Graphics.UserInterface;
+using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Online.Multiplayer;
 using osu.Game.Overlays.Settings;
 using osu.Game.Screens;
@@ -64,6 +65,8 @@ namespace osu.Game.Tournament.Screens.Gameplay
         {
             Depth = float.MinValue,
         };
+
+        private LabelledTextBox chatBox = null!;
 
         protected override bool FetchDataFromMemoryThisScreen => true;
 
@@ -201,6 +204,10 @@ namespace osu.Game.Tournament.Screens.Gameplay
                         }
                     }
                 },
+                chatBox = new LabelledTextBox
+                {
+                    Label = "enter to chat",
+                },
                 new TourneyButton
                 {
                     Text = "强制刷新聊天区域",
@@ -243,6 +250,12 @@ namespace osu.Game.Tournament.Screens.Gameplay
             });
 
             chroma.Push(new IdleScreen());
+
+            chatBox.OnCommit += (_, _) =>
+            {
+                chat.PostMessage(chatBox.Text);
+                chatBox.Text = string.Empty;
+            };
         }
 
         private bool roundPreviewShow;
