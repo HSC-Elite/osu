@@ -19,6 +19,7 @@ using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Online.Multiplayer;
 using osu.Game.Overlays.Settings;
 using osu.Game.Screens;
+using osu.Game.Screens.Play.PlayerSettings;
 using osu.Game.Tournament.Components;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.Models;
@@ -232,6 +233,10 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
                         chroma.Exit();
                     }
+                },
+                new VisualSettings
+                {
+                    Scale = new Vector2(0.7f)
                 }
             });
 
