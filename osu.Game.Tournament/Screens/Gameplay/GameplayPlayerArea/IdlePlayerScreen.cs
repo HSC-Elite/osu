@@ -29,6 +29,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         [Resolved]
         private LazerRoomMatchInfo lazerRoomMatchInfo { get; set; } = null!;
 
+        private Bindable<float> usernameFontSize = new Bindable<float>();
+
         private OsuLogo logo;
 
         private static readonly Vector2 small_logo_size = new Vector2(0.35f);
@@ -67,6 +69,17 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                     Colour = colour == TeamColour.Red ? Color4Extensions.FromHex("#FB8B96") : Color4Extensions.FromHex("#AFF0F7")
                 }
             };
+        }
+
+        [BackgroundDependencyLoader]
+        private void load(LadderInfo ladder)
+        {
+            usernameFontSize.BindValueChanged(u =>
+            {
+                userText.Font = OsuFont.Default.With(size: u.NewValue);
+            });
+
+            usernameFontSize.BindTo(ladder.IdleScreenUsernameFontSize);
         }
 
         protected override void LoadComplete()

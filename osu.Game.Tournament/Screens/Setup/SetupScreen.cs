@@ -13,6 +13,7 @@ using osu.Game.Graphics.Containers;
 using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Online.API;
 using osu.Game.Overlays;
+using osu.Game.Overlays.Settings;
 using osu.Game.Rulesets;
 using osuTK;
 
@@ -141,6 +142,11 @@ namespace osu.Game.Tournament.Screens.Setup
                     Label = "启用回合预览",
                     Current = LadderInfo.EnableRoundPreview,
                 },
+                new LabelledSliderBar<float>
+                {
+                    Label = "Idle player username font size",
+                    Current = LadderInfo.IdleScreenUsernameFontSize,
+                }
             };
         }
 

@@ -66,5 +66,12 @@ namespace osu.Game.Tournament.Models
         public BindableList<ModMultiplierSetting> ModMultiplierSettings { get; } = new BindableList<ModMultiplierSetting>();
 
         public Bindable<bool> EnableRoundPreview = new Bindable<bool>();
+
+        public BindableFloat IdleScreenUsernameFontSize = new BindableFloat(45)
+        {
+            MinValue = 1,
+            MaxValue = 100,
+            Precision = 0.1f,
+        };
     }
 }
