@@ -65,7 +65,7 @@ jobs:
         run: dotnet jb inspectcode $(pwd)/osu.Desktop.slnf --no-build --output="inspectcodereport.xml" --caches-home="inspectcode" --verbosity=WARN
 
       - name: NVika
-        run: dotnet nvika parsereport "${{github.workspace}}/inspectcodereport.xml" --treatwarningsaserrors
+        run: dotnet nvika parsereport "${{github.workspace}}/osu/inspectcodereport.xml" --treatwarningsaserrors
 
   test:
     name: Test
