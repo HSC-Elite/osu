@@ -139,6 +139,14 @@ namespace osu.Game.Tournament.IPC
                 if (s == MultiplayerUserState.Idle || s == MultiplayerUserState.Spectating)
                     updateUsers();
             };
+            client.ResultsReady += () =>
+            {
+                if (State.Value == TourneyState.Playing)
+                {
+                    State.Value = TourneyState.Ranking;
+                    Logger.Log("Switching to ranking");
+                }
+            };
         }
 
         private void onRoomUpdated() => Scheduler.AddOnce(() =>
@@ -156,12 +164,6 @@ namespace osu.Game.Tournament.IPC
             }
 
             Logger.Log($"Room status {client.Room?.State} {client.Room?.MatchState} {currentRoom.Value?.Status}");
-
-            if (State.Value == TourneyState.Playing && client.Room?.State != MultiplayerRoomState.Playing)
-            {
-                State.Value = TourneyState.Ranking;
-                Logger.Log("Switching to ranking");
-            }
         });
 
         private void onGameplayAborted(GameplayAbortReason reason)

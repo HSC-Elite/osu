@@ -238,6 +238,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
             double startTime = minFrameTimes.Min();
 
+            // It always starts playing from 0 at the beginning
             if (startTime < 10000)
                 startTime = 0;
 
@@ -284,7 +285,13 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             if (instance == null)
                 return;
 
-            syncManager.RemoveManagedClock(instance.SpectatorPlayerClock);
+            Scheduler.AddDelayed(() =>
+            {
+                if (instance.Player is MultiSpectatorPlayer spectatorPlayer)
+                {
+                    spectatorPlayer.ForceToResult();
+                }
+            }, 5 * 1000);
         });
 
         protected override void QuitGameplay(int userId) => Schedule(() =>
