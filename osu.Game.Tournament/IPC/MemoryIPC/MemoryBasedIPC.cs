@@ -274,7 +274,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
         protected long CalculateModMultiplier(PlayerScore s)
         {
-            return (long)(s.Score * (Ladder.ModMultiplierSettings.FirstOrDefault(m => (m.Mods.Value & s.Mods) > LegacyMods.None)?.Multiplier.Value ?? 1.0));
+            return (long)(s.Score * (Ladder.ModMultiplierSettings.Where(m => (m.Mods.Value & s.Mods) > LegacyMods.None).Aggregate(1.0, (d, setting) => d * setting.Multiplier.Value)));
         }
 
         protected virtual IEnumerable<PlayerScore> GetTeamScore(TeamColour colour)
