@@ -7,10 +7,13 @@ using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
+using osu.Framework.Graphics.Rendering;
 using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Sprites;
 using osu.Framework.Graphics.Textures;
+using osu.Framework.Graphics.Veldrid;
 using osu.Framework.Threading;
+using osu.Game.Graphics;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Overlays.Settings;
 using osu.Game.Tournament.Components;
@@ -31,6 +34,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
         public readonly Bindable<TourneyState> State = new Bindable<TourneyState>();
         private OsuButton warmupButton = null!;
         private Sprite slotSprite = null!;
+        private SettingsNumberBox frameRateInputBox;
 
         private MatchHeader header = null!;
         private RoundInformationPreview roundPreview = null!;
@@ -43,6 +47,12 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
         [Resolved]
         private TournamentMatchChatDisplay chat { get; set; } = null!;
+
+        [Resolved]
+        private IRenderer renderer { get; set; } = null!;
+
+        [Resolved]
+        private OsuColour colours { get; set; } = null!;
 
         private Drawable chroma = null!;
 
@@ -161,12 +171,26 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     Current = LadderInfo.ChromaKeyWidth,
                     KeyboardStep = 1,
                 },
-                OperatingSystem.IsWindows()
-                    ? new SettingsSlider<int>
+                new SettingsSlider<int>
+                {
+                    LabelText = "Frame rate",
+                    Current = LadderInfo.FrameRate,
+                    KeyboardStep = 1,
+                },
+                frameRateInputBox = new SettingsNumberBox
+                {
+                    LabelText = "Frame rate",
+                },
+                !D3D11Interop.TryGetD3D11Device(renderer, out _, out _, out _)
+                    ? new TournamentSpriteText
                     {
-                        LabelText = "Frame rate",
-                        Current = LadderInfo.FrameRate,
-                        KeyboardStep = 1,
+                        Colour = colours.Orange1,
+                        Padding = new MarginPadding
+                        {
+                            Horizontal = 5
+                        },
+                        RelativeSizeAxes = Axes.X,
+                        Text = "目前的渲染器不是D3D11，无法使用WGC捕捉，已回滚至bitblt，可能会有延迟或者性能损失"
                     }
                     : Empty(),
                 new SettingsSlider<int>
@@ -215,6 +239,15 @@ namespace osu.Game.Tournament.Screens.Gameplay
             {
                 if (s.OldValue == typeof(MapPoolScreen) && s.NewValue == typeof(GameplayScreen))
                     switchFromMappool = true;
+            });
+
+            LadderInfo.FrameRate.BindValueChanged(f => frameRateInputBox.Current.Value = f.NewValue, true);
+            frameRateInputBox.Current.BindValueChanged(f =>
+            {
+                if (f.NewValue == null)
+                    return;
+
+                LadderInfo.FrameRate.Value = f.NewValue.Value;
             });
         }
 
