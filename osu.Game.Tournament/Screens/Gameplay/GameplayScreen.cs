@@ -34,7 +34,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
         public readonly Bindable<TourneyState> State = new Bindable<TourneyState>();
         private OsuButton warmupButton = null!;
         private Sprite slotSprite = null!;
-        private SettingsNumberBox frameRateInputBox;
+        private SettingsNumberBox frameRateInputBox = null!;
 
         private MatchHeader header = null!;
         private RoundInformationPreview roundPreview = null!;
