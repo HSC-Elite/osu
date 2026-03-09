@@ -190,6 +190,7 @@ jobs:
           $assetPaths = $assets | ForEach-Object { $_.FullName }
 
           gh release create $tag `
+            --target ${{ github.sha }} `
             --title $tag `
             --notes "Automated build for version ${{ steps.meta.outputs.version }} (channel: ${{ steps.meta.outputs.channel }})" `
             $assetPaths
