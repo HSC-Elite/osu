@@ -4,6 +4,7 @@
 using System;
 using System.Linq;
 using osu.Framework.Allocation;
+using osu.Framework.Audio;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
@@ -36,6 +37,9 @@ namespace osu.Game.Tournament.Screens.Gameplay
         private Sprite slotSprite = null!;
         private SettingsNumberBox frameRateInputBox = null!;
 
+        private PlayerArea redArea = null!;
+        private PlayerArea blueArea = null!;
+
         private MatchHeader header = null!;
         private RoundInformationPreview roundPreview = null!;
 
@@ -47,6 +51,9 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
         [Resolved]
         private TournamentMatchChatDisplay chat { get; set; } = null!;
+
+        [Resolved]
+        private AudioManager audio { get; set; } = null!;
 
         [Resolved]
         private IRenderer renderer { get; set; } = null!;
@@ -103,13 +110,13 @@ namespace osu.Game.Tournament.Screens.Gameplay
                             Width = 1366,
                             Children = new Drawable[]
                             {
-                                new PlayerArea(TeamColour.Red)
+                                redArea = new PlayerArea(TeamColour.Red)
                                 {
                                     Name = "Left PlayerArea",
                                     RelativeSizeAxes = Axes.Both,
                                     Width = 0.5f,
                                 },
-                                new PlayerArea(TeamColour.Blue)
+                                blueArea = new PlayerArea(TeamColour.Blue)
                                 {
                                     Name = "Right PlayerArea",
                                     RelativeSizeAxes = Axes.Both,
@@ -200,9 +207,44 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     KeyboardStep = 1,
                 },
                 new ControlPanel.Spacer(),
+                new SettingsSlider<double>
+                {
+                    LabelText = "Master Volume",
+                    Current = audio.Volume
+                },
+                new SettingsSlider<double>
+                {
+                    LabelText = "Track Volume",
+                    Current = audio.VolumeTrack
+                },
+                new SettingsSlider<double>
+                {
+                    LabelText = "Sample Volume",
+                    Current = audio.VolumeSample
+                },
+                new ControlPanel.Spacer(),
                 new MatchRoundNameTextBox
                 {
                     RelativeSizeAxes = Axes.X,
+                },
+                new TourneyButton
+                {
+                    Text = "红飞",
+                    Action = redArea.Launch
+                },
+                new TourneyButton
+                {
+                    Text = "蓝飞",
+                    Action = blueArea.Launch
+                },
+                new TourneyButton
+                {
+                    Text = "飞重置",
+                    Action = () =>
+                    {
+                        redArea.Reset();
+                        blueArea.Reset();
+                    }
                 },
                 new TourneyButton
                 {
@@ -473,7 +515,8 @@ namespace osu.Game.Tournament.Screens.Gameplay
             [Resolved]
             private LadderInfo ladder { get; set; } = null!;
 
-            private TeamColour teamColour;
+            private readonly TeamColour teamColour;
+            private Container? loseTextContainer;
 
             public PlayerArea(TeamColour teamColour)
             {
@@ -484,6 +527,42 @@ namespace osu.Game.Tournament.Screens.Gameplay
             private void load()
             {
                 ladder.PlayersPerTeam.BindValueChanged(performLayout, true);
+            }
+
+            public void Launch()
+            {
+                double delayTime = 0;
+                bool clockWise = true;
+
+                foreach (var player in InternalChildren.OfType<PlayerWindow>())
+                {
+                    using (player.BeginDelayedSequence(delayTime))
+                    {
+                        player.FlyingLaunch(clockWise);
+                    }
+
+                    delayTime += 300;
+                    clockWise = !clockWise;
+                }
+
+                loseTextContainer?.RotateTo(150).Delay(delayTime + 1200).FadeIn(1000).RotateTo(0, 1000, Easing.OutCubic);
+            }
+
+            public void Reset()
+            {
+                double delayTime = 0;
+
+                foreach (var player in InternalChildren.OfType<PlayerWindow>())
+                {
+                    using (player.BeginDelayedSequence(delayTime))
+                    {
+                        player.Reset();
+                    }
+
+                    delayTime += 300;
+                }
+
+                loseTextContainer?.Delay(delayTime + 1200).FadeOut(300);
             }
 
             private void performLayout(ValueChangedEvent<int> playerCount)
@@ -531,8 +610,10 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     case 1:
                         InternalChildren = new Drawable[]
                         {
-                            new CapturedWindowSprite($"{TournamentGame.TOURNAMENT_CLIENT_NAME}{clientIndex}")
+                            new PlayerWindow(clientIndex)
                             {
+                                Anchor = Anchor.Centre,
+                                Origin = Anchor.Centre,
                                 RelativeSizeAxes = Axes.Both,
                             }
                         };
@@ -541,19 +622,19 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     case 2:
                         InternalChildren = new Drawable[]
                         {
-                            new CapturedWindowSprite($"{TournamentGame.TOURNAMENT_CLIENT_NAME}{clientIndex++}")
+                            new PlayerWindow(clientIndex++)
                             {
                                 RelativeSizeAxes = Axes.Both,
                                 Height = 0.5f,
-                                Anchor = Anchor.TopCentre,
-                                Origin = Anchor.TopCentre,
+                                RelativeAnchorPosition = new Vector2(0.25f, 0.5f),
+                                Origin = Anchor.Centre,
                             },
-                            new CapturedWindowSprite($"{TournamentGame.TOURNAMENT_CLIENT_NAME}{clientIndex}")
+                            new PlayerWindow(clientIndex)
                             {
                                 RelativeSizeAxes = Axes.Both,
                                 Height = 0.5f,
-                                Anchor = Anchor.BottomCentre,
-                                Origin = Anchor.BottomCentre,
+                                RelativeAnchorPosition = new Vector2(0.75f, 0.5f),
+                                Origin = Anchor.Centre,
                             }
                         };
                         break;
@@ -561,29 +642,29 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     case 3:
                         InternalChildren = new Drawable[]
                         {
-                            new CapturedWindowSprite($"{TournamentGame.TOURNAMENT_CLIENT_NAME}{clientIndex++}")
+                            new PlayerWindow(clientIndex++)
                             {
                                 RelativeSizeAxes = Axes.Both,
                                 Width = 0.5f,
                                 Height = 0.5f,
-                                Anchor = Anchor.TopCentre,
-                                Origin = Anchor.TopCentre,
+                                RelativeAnchorPosition = new Vector2(0.5f, 0.25f),
+                                Origin = Anchor.Centre,
                             },
-                            new CapturedWindowSprite($"{TournamentGame.TOURNAMENT_CLIENT_NAME}{clientIndex++}")
+                            new PlayerWindow(clientIndex++)
                             {
                                 RelativeSizeAxes = Axes.Both,
                                 Width = 0.5f,
                                 Height = 0.5f,
-                                Anchor = Anchor.BottomLeft,
-                                Origin = Anchor.BottomLeft,
+                                RelativeAnchorPosition = new Vector2(0.25f, 0.75f),
+                                Origin = Anchor.Centre,
                             },
-                            new CapturedWindowSprite($"{TournamentGame.TOURNAMENT_CLIENT_NAME}{clientIndex}")
+                            new PlayerWindow(clientIndex)
                             {
                                 RelativeSizeAxes = Axes.Both,
                                 Width = 0.5f,
                                 Height = 0.5f,
-                                Anchor = Anchor.BottomRight,
-                                Origin = Anchor.BottomRight,
+                                RelativeAnchorPosition = new Vector2(0.75f, 0.75f),
+                                Origin = Anchor.Centre,
                             },
                         };
                         break;
@@ -591,37 +672,37 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     case 4:
                         InternalChildren = new Drawable[]
                         {
-                            new CapturedWindowSprite($"{TournamentGame.TOURNAMENT_CLIENT_NAME}{clientIndex++}")
+                            new PlayerWindow(clientIndex++)
                             {
                                 RelativeSizeAxes = Axes.Both,
                                 Width = 0.5f,
                                 Height = 0.5f,
-                                Anchor = Anchor.TopLeft,
-                                Origin = Anchor.TopLeft,
+                                RelativeAnchorPosition = new Vector2(0.25f, 0.25f),
+                                Origin = Anchor.Centre,
                             },
-                            new CapturedWindowSprite($"{TournamentGame.TOURNAMENT_CLIENT_NAME}{clientIndex++}")
+                            new PlayerWindow(clientIndex++)
                             {
                                 RelativeSizeAxes = Axes.Both,
                                 Width = 0.5f,
                                 Height = 0.5f,
-                                Anchor = Anchor.TopRight,
-                                Origin = Anchor.TopRight,
+                                RelativeAnchorPosition = new Vector2(0.75f, 0.25f),
+                                Origin = Anchor.Centre,
                             },
-                            new CapturedWindowSprite($"{TournamentGame.TOURNAMENT_CLIENT_NAME}{clientIndex++}")
+                            new PlayerWindow(clientIndex++)
                             {
                                 RelativeSizeAxes = Axes.Both,
                                 Width = 0.5f,
                                 Height = 0.5f,
-                                Anchor = Anchor.BottomLeft,
-                                Origin = Anchor.BottomLeft,
+                                RelativeAnchorPosition = new Vector2(0.25f, 0.75f),
+                                Origin = Anchor.Centre,
                             },
-                            new CapturedWindowSprite($"{TournamentGame.TOURNAMENT_CLIENT_NAME}{clientIndex}")
+                            new PlayerWindow(clientIndex)
                             {
                                 RelativeSizeAxes = Axes.Both,
                                 Width = 0.5f,
                                 Height = 0.5f,
-                                Anchor = Anchor.BottomRight,
-                                Origin = Anchor.BottomRight,
+                                RelativeAnchorPosition = new Vector2(0.75f, 0.75f),
+                                Origin = Anchor.Centre,
                             },
                         };
                         break;
@@ -629,7 +710,35 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     default:
                         throw new ArgumentException("Not Support this player count");
                 }
+
+                AddInternal(loseTextSprite());
             }
+
+            private Container loseTextSprite() => loseTextContainer = new Container
+            {
+                Anchor = Anchor.Centre,
+                Origin = Anchor.Centre,
+                RelativeSizeAxes = Axes.Both,
+                Alpha = 0,
+                Children = new Drawable[]
+                {
+                    new TournamentSpriteText
+                    {
+                        Anchor = Anchor.Centre,
+                        Origin = Anchor.Centre,
+                        Font = OsuFont.Torus.With(size: 187, weight: FontWeight.Bold),
+                        Text = "输了...",
+                        Colour = TournamentGame.GetTeamColour(teamColour)
+                    },
+                    new TournamentSpriteText
+                    {
+                        Anchor = Anchor.Centre,
+                        Origin = Anchor.Centre,
+                        Font = OsuFont.Torus.With(size: 175, weight: FontWeight.Bold),
+                        Text = "输了...",
+                    },
+                }
+            };
         }
     }
 }
