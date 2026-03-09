@@ -1,63 +1,195 @@
-# from cloneWith
-# https://github.com/CloneWith/osu/blob/b46c9fd4185263be2fbe39eef4a0616ac620430d/.github/workflows/build-release.yml
 name: Build Release
-run-name: Build Release (${{inputs.profile}}-${{inputs.version}})
+run-name: Build Release (${{ inputs.profile }}-${{ inputs.version_core }}-${{ inputs.feature_suffix }})
 
 on:
   workflow_dispatch:
     inputs:
       profile:
-        description: 'Build Profile'
+        description: Build Profile
         type: choice
         required: true
-        default: 'Release'
+        default: Release
         options:
           - Debug
           - Release
-      version:
-        description: 'Version Number'
+
+      version_core:
+        description: "Version core (example: 2026.308.0)"
         required: true
-        default: '0.0.0'
+        default: 2026.308.0
+
+      feature_suffix:
+        description: "Version suffix / feature name (example: tournament-ui)"
+        required: true
+        default: shanden
+
+      channel_override:
+        description: "Optional update channel override (leave empty to use feature_suffix)"
+        required: false
+        default: General
 
 permissions:
-  contents: read
+  contents: write
 
 defaults:
   run:
+    shell: pwsh
     working-directory: ./osu
+
+env:
+  DOTNET_VERSION: 8.0.x
+
+  PACK_ID: osulazer-shanden
+  PACK_TITLE: osu!
+  MAIN_EXE: osu!.exe
+
+  PUBLISH_DIR: ${{ github.workspace }}\publish
+  RELEASES_DIR: ${{ github.workspace }}\velopack-releases
 
 jobs:
   build:
-    name: Build
-    runs-on: ${{matrix.os.fullname}}
-    strategy:
-      matrix:
-        os:
-          - { prettyname: Windows, fullname: windows-latest }
-    timeout-minutes: 10
+    name: Build windows-x64
+    runs-on: windows-latest
+    timeout-minutes: 30
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           path: osu
+          fetch-depth: 0
 
       - name: Checkout framework
         uses: actions/checkout@v4
         with:
           repository: shanden-tournament/osu-framework
-          path: osu-framework
           ref: shanden-custom
-      
-      - name: Install .NET 8.0.x
+          path: osu-framework
+
+      - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Compile
-        run: dotnet publish -f net8.0-windows -r win-x64 -c ${{inputs.profile}} -o ${{ github.workspace }}/osu/Release /p:Version=${{ inputs.version }} ${{ github.workspace }}/osu/osu.Desktop/osu.Desktop.csproj
+      - name: Install Velopack CLI
+        run: dotnet tool install --global vpk
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: osu-build-${{inputs.profile}}-${{inputs.version}}@${{matrix.os.fullname}}
-          path: ${{ github.workspace }}/osu/Release/**
+      - name: Compose metadata
+        id: meta
+        run: |
+          $version = "${{ inputs.version_core }}-${{ inputs.feature_suffix }}"
+
+          $channel = "${{ inputs.channel_override }}"
+          if ([string]::IsNullOrWhiteSpace($channel)) {
+            $channel = "${{ inputs.feature_suffix }}"
+          }
+
+          $tag = "$channel-${{ inputs.version_core }}"
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "channel=$channel" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+
+          Write-Host "Version: $version"
+          Write-Host "Channel: $channel"
+          Write-Host "Tag: $tag"
+
+      - name: Prepare directories
+        run: |
+          New-Item -ItemType Directory -Force -Path "${env:PUBLISH_DIR}" | Out-Null
+          New-Item -ItemType Directory -Force -Path "${env:RELEASES_DIR}" | Out-Null
+
+      # 下载同一 channel 最近一个 release 的更新资产，供后续继续生成索引/包
+      # 首次发布允许没有历史资产
+      - name: Download previous assets for same channel
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $prefix = "${{ steps.meta.outputs.channel }}-"
+
+          $tag = gh release list --limit 100 --json tagName,isDraft,isPrerelease `
+            --jq "[.[] | select(.isDraft == false) | select(.tagName | startswith(`"$prefix`"))][0].tagName"
+
+          if ([string]::IsNullOrWhiteSpace($tag) -or $tag -eq "null") {
+            Write-Host "No previous release found for channel '$prefix'. Treating as first release."
+            exit 0
+          }
+
+          Write-Host "Downloading previous assets from release: $tag"
+
+          gh release download $tag `
+            --dir "${env:RELEASES_DIR}" `
+            --pattern "*.nupkg" `
+            --pattern "RELEASES" `
+            --pattern "releases.*.json"
+
+      - name: Publish osu.Desktop
+        run: |
+          dotnet publish `
+            "${{ github.workspace }}/osu/osu.Desktop/osu.Desktop.csproj" `
+            -f net8.0-windows10.0.22621.0 `
+            -r win-x64 `
+            -c "${{ inputs.profile }}" `
+            -o "${env:PUBLISH_DIR}" `
+            /p:Version="${{ steps.meta.outputs.version }}"
+
+      - name: Pack Velopack release
+        run: |
+          $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
+
+          vpk pack `
+            --packId "${env:PACK_ID}" `
+            --packVersion "${{ steps.meta.outputs.version }}" `
+            --packDir "${env:PUBLISH_DIR}" `
+            --mainExe "${env:MAIN_EXE}" `
+            --packTitle "${env:PACK_TITLE}" `
+            --runtime "win-x64" `
+            --channel "${{ steps.meta.outputs.channel }}" `
+            --outputDir "${env:RELEASES_DIR}"
+
+      - name: Show generated files
+        run: |
+          Get-ChildItem -Force "${env:RELEASES_DIR}" | Format-Table Name, Length, LastWriteTime
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.meta.outputs.tag }}"
+
+          $assets = @()
+
+          $releasesFile = Join-Path "${env:RELEASES_DIR}" "RELEASES"
+          if (Test-Path $releasesFile) {
+            $assets += Get-Item $releasesFile
+          }
+
+          $jsonFiles = Get-ChildItem "${env:RELEASES_DIR}\releases.*.json" -ErrorAction SilentlyContinue
+          if ($jsonFiles) {
+            $assets += $jsonFiles
+          }
+
+          $nupkgs = Get-ChildItem "${env:RELEASES_DIR}\*.nupkg" -ErrorAction SilentlyContinue
+          if ($nupkgs) {
+            $assets += $nupkgs
+          }
+
+          $portableZips = Get-ChildItem "${env:RELEASES_DIR}\*Portable.zip" -ErrorAction SilentlyContinue
+          if ($portableZips) {
+            $assets += $portableZips
+          }
+
+          # 明确排除 Setup.exe
+          $assets = $assets | Where-Object { $_.Name -notlike "*Setup.exe" }
+
+          if (-not $assets -or $assets.Count -eq 0) {
+            throw "No release assets found to upload."
+          }
+
+          $assetPaths = $assets | ForEach-Object { $_.FullName }
+
+          gh release create $tag `
+            --title $tag `
+            --notes "Automated build for version ${{ steps.meta.outputs.version }} (channel: ${{ steps.meta.outputs.channel }})" `
+            $assetPaths

@@ -10,7 +10,6 @@ using osu.Framework.Localisation;
 using osu.Game.Configuration;
 using osu.Game.Localisation;
 using osu.Game.Online.Multiplayer;
-using osu.Game.Overlays.Dialog;
 using osu.Game.Overlays.Notifications;
 using osu.Game.Updater;
 
@@ -75,19 +74,6 @@ namespace osu.Game.Overlays.Settings.Sections.General
 
         private void releaseStreamChanged(ValueChangedEvent<ReleaseStream> stream)
         {
-            if (stream.NewValue == ReleaseStream.Tachyon)
-            {
-                dialogOverlay?.Push(
-                    new ConfirmDialog(GeneralSettingsStrings.ChangeReleaseStreamConfirmation,
-                        () => configReleaseStream.Value = ReleaseStream.Tachyon,
-                        () => releaseStreamDropdown.Current.Value = ReleaseStream.Lazer)
-                    {
-                        BodyText = GeneralSettingsStrings.ChangeReleaseStreamConfirmationInfo
-                    });
-
-                return;
-            }
-
             configReleaseStream.Value = stream.NewValue;
         }
 

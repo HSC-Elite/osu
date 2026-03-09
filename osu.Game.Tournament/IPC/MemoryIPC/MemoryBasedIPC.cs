@@ -271,7 +271,6 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
         protected long CalculateModMultiplier(PlayerScore s)
         {
-            //return (long)(s.Score * (Ladder.ModMultiplierSettings.FirstOrDefault(m => (m.Mods.Value & s.Mods) > LegacyMods.None)?.Multiplier.Value ?? 1.0));
             return s.Score;
         }
 
