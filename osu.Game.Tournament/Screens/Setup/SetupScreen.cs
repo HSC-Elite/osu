@@ -70,6 +70,7 @@ namespace osu.Game.Tournament.Screens.Setup
         {
             fillFlow.Children = new Drawable[]
             {
+                new UpdateCheckAction(),
                 new ActionableInfo
                 {
                     Label = "Current user",
