@@ -85,6 +85,7 @@ namespace osu.Game.Tournament.Screens.Setup
                         memoryBasedIPC?.Reset();
                     }
                 },
+                new UpdateCheckAction(),
                 new ActionableInfo
                 {
                     Label = "Current user",
