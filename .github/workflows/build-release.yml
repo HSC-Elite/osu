@@ -26,7 +26,7 @@ on:
       channel_override:
         description: "Optional update channel override (leave empty to use feature_suffix)"
         required: false
-        default: general
+        default: General
 
 permissions:
   contents: write
@@ -109,7 +109,7 @@ jobs:
           $prefix = "${{ steps.meta.outputs.channel }}-"
 
           $tag = gh release list --limit 100 --json tagName,isDraft,isPrerelease `
-            --jq "[.[] | select(.isDraft == false) | select(.tagName | startswith(\"$prefix\"))][0].tagName"
+            --jq "[.[] | select(.isDraft == false) | select(.tagName | startswith(`"$prefix`"))][0].tagName"
 
           if ([string]::IsNullOrWhiteSpace($tag) -or $tag -eq "null") {
             Write-Host "No previous release found for channel '$prefix'. Treating as first release."
@@ -173,6 +173,11 @@ jobs:
           $nupkgs = Get-ChildItem "${env:RELEASES_DIR}\*.nupkg" -ErrorAction SilentlyContinue
           if ($nupkgs) {
             $assets += $nupkgs
+          }
+
+          $portableZips = Get-ChildItem "${env:RELEASES_DIR}\*Portable.zip" -ErrorAction SilentlyContinue
+          if ($portableZips) {
+            $assets += $portableZips
           }
 
           # 明确排除 Setup.exe
