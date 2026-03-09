@@ -7,9 +7,9 @@ namespace osu.Game.Configuration
 {
     public enum ReleaseStream
     {
-        Lazer,
+        General,
 
-        [Description("Tachyon (Unstable)")]
-        Tachyon
+        [Description("Lazer Match")]
+        LazerMatch
     }
 }
