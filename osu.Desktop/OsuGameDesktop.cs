@@ -107,14 +107,6 @@ namespace osu.Desktop
 
         protected override UpdateManager CreateUpdateManager()
         {
-            // If this is the first time we've run the game, ie it is being installed,
-            // reset the user's release stream to "lazer".
-            //
-            // This ensures that if a user is trying to recover from a failed startup on an unstable release stream,
-            // the game doesn't immediately try and update them back to the release stream after starting up.
-            if (IsFirstRun)
-                LocalConfig.SetValue(OsuSetting.ReleaseStream, ReleaseStream.Lazer);
-
             if (IsPackageManaged)
                 return new NoActionUpdateManager();
 
