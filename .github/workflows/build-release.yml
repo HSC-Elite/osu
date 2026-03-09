@@ -14,16 +14,17 @@ on:
           - Release
 
       version_core:
-        description: Version core (example: 20260308.0)
+        description: "Version core (example: 2026.308.0)"
         required: true
+        default: 2026.308.0
 
       feature_suffix:
-        description: Version suffix / feature name (example: tournament-ui)
+        description: "Version suffix / feature name (example: tournament-ui)"
         required: true
         default: shanden
 
       channel_override:
-        description: Optional update channel override (leave empty to use feature_suffix)
+        description: "Optional update channel override (leave empty to use feature_suffix)"
         required: false
         default: general
 
@@ -127,7 +128,7 @@ jobs:
         run: |
           dotnet publish `
             "${{ github.workspace }}/osu/osu.Desktop/osu.Desktop.csproj" `
-            -f net8.0-windows `
+            -f net8.0-windows10.0.22621.0 `
             -r win-x64 `
             -c "${{ inputs.profile }}" `
             -o "${env:PUBLISH_DIR}" `
