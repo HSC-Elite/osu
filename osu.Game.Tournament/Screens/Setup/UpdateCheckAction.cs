@@ -106,7 +106,7 @@ namespace osu.Game.Tournament.Screens.Setup
                 Velopack.UpdateManager updateManager = new Velopack.UpdateManager(updateSource, new UpdateOptions
                 {
                     AllowVersionDowngrade = true,
-                    ExplicitChannel = releaseStream.Value.ToString()
+                    ExplicitChannel = releaseStream.Value.ToString().ToLowerInvariant()
                 });
 
                 UpdateInfo? update = await updateManager.CheckForUpdatesAsync().ConfigureAwait(false);

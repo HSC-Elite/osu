@@ -24,9 +24,13 @@ on:
         default: shanden
 
       channel_override:
-        description: "Optional update channel override (leave empty to use feature_suffix)"
-        required: false
-        default: General
+        description: "update channel"
+        type: choice
+        required: true
+        default: general
+        options:
+          - general
+          - lazermatch
 
 permissions:
   contents: write
