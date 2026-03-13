@@ -250,7 +250,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
                         if (chroma.CurrentScreen is IdleScreen)
                             return;
 
-                        chroma.Exit();
+                        IPC.State.Value = TourneyState.Idle;
                     }
                 },
                 new VisualSettings

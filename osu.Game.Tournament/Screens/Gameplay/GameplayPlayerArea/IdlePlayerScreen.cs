@@ -29,9 +29,9 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         [Resolved]
         private LazerRoomMatchInfo lazerRoomMatchInfo { get; set; } = null!;
 
-        private Bindable<float> usernameFontSize = new Bindable<float>();
+        private readonly Bindable<float> usernameFontSize = new Bindable<float>();
 
-        private OsuLogo logo;
+        private readonly OsuLogo logo;
 
         private static readonly Vector2 small_logo_size = new Vector2(0.35f);
         private static readonly Vector2 medium_logo_size = new Vector2(0.5f);
