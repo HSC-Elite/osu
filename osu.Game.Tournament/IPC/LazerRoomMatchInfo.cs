@@ -180,6 +180,14 @@ namespace osu.Game.Tournament.IPC
             State.Value = TourneyState.Idle;
         }
 
+        public void ForceReSpectate()
+        {
+            if (client.Room?.State != MultiplayerRoomState.Playing)
+                return;
+
+            onLoadRequested();
+        }
+
         private void onLoadRequested()
         {
             leaderboardProvider = null;

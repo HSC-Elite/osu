@@ -238,8 +238,8 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     Text = "force spect",
                     Action = () =>
                     {
-                        IPC.State.Value = TourneyState.WaitingForClients;
-                        updateState();
+                        IPC.State.Value = TourneyState.Idle;
+                        ((LazerRoomMatchInfo)IPC).ForceReSpectate();
                     }
                 },
                 new TourneyButton
