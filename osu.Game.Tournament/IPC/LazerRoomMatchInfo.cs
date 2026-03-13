@@ -156,6 +156,7 @@ namespace osu.Game.Tournament.IPC
                 Logger.Log("exiting room");
 
                 currentRoom.Value = null;
+                return;
             }
 
             if (client.LocalUser != null && client.LocalUser.State != MultiplayerUserState.Spectating)
