@@ -506,7 +506,7 @@ namespace osu.Game.Screens.Play
                     }),
                     skipOutroOverlay = new SkipOverlay(GameplayState.Storyboard.LatestEventTime ?? 0)
                     {
-                        RequestSkip = () => progressToResults(false),
+                        RequestSkip = () => ProgressToResults(false),
                         Alpha = 0
                     },
                     DrawableRuleset.ResumeOverlay?.CreateProxy() ?? new Container(),
@@ -676,7 +676,7 @@ namespace osu.Game.Screens.Play
             // show the results instead.
             if (GameplayState.HasPassed && !isRestarting)
             {
-                progressToResults(false);
+                ProgressToResults(false);
                 return false;
             }
 
@@ -839,7 +839,7 @@ namespace osu.Game.Screens.Play
                 return;
             }
 
-            progressToResults(true);
+            ProgressToResults(true);
         }
 
         /// <summary>
@@ -849,7 +849,7 @@ namespace osu.Game.Screens.Play
         /// A final display will only occur once all work is completed in <see cref="PrepareScoreForResultsAsync"/>. This means that even after calling this method, the results screen will never be shown until <see cref="JudgementProcessor.HasCompleted">ScoreProcessor.HasCompleted</see> becomes <see langword="true"/>.
         /// </remarks>
         /// <param name="withDelay">Whether a minimum delay (<see cref="RESULTS_DISPLAY_DELAY"/>) should be added before the screen is displayed.</param>
-        private void progressToResults(bool withDelay)
+        protected void ProgressToResults(bool withDelay)
         {
             if (!Configuration.ShowResults)
                 return;

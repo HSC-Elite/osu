@@ -83,7 +83,7 @@ namespace osu.Game.Screens.Play
             if (!this.IsCurrentScreen())
                 return;
 
-            this.Push(CreateResults(score.ScoreInfo));
+            ProgressToResults(false);
         }
 
         protected override Score CreateScore(IBeatmap beatmap) => score;
