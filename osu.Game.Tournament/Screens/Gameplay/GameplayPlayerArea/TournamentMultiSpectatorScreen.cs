@@ -133,9 +133,9 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                 AddInternal(leaderboardProvider);
                 foreach (var instance in instances)
                     leaderboardProvider.AddClock(instance.UserId, instance.SpectatorPlayerClock);
-
-                lazerRoomInfo.LeaderboardProvider = leaderboardProvider;
             });
+
+            lazerRoomInfo.LeaderboardProvider = leaderboardProvider;
 
             tourneyState.BindTo(lazerRoomInfo.State);
 
