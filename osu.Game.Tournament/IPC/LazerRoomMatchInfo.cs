@@ -89,19 +89,26 @@ namespace osu.Game.Tournament.IPC
             {
                 if (result.IsCompletedSuccessfully)
                 {
-                    currentRoom.Value = room;
-                    onSuccess?.Invoke(room);
+                    Scheduler.Add(() =>
+                    {
+                        currentRoom.Value = room;
+                        onSuccess?.Invoke(room);
+                    });
                 }
                 else
                 {
-                    Exception? exception = result.Exception?.AsSingular();
+                    Scheduler.Add(() =>
+                    {
+                        currentRoom.Value = null;
+                        Exception? exception = result.Exception?.AsSingular();
 
-                    onFailure ??= (m, e) => Logger.Error(e, m);
+                        onFailure ??= (m, e) => Logger.Error(e, m);
 
-                    if (exception?.GetHubExceptionMessage() is string message)
-                        onFailure?.Invoke(message, exception);
-                    else
-                        onFailure?.Invoke($"Failed to join multiplayer room. {exception?.Message}", exception);
+                        if (exception?.GetHubExceptionMessage() is string message)
+                            onFailure?.Invoke(message, exception);
+                        else
+                            onFailure?.Invoke($"Failed to join multiplayer room. {exception?.Message}", exception);
+                    });
                 }
             });
         });
