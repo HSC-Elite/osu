@@ -43,9 +43,6 @@ namespace osu.Game.Tournament.Screens.Gameplay
         private OsuButton warmupButton = null!;
         private Sprite slotSprite = null!;
 
-        private PlayerArea redArea = null!;
-        private PlayerArea blueArea = null!;
-
         private MatchHeader header = null!;
         private RoundInformationPreview roundPreview = null!;
 
@@ -210,25 +207,6 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 new MatchRoundNameTextBox
                 {
                     RelativeSizeAxes = Axes.X,
-                },
-                new TourneyButton
-                {
-                    Text = "红飞",
-                    Action = redArea.Launch
-                },
-                new TourneyButton
-                {
-                    Text = "蓝飞",
-                    Action = blueArea.Launch
-                },
-                new TourneyButton
-                {
-                    Text = "飞重置",
-                    Action = () =>
-                    {
-                        redArea.Reset();
-                        blueArea.Reset();
-                    }
                 },
                 new TourneyButton
                 {
