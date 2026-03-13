@@ -12,6 +12,7 @@ using osu.Framework.Extensions;
 using osu.Framework.Extensions.ExceptionExtensions;
 using osu.Framework.Logging;
 using osu.Game.Beatmaps;
+using osu.Game.Beatmaps.Legacy;
 using osu.Game.Database;
 using osu.Game.Online;
 using osu.Game.Online.API.Requests.Responses;
@@ -214,6 +215,8 @@ namespace osu.Game.Tournament.IPC
             if (client.Room == null || client.LocalUser == null)
                 return;
 
+            beatmapLookUpCancellation?.Cancel();
+
             MultiplayerPlaylistItem item = client.Room.CurrentPlaylistItem;
             int gameplayBeatmapId = client.LocalUser.BeatmapId ?? item.BeatmapID;
             int gameplayRulesetId = client.LocalUser.RulesetId ?? item.RulesetID;
@@ -239,8 +242,13 @@ namespace osu.Game.Tournament.IPC
                 return;
             }
 
-            beatmapLookupCache.GetBeatmapAsync(gameplayBeatmapId).ContinueWith(t =>
+            beatmapLookUpCancellation = new CancellationTokenSource();
+
+            beatmapLookupCache.GetBeatmapAsync(gameplayBeatmapId, beatmapLookUpCancellation.Token).ContinueWith(t =>
             {
+                if (!t.IsCompletedSuccessfully)
+                    return;
+
                 Scheduler.Add(() =>
                 {
                     APIBeatmap? beatmapSet = t.GetResultSafely();
@@ -248,11 +256,13 @@ namespace osu.Game.Tournament.IPC
                         return;
 
                     Beatmap.Value = new TournamentBeatmap(beatmapSet);
+                    Mods.Value = LegacyMods.None;
                 });
             });
         }
 
         private CancellationTokenSource? downloadCheckCancellation;
+        private CancellationTokenSource? beatmapLookUpCancellation;
         private int lastAutoDownloadBeatmap;
 
         private void onBeatmapAvailabilityChanged(ValueChangedEvent<BeatmapAvailability> e)
