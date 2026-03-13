@@ -139,7 +139,12 @@ namespace osu.Desktop
                 }
 
                 if (tournamentClient)
-                    host.Run(new TournamentGame());
+                {
+                    host.Run(new TournamentGame
+                    {
+                        IsFirstRun = isFirstRun
+                    });
+                }
                 else
                 {
                     host.Run(new OsuGameDesktop(args)

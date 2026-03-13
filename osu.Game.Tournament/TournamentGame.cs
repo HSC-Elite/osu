@@ -11,6 +11,7 @@ using osu.Framework.Graphics.Colour;
 using osu.Framework.Input.Handlers.Mouse;
 using osu.Framework.Logging;
 using osu.Framework.Platform;
+using osu.Game.Configuration;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Cursor;
 using osu.Game.Graphics.UserInterface;
@@ -43,6 +44,8 @@ namespace osu.Game.Tournament
 
         [Cached(typeof(IDialogOverlay))]
         private readonly DialogOverlay dialogOverlay = new DialogOverlay();
+
+        public bool IsFirstRun { get; init; }
 
         [BackgroundDependencyLoader]
         private void load(FrameworkConfigManager frameworkConfig, GameHost host)
@@ -116,6 +119,9 @@ namespace osu.Game.Tournament
                     }), true);
                 });
             }));
+
+            if (IsFirstRun)
+                LocalConfig.SetValue(OsuSetting.ReleaseStream, ReleaseStream.General);
         }
 
         [Resolved]
