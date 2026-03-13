@@ -17,6 +17,7 @@ using osu.Framework.Logging;
 using osu.Game.Updater;
 using osu.Desktop.Windows;
 using osu.Framework.Allocation;
+using osu.Game.Configuration;
 using osu.Game.IO;
 using osu.Game.IPC;
 using osu.Game.Online.Multiplayer;
@@ -106,6 +107,9 @@ namespace osu.Desktop
 
         protected override UpdateManager CreateUpdateManager()
         {
+            if (IsFirstRun)
+                LocalConfig.SetValue(OsuSetting.ReleaseStream, ReleaseStream.General);
+
             if (IsPackageManaged)
                 return new NoActionUpdateManager();
 
