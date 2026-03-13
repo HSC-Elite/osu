@@ -162,7 +162,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
         public bool AddRedPlayer(Drawable player)
         {
-            if (redIndex > redTeamContainer.Count)
+            if (redIndex >= redTeamContainer.Count)
                 return false;
 
             var emptyContainer = redTeamContainer[redIndex] as Container;
@@ -177,7 +177,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
         public bool AddBluePlayer(Drawable player)
         {
-            if (blueIndex > blueTeamContainer.Count)
+            if (blueIndex >= blueTeamContainer.Count)
                 return false;
 
             var emptyContainer = blueTeamContainer[blueIndex] as Container;
