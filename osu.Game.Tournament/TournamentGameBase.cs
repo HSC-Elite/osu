@@ -72,7 +72,7 @@ namespace osu.Game.Tournament
             base.SetHost(host);
 
             if (host.Window != null)
-                host.Window.Title = $"HSC - Tournamnet 20w14∞ [别看这个，快去看选手操作！]";
+                host.Window.Title = $"HSC - Tournamnet 20w14∞ [别看这个，快去看选手操作！] [lazer 比赛用]";
         }
 
         private TournamentSpriteText initialisationText = null!;
