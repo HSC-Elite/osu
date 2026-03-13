@@ -34,6 +34,8 @@ namespace osu.Game.Tournament.Screens.Setup
 
         private readonly Bindable<ReleaseStream> releaseStream = new Bindable<ReleaseStream>();
 
+        private string getCurrentVersion => $"当前版本为{game.Version}";
+
         public UpdateCheckAction()
             : base(true)
         {
@@ -54,7 +56,7 @@ namespace osu.Game.Tournament.Screens.Setup
                 Colour = colours.Blue,
             });
 
-            text.Text = $"当前版本为{game.Version}";
+            text.Text = getCurrentVersion;
 
             string version = game.Version;
 
@@ -106,7 +108,7 @@ namespace osu.Game.Tournament.Screens.Setup
                 Velopack.UpdateManager updateManager = new Velopack.UpdateManager(updateSource, new UpdateOptions
                 {
                     AllowVersionDowngrade = true,
-                    ExplicitChannel = releaseStream.Value.ToString()
+                    ExplicitChannel = releaseStream.Value.ToString().ToLowerInvariant()
                 });
 
                 UpdateInfo? update = await updateManager.CheckForUpdatesAsync().ConfigureAwait(false);
@@ -114,6 +116,7 @@ namespace osu.Game.Tournament.Screens.Setup
                 if (cancellationToken.IsCancellationRequested)
                 {
                     log("Update check cancelled");
+                    text.Text = $"更新已取消，{getCurrentVersion}";
                     return true;
                 }
 
@@ -121,6 +124,8 @@ namespace osu.Game.Tournament.Screens.Setup
                 {
                     // No update is available.
                     log("No update found");
+                    text.Text = $"已是最新版本，{getCurrentVersion}";
+
                     return false;
                 }
 
@@ -169,7 +174,7 @@ namespace osu.Game.Tournament.Screens.Setup
                 return false;
             }
 
-            text.Text = "下载完成，重启以安装更新";
+            text.Text = $"下载完成，重启以安装更新{update.TargetFullRelease.Version}";
             button.Text = "重新启动";
 
             Schedule(() =>

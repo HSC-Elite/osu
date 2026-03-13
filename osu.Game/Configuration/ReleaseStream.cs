@@ -7,9 +7,10 @@ namespace osu.Game.Configuration
 {
     public enum ReleaseStream
     {
+        [Description("通用端")]
         General,
 
-        [Description("Lazer Match")]
+        [Description("Lazer比赛直播端")]
         LazerMatch
     }
 }

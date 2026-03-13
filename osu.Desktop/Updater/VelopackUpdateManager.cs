@@ -59,7 +59,7 @@ namespace osu.Desktop.Updater
                 Velopack.UpdateManager updateManager = new Velopack.UpdateManager(updateSource, new UpdateOptions
                 {
                     AllowVersionDowngrade = true,
-                    ExplicitChannel = ReleaseStream.Value.ToString(),
+                    ExplicitChannel = ReleaseStream.Value.ToString().ToLowerInvariant(),
                 });
 
                 UpdateInfo? update = await updateManager.CheckForUpdatesAsync().ConfigureAwait(false);
