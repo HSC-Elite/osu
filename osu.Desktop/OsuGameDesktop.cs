@@ -108,7 +108,7 @@ namespace osu.Desktop
         protected override UpdateManager CreateUpdateManager()
         {
             if (IsFirstRun)
-                LocalConfig.SetValue(OsuSetting.ReleaseStream, ReleaseStream.General);
+                LocalConfig.SetValue(OsuSetting.ReleaseStream, ReleaseStream.LazerMatch);
 
             if (IsPackageManaged)
                 return new NoActionUpdateManager();

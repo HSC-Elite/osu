@@ -121,7 +121,7 @@ namespace osu.Game.Tournament
             }));
 
             if (IsFirstRun)
-                LocalConfig.SetValue(OsuSetting.ReleaseStream, ReleaseStream.General);
+                LocalConfig.SetValue(OsuSetting.ReleaseStream, ReleaseStream.LazerMatch);
         }
 
         [Resolved]
