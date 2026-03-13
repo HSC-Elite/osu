@@ -438,7 +438,7 @@ namespace osu.Game.Tournament.IPC
                          ?? 1.0));
             }
 
-            return (long)multiplier * score.TotalScore.Value;
+            return (long)(multiplier * score.TotalScore.Value);
         }
 
         private Mod[] getUserMod(int userId)
