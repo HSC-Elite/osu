@@ -54,9 +54,9 @@ namespace osu.Game.Tournament.IPC
             set => leaderboardProvider = value;
         }
 
-        private BindableList<MultiplayerRoomUser> redTeamUser = new BindableList<MultiplayerRoomUser>();
-        private BindableList<MultiplayerRoomUser> blueTeamUser = new BindableList<MultiplayerRoomUser>();
-        private BindableList<MultiplayerRoomUser> roomUser = new BindableList<MultiplayerRoomUser>();
+        private readonly BindableList<MultiplayerRoomUser> redTeamUser = new BindableList<MultiplayerRoomUser>();
+        private readonly BindableList<MultiplayerRoomUser> blueTeamUser = new BindableList<MultiplayerRoomUser>();
+        private readonly BindableList<MultiplayerRoomUser> roomUser = new BindableList<MultiplayerRoomUser>();
 
         public IBindableList<MultiplayerRoomUser> RedTeamUser => redTeamUser;
         public IBindableList<MultiplayerRoomUser> BlueTeamUser => blueTeamUser;
