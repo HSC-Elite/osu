@@ -90,7 +90,6 @@ namespace osu.Game.Tournament.IPC
                 {
                     currentRoom.Value = room;
                     onSuccess?.Invoke(room);
-                    updateUsers();
                 }
                 else
                 {
@@ -124,6 +123,7 @@ namespace osu.Game.Tournament.IPC
             Ladder.CurrentMatch.BindValueChanged(_ =>
             {
                 teamIdsCache.Clear();
+                updateUsers();
             });
 
             client.RoomUpdated += onRoomUpdated;
@@ -312,6 +312,7 @@ namespace osu.Game.Tournament.IPC
             }
 
             updateChannel();
+            updateUsers();
         }
 
         private void onRoomPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -334,7 +335,12 @@ namespace osu.Game.Tournament.IPC
         private void updateUsers() => Scheduler.AddOnce(() =>
         {
             if (client.Room == null || client.LocalUser == null)
+            {
+                roomUser.Clear();
+                redTeamUser.Clear();
+                blueTeamUser.Clear();
                 return;
+            }
 
             var currentUser = client.Room.Users.Where(p => p.State != MultiplayerUserState.Spectating);
 
