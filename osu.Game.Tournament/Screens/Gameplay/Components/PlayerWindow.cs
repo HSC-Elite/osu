@@ -80,6 +80,9 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
             var sampleStore = audioManager.GetSampleStore(new NamespacedResourceStore<byte[]>(new StorageBackedResourceStore(storage), "Lmao"));
             string samplePath = storage.GetFullPath("Lmao");
 
+            if (!Directory.Exists(samplePath))
+                return;
+
             string[] files = Directory.GetFiles(samplePath);
 
             foreach (string file in files)
