@@ -68,8 +68,10 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             return ReadInt64(channelIdAddress);
         }
 
-        public List<Message>? GetTourneyChat(int messageSize = -1)
+        public List<Message>? GetTourneyChat(out int memoryMessageSize, int currentMessageCount = -1)
         {
+            memoryMessageSize = 0;
+
             if (!CheckInitialized() || chatAreaAddress == null)
                 return null;
 
@@ -103,14 +105,14 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                     IntPtr messagesAddr = ReadInt32(currentChannel + 0x10);
                     IntPtr messagesItems = ReadInt32(messagesAddr + 0x4);
 
-                    int messageLength = ReadInt32(messagesAddr + 0xc);
+                    memoryMessageSize = ReadInt32(messagesAddr + 0xc);
 
-                    if (messageSize == messageLength)
+                    if (currentMessageCount == memoryMessageSize)
                     {
-                        continue;
+                        return null;
                     }
 
-                    for (int m = 0; m < messageLength; m++)
+                    for (int m = 0; m < memoryMessageSize; m++)
                     {
                         IntPtr currentMessagePointer = messagesItems + 0x8 + 0x4 * m;
                         IntPtr currentMessage = ReadInt32(currentMessagePointer);

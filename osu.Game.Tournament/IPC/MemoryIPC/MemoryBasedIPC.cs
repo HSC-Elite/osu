@@ -29,6 +29,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
         public SlotPlayerStatus[] SlotPlayers { get; } = Enumerable.Range(0, 8).Select(i => new SlotPlayerStatus()).ToArray();
         public Bindable<Channel> TourneyChatChannel { get; } = new Bindable<Channel>();
+        private int currentMemoryMessageCount = 0;
 
         [Resolved]
         protected LadderInfo Ladder { get; private set; } = null!;
@@ -57,12 +58,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
             ChatChannel.BindValueChanged(c =>
             {
-                TourneyChatChannel.Value = new Channel
-                {
-                    Name = "mp",
-                    Id = c.NewValue,
-                    Type = ChannelType.Private
-                };
+                resetTourneyChatChannel(c.NewValue);
             }, true);
         }
 
@@ -136,7 +132,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                 }
 
                 ChatChannel.Value = (int)reader.GetChannelId();
-                updateMessageList(reader.GetTourneyChat(TourneyChatChannel.Value.Messages.Count) ?? new List<Message>());
+                updateTourneyChat(reader);
             }
             catch (InvalidOperationException)
             {
@@ -150,22 +146,36 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             }
         }
 
-        private void updateMessageList(List<Message> tourneyChatItems)
+        private void resetTourneyChatChannel(int channelId)
         {
-            var takenChat = tourneyChatItems.TakeLast(Channel.MAX_HISTORY).ToArray();
+            TourneyChatChannel.Value = new Channel
+            {
+                Name = "mp",
+                Id = channelId,
+                Type = ChannelType.Private
+            };
+
+            currentMemoryMessageCount = 0;
+        }
+
+        private void updateTourneyChat(TourneyManagerMemoryReader reader)
+        {
+            List<Message>? updatedMessages = reader.GetTourneyChat(out int memoryMessageCount, currentMemoryMessageCount);
+
+            applyUpdatedTourneyChat(updatedMessages);
+            currentMemoryMessageCount = memoryMessageCount;
+        }
+
+        private void applyUpdatedTourneyChat(List<Message>? tourneyChatItems)
+        {
+            if (tourneyChatItems == null)
+                return;
+
+            Message[] takenChat = tourneyChatItems.TakeLast(Channel.MAX_HISTORY).ToArray();
 
             var channel = TourneyChatChannel.Value;
 
-            var toRemove = channel.Messages.Except(takenChat).ToArray();
-            foreach (var item in toRemove)
-                channel.Messages.Remove(item);
-
-            if (toRemove.Length > 0)
-            {
-                Logger.Log($"memory: deleted {toRemove.Length} message items");
-            }
-
-            var toAdd = takenChat.Except(channel.Messages).ToArray();
+            Message[] toAdd = takenChat.Except(channel.Messages).ToArray();
             channel.AddNewMessages(toAdd);
 
             if (toAdd.Length > 0)

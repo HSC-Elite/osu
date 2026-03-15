@@ -108,9 +108,9 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             if (!IsAttached)
                 throw new InvalidOperationException("Process is not attached or has exited.");
 
-            int ByteSize = Marshal.SizeOf(typeof(T));
+            int byteSize = Marshal.SizeOf(typeof(T));
 
-            byte[] buffer = new byte[ByteSize];
+            byte[] buffer = new byte[byteSize];
 
             WindowsAPI.ReadProcessMemory(ProcessHandle, address, buffer, buffer.Length, out _);
 
