@@ -14,6 +14,8 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
     // https://github.com/tosuapp/tosu
     public class TourneyManagerMemoryReader : StableMemoryReader
     {
+        private const int diagnostic_log_interval_ms = 30000;
+
         // found with PercyDan54
         private static readonly PatternInfo channel_id_pattern = new PatternInfo("8B CE BA 07 00 00 00 E8 ?? ?? ?? ?? A3 ?? ?? ?? ?? 89 15 ?? ?? ?? ?? E8", 0xd);
 
@@ -22,6 +24,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
         private IntPtr? channelAddress;
 
         private IntPtr? chatAreaAddress;
+        private long nextDiagnosticLogAt;
 
         protected override void InitializeAddressInternal(List<MemoryRegion> regions)
         {
@@ -112,6 +115,10 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                         return null;
                     }
 
+                    int skippedEmptyContent = 0;
+                    int skippedInvalidHeader = 0;
+                    int skippedInvalidTime = 0;
+
                     for (int m = 0; m < memoryMessageSize; m++)
                     {
                         IntPtr currentMessagePointer = messagesItems + 0x8 + 0x4 * m;
@@ -120,18 +127,27 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                         string content = ReadSharpString(ReadInt32(currentMessage + 0x4)) ?? string.Empty;
 
                         if (content == string.Empty)
+                        {
+                            skippedEmptyContent++;
                             continue;
+                        }
 
                         string[] timeAndName = (ReadSharpString(ReadInt32(currentMessage + 0x8)) ?? string.Empty).Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
 
                         if (timeAndName.Length != 2)
+                        {
+                            skippedInvalidHeader++;
                             continue;
+                        }
 
                         string timePart = timeAndName[0].Trim();
                         string namePart = timeAndName[1].Trim();
 
                         if (!DateTimeOffset.TryParse(timePart, out var time))
+                        {
+                            skippedInvalidTime++;
                             continue;
+                        }
 
                         if (namePart.EndsWith(':'))
                             namePart = namePart[..^1];
@@ -149,6 +165,15 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                             },
                             Content = content,
                         });
+                    }
+
+                    if ((result.Count != memoryMessageSize || skippedEmptyContent > 0 || skippedInvalidHeader > 0 || skippedInvalidTime > 0)
+                        && shouldEmitDiagnostic())
+                    {
+                        Logger.Log(
+                            $"memory chat reader diagnostic: current_count={currentMessageCount}, memory_count={memoryMessageSize}, materialized_count={result.Count}, skipped_empty={skippedEmptyContent}, skipped_header={skippedInvalidHeader}, skipped_time={skippedInvalidTime}, first={describeMessage(result.Count > 0 ? result[0] : null)}, last={describeMessage(result.Count > 0 ? result[^1] : null)}",
+                            LoggingTarget.Runtime,
+                            LogLevel.Important);
                     }
 
                     return result;
@@ -170,6 +195,40 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                 if (ReferenceEquals(this, other)) return true;
 
                 return Timestamp == other.Timestamp && Sender.Username == other.Sender.Username && Content == other.Content;
+            }
+        }
+
+        private bool shouldEmitDiagnostic()
+        {
+            long now = Environment.TickCount64;
+
+            if (now < nextDiagnosticLogAt)
+                return false;
+
+            nextDiagnosticLogAt = now + diagnostic_log_interval_ms;
+            return true;
+        }
+
+        private static string describeMessage(Message? message)
+        {
+            if (message == null)
+                return "<none>";
+
+            string content = message.Content ?? string.Empty;
+
+            return $"[{message.Timestamp:O}] {message.Sender.Username} len={content.Length} hash={getContentHash(content):X8}";
+        }
+
+        private static int getContentHash(string content)
+        {
+            unchecked
+            {
+                int hash = 17;
+
+                foreach (char c in content)
+                    hash = hash * 31 + c;
+
+                return hash;
             }
         }
     }

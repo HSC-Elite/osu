@@ -20,6 +20,8 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
     [SupportedOSPlatform("windows")]
     public partial class MemoryBasedIPC : MatchIPCInfo, IProvideAdditionalData
     {
+        private const int chat_diagnostic_log_interval_ms = 30000;
+
         private int lastBeatmapId;
         private GetBeatmapRequest? beatmapLookupRequest;
 
@@ -30,6 +32,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
         public SlotPlayerStatus[] SlotPlayers { get; } = Enumerable.Range(0, 8).Select(i => new SlotPlayerStatus()).ToArray();
         public Bindable<Channel> TourneyChatChannel { get; } = new Bindable<Channel>();
         private int currentMemoryMessageCount = 0;
+        private long nextChatDiagnosticLogAt;
 
         [Resolved]
         protected LadderInfo Ladder { get; private set; } = null!;
@@ -174,6 +177,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             Message[] takenChat = tourneyChatItems.TakeLast(Channel.MAX_HISTORY).ToArray();
 
             var channel = TourneyChatChannel.Value;
+            int previousChannelCount = channel.Messages.Count;
 
             Message[] toAdd = takenChat.Except(channel.Messages).ToArray();
             channel.AddNewMessages(toAdd);
@@ -181,6 +185,51 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             if (toAdd.Length > 0)
             {
                 Logger.Log($"memory: add {toAdd.Length} message items");
+            }
+
+            bool suspiciousLargeAdd = previousChannelCount > 0 && toAdd.Length >= 20;
+            bool suspiciousFullWindowAdd = previousChannelCount > 0 && takenChat.Length > 0 && toAdd.Length == takenChat.Length;
+
+            if ((suspiciousLargeAdd || suspiciousFullWindowAdd) && shouldEmitChatDiagnostic(ref nextChatDiagnosticLogAt))
+            {
+                Logger.Log(
+                    $"memory chat diagnostic: channel_count={previousChannelCount}, incoming_count={tourneyChatItems.Count}, taken_count={takenChat.Length}, to_add={toAdd.Length}, current_memory_count={currentMemoryMessageCount}, first_add={describeMessage(toAdd.FirstOrDefault())}, last_add={describeMessage(toAdd.LastOrDefault())}",
+                    LoggingTarget.Runtime,
+                    LogLevel.Important);
+            }
+        }
+
+        private static bool shouldEmitChatDiagnostic(ref long nextLogAt)
+        {
+            long now = Environment.TickCount64;
+
+            if (now < nextLogAt)
+                return false;
+
+            nextLogAt = now + chat_diagnostic_log_interval_ms;
+            return true;
+        }
+
+        private static string describeMessage(Message? message)
+        {
+            if (message == null)
+                return "<none>";
+
+            string content = message.Content ?? string.Empty;
+
+            return $"[{message.Timestamp:O}] {message.Sender.Username} len={content.Length} hash={getContentHash(content):X8}";
+        }
+
+        private static int getContentHash(string content)
+        {
+            unchecked
+            {
+                int hash = 17;
+
+                foreach (char c in content)
+                    hash = hash * 31 + c;
+
+                return hash;
             }
         }
 
