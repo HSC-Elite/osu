@@ -70,7 +70,7 @@ namespace osu.Game.Tournament.Components
 
             if (!ladderInfo.UseAlternateChatSource.Value)
             {
-                var joinedChannel = manager.JoinedChannels.SingleOrDefault(ch => ch.Id == oldChannelId || ch.Id == channelId);
+                var joinedChannel = manager.JoinedChannels.SingleOrDefault(ch => ch.Id == oldChannelId);
                 if (joinedChannel != null)
                     manager.LeaveChannel(joinedChannel);
 
@@ -80,15 +80,18 @@ namespace osu.Game.Tournament.Components
                     Type = ChannelType.Public
                 };
 
-                manager.JoinChannel(channel);
-
                 if (sourceChanged && additionalData != null)
                 {
                     Channel.UnbindFrom(additionalData.TourneyChatChannel);
                     Channel.BindTo(manager.CurrentChannel);
                 }
 
-                manager.CurrentChannel.Value = channel;
+                // 退出频道可能有延迟 因为退出频道使用了 Scheduler
+                Scheduler.AddDelayed(() =>
+                {
+                    manager.JoinChannel(channel);
+                    manager.CurrentChannel.Value = channel;
+                }, 5);
                 return;
             }
 
