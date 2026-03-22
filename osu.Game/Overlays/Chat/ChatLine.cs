@@ -73,22 +73,20 @@ namespace osu.Game.Overlays.Chat
         private Drawable? background;
 
         private bool alternatingBackground;
+
+        // ReSharper disable once ConvertToConstant.Local
+        // ReSharper disable once FieldCanBeMadeReadOnly.Local
         private bool requiresTimestamp = true;
 
         public bool RequiresTimestamp
         {
             get => requiresTimestamp;
+            // ReSharper disable once ValueParameterNotUsed
+            // 主动 patch 禁用隐藏 timestamp
             set
             {
-                if (requiresTimestamp == value)
-                    return;
-
-                requiresTimestamp = value;
-
-                if (!IsLoaded)
-                    return;
-
-                updateMessageContent();
+                //requiresTimestamp = value;
+                return;
             }
         }
 

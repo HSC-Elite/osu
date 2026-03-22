@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
+using osu.Framework.Extensions;
 using osu.Framework.Extensions.ObjectExtensions;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Textures;
@@ -15,6 +16,7 @@ using osu.Framework.Input;
 using osu.Framework.IO.Stores;
 using osu.Framework.Logging;
 using osu.Framework.Platform;
+using osu.Framework.Utils;
 using osu.Game.Beatmaps.Legacy;
 using osu.Game.Configuration;
 using osu.Game.Database;
@@ -72,8 +74,23 @@ namespace osu.Game.Tournament
             base.SetHost(host);
 
             if (host.Window != null)
-                host.Window.Title = $"HSC - Tournamnet 20w14∞ [别看这个，快去看选手操作！] [lazer 比赛用]";
+                host.Window.Title = $"HSC - Tournamnet 20w14∞ [{randomTitle}] {versionSniffer} 版本:{Version} [lazer 比赛用]";
         }
+
+        private static readonly string[] titles =
+        {
+            "这窗口值一个 S rank",
+            "别看这个，快去看选手操作！",
+            "正在检测选手的屏幕压力...检测结果：炸了",
+            "鼠标灵敏度已重置为：随缘",
+            "请按 F1 寻求如何不气死自己的方法",
+            "加载中... (其实根本没在加载)",
+            "👌👌👌👌👌👌👌",
+        };
+
+        private string randomTitle => titles[RNG.Next(0, titles.Length)];
+
+        private string versionSniffer => ReleaseStream.General.GetDescription();
 
         private TournamentSpriteText initialisationText = null!;
 
