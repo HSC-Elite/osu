@@ -87,7 +87,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             tourneyManagerMemoryReader = new TourneyManagerMemoryReader();
         }
 
-        private void updateTourneyData()
+        private void updateTourneyManagerData()
         {
             var reader = tourneyManagerMemoryReader;
 
@@ -256,7 +256,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                     break;
 
                 case AttachStatus.Attached:
-                    updateTourneyData();
+                    updateTourneyManagerData();
                     available.Value = true;
                     break;
             }
