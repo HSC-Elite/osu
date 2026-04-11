@@ -108,13 +108,13 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             if (!IsAttached)
                 throw new InvalidOperationException("Process is not attached or has exited.");
 
-            int ByteSize = Marshal.SizeOf(typeof(T));
+            int byteSize = Marshal.SizeOf(typeof(T));
 
-            byte[] buffer = new byte[ByteSize];
+            byte[] buffer = new byte[byteSize];
 
             WindowsAPI.ReadProcessMemory(ProcessHandle, address, buffer, buffer.Length, out _);
 
-            return ByteArrayToStructure<T>(buffer);
+            return byteArrayToStructure<T>(buffer);
         }
 
         public IntPtr GetModuleBase(string moduleName)
@@ -122,7 +122,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             if (!IsAttached)
                 throw new InvalidOperationException("Process is not attached or has exited.");
 
-            foreach (ProcessModule mod in Process.Modules)
+            foreach (ProcessModule mod in Process!.Modules)
             {
                 if (mod.ModuleName.Equals(moduleName, StringComparison.OrdinalIgnoreCase))
                 {
@@ -151,7 +151,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
         // https://stackoverflow.com/a/50672487
 
-        private static T ByteArrayToStructure<T>(byte[] bytes) where T : struct
+        private static T byteArrayToStructure<T>(byte[] bytes) where T : struct
         {
             var handle = GCHandle.Alloc(bytes, GCHandleType.Pinned);
 
@@ -166,7 +166,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
         }
 
         // maybe useless unless we write memory :)
-        private static byte[] StructureToByteArray(object obj)
+        private static byte[] structureToByteArray(object obj)
         {
             int length = Marshal.SizeOf(obj);
 
@@ -312,7 +312,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                     });
                 }
 
-                address = new IntPtr(memInfo.BaseAddress.ToInt64() + (long)memInfo.RegionSize);
+                address = new IntPtr(memInfo.BaseAddress.ToInt64() + memInfo.RegionSize);
             }
 
             return regions;

@@ -28,6 +28,7 @@ using osu.Game.Screens.Play.HUD.ClicksPerSecond;
 using osu.Game.Screens.Play.HUD.JudgementCounter;
 using osu.Game.Skinning;
 using osuTK;
+using osuTK.Graphics;
 
 namespace osu.Game.Screens.Play
 {
@@ -51,7 +52,7 @@ namespace osu.Game.Screens.Play
                 return base.ShouldBeConsideredForInput(child);
 
             // hold to quit button should always be interactive.
-            return child == bottomRightElements;
+            return child == BottomRightElements;
         }
 
         public readonly ModDisplay ModDisplay;
@@ -66,6 +67,9 @@ namespace osu.Game.Screens.Play
 
         [Cached]
         private readonly JudgementCountController judgementCountController;
+
+        [Resolved]
+        private ScoreProcessor scoreProcessor { get; set; } = null!;
 
         public Bindable<bool> ShowHealthBar = new Bindable<bool>(true);
 
@@ -92,8 +96,8 @@ namespace osu.Game.Screens.Play
         // They will make a best-effort attempt to get out of the way of any other skinnable components.
 
         public readonly FillFlowContainer TopLeftElements;
-        internal readonly FillFlowContainer TopRightElements;
-        private readonly FillFlowContainer bottomRightElements;
+        public readonly FillFlowContainer TopRightElements;
+        public readonly FillFlowContainer BottomRightElements;
 
         internal readonly IBindable<bool> IsPlaying = new Bindable<bool>();
 
@@ -155,7 +159,7 @@ namespace osu.Game.Screens.Play
                         ModDisplay = CreateModsContainer(),
                     }
                 },
-                bottomRightElements = new FillFlowContainer
+                BottomRightElements = new FillFlowContainer
                 {
                     Anchor = Anchor.BottomRight,
                     Origin = Anchor.BottomRight,
@@ -221,6 +225,8 @@ namespace osu.Game.Screens.Play
 
             // start all elements hidden
             hideTargets.ForEach(d => d.Hide());
+
+            scoreProcessor.Combo.BindValueChanged(onComboChange);
         }
 
         public override void Hide() =>
@@ -314,10 +320,10 @@ namespace osu.Game.Screens.Play
             else
                 TopLeftElements.Y = 0;
 
-            if (highestBottomScreenSpace.HasValue && DrawHeight - bottomRightElements.DrawHeight > 0)
-                bottomRightElements.Y = BottomScoringElementsHeight = -Math.Clamp(DrawHeight - ToLocalSpace(highestBottomScreenSpace.Value).Y, 0, DrawHeight - bottomRightElements.DrawHeight);
+            if (highestBottomScreenSpace.HasValue && DrawHeight - BottomRightElements.DrawHeight > 0)
+                BottomRightElements.Y = BottomScoringElementsHeight = -Math.Clamp(DrawHeight - ToLocalSpace(highestBottomScreenSpace.Value).Y, 0, DrawHeight - BottomRightElements.DrawHeight);
             else
-                bottomRightElements.Y = 0;
+                BottomRightElements.Y = 0;
 
             void processDrawables(SkinnableContainer components)
             {
@@ -397,6 +403,30 @@ namespace osu.Game.Screens.Play
                 case HUDVisibilityMode.Always:
                     ShowHud.Value = true;
                     break;
+            }
+        }
+
+        [Resolved]
+        private IGameplayClock gameplayClock { get; set; }
+
+        private void onComboChange(ValueChangedEvent<int> combo)
+        {
+            if (gameplayClock.IsRewinding)
+                return;
+
+            if (combo.NewValue == 0 && combo.OldValue > 20)
+            {
+                foreach (var component in mainComponents.Components)
+                {
+                    if (component is not Drawable drawable)
+                        continue;
+
+                    if (component is not IShakeWhenMiss iShake || !iShake.ShakeWhenMiss.Value)
+                        continue;
+
+                    drawable.MoveToOffset(new Vector2(10, 0), 80, Easing.OutSine).Then().MoveToOffset(new Vector2(-20, 0), 80, Easing.InOutSine).Then().MoveToOffset(new Vector2(10, 0), 80, Easing.OutSine);
+                    drawable.FlashColour(Color4.Red, 1000, Easing.InOutSine);
+                }
             }
         }
 

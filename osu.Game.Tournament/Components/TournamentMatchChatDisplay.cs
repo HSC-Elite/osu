@@ -21,7 +21,8 @@ namespace osu.Game.Tournament.Components
         private readonly Bindable<int> chatChannel = new Bindable<int>();
         private readonly BindableBool useAlternateChat = new BindableBool();
 
-        private ChannelManager? manager;
+        private ChannelManager manager = null!;
+        private int oldChannelId;
         private int channelId;
 
         [Resolved]
@@ -31,7 +32,7 @@ namespace osu.Game.Tournament.Components
         private IAPIProvider api { get; set; } = null!;
 
         [Resolved]
-        private MatchIPCInfo? ipc { get; set; }
+        private MatchIPCInfo ipc { get; set; } = null!;
 
         private IProvideAdditionalData? additionalData => ipc as MemoryBasedIPC;
 
@@ -45,35 +46,33 @@ namespace osu.Game.Tournament.Components
         [BackgroundDependencyLoader]
         private void load()
         {
-            if (ipc != null)
-            {
-                chatChannel.BindTo(ipc.ChatChannel);
-                chatChannel.BindValueChanged(c =>
-                {
-                    channelId = c.NewValue;
-
-                    if (channelId <= 0) return;
-
-                    UpdateChat(false);
-                    Logger.Log($"Switch channel to {channelId}");
-                }, true);
-            }
+            AddInternal(manager = new ChannelManager(api));
 
             useAlternateChat.BindTo(ladderInfo.UseAlternateChatSource);
             useAlternateChat.BindValueChanged(_ => UpdateChat(true), true);
+
+            chatChannel.BindTo(ipc.ChatChannel);
+            chatChannel.BindValueChanged(c =>
+            {
+                oldChannelId = c.OldValue;
+                channelId = c.NewValue;
+
+                if (channelId <= 0) return;
+
+                UpdateChat(false);
+                Logger.Log($"Switch channel to {channelId}");
+            }, true);
         }
 
         public void UpdateChat(bool sourceChanged)
         {
-            if (manager == null)
-            {
-                AddInternal(manager = new ChannelManager(api));
-            }
+            Logger.Log($"Update channel {channelId}, {nameof(sourceChanged)}: {sourceChanged}, {nameof(ladderInfo.UseAlternateChatSource)}: {ladderInfo.UseAlternateChatSource.Value}");
 
             if (!ladderInfo.UseAlternateChatSource.Value)
             {
-                foreach (var ch in manager.JoinedChannels.ToList())
-                    manager.LeaveChannel(ch);
+                var joinedChannel = manager.JoinedChannels.SingleOrDefault(ch => ch.Id == oldChannelId);
+                if (joinedChannel != null)
+                    manager.LeaveChannel(joinedChannel);
 
                 var channel = new Channel
                 {
@@ -81,15 +80,18 @@ namespace osu.Game.Tournament.Components
                     Type = ChannelType.Public
                 };
 
-                manager.JoinChannel(channel);
-
                 if (sourceChanged && additionalData != null)
                 {
                     Channel.UnbindFrom(additionalData.TourneyChatChannel);
                     Channel.BindTo(manager.CurrentChannel);
                 }
 
-                manager.CurrentChannel.Value = channel;
+                // 退出频道可能有延迟 因为退出频道使用了 Scheduler
+                Scheduler.AddDelayed(() =>
+                {
+                    manager.JoinChannel(channel);
+                    manager.CurrentChannel.Value = channel;
+                }, 5);
                 return;
             }
 

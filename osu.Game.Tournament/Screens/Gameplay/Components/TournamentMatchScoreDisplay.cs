@@ -9,14 +9,19 @@ using osu.Game.Graphics.Sprites;
 using osu.Game.Screens.Play.HUD;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.IPC.MemoryIPC;
+using osu.Game.Tournament.Models;
 
 namespace osu.Game.Tournament.Screens.Gameplay.Components
 {
     public partial class TournamentMatchScoreDisplay : MatchScoreDisplay
     {
-        // private bool invertTextColor;
-        private ComboCounter team1MaxCombo;
-        private ComboCounter team2MaxCombo;
+        //private bool invertTextColor;
+        private ComboCounter team1MaxCombo = null!;
+        private ComboCounter team2MaxCombo = null!;
+        private readonly Colour4 black = Colour4.FromHex("1f1f1f");
+
+        [Resolved]
+        private LadderInfo ladderInfo { get; set; } = null!;
 
         [Resolved]
         private MatchIPCInfo ipc { get; set; } = null!;
@@ -55,10 +60,11 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
             team2MaxCombo.Current.BindTo(additionalData.Team2Combo);
         }
 
-        // private void updateColor()
-        // {
-        //     Score1Text.DrawableCount.Colour = Score2Text.DrawableCount.Colour = ScoreDiffText.DrawableCount.Colour = Color4Extensions.FromHex("383838");
-        // }
+        //private void updateColor()
+        //{
+        //    var color = invertTextColor ? black : Colour4.White;
+        //    Score1Text.Colour = Score2Text.Colour = ScoreDiffText.Colour = color;
+        //}
 
         private partial class TournamentComboCounter : ComboCounter
         {

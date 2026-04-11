@@ -73,22 +73,20 @@ namespace osu.Game.Overlays.Chat
         private Drawable? background;
 
         private bool alternatingBackground;
+
+        // ReSharper disable once ConvertToConstant.Local
+        // ReSharper disable once FieldCanBeMadeReadOnly.Local
         private bool requiresTimestamp = true;
 
         public bool RequiresTimestamp
         {
             get => requiresTimestamp;
+            // ReSharper disable once ValueParameterNotUsed
+            // 主动 patch 禁用隐藏 timestamp
             set
             {
-                if (requiresTimestamp == value)
-                    return;
-
-                requiresTimestamp = value;
-
-                if (!IsLoaded)
-                    return;
-
-                updateMessageContent();
+                //requiresTimestamp = value;
+                return;
             }
         }
 
@@ -292,7 +290,7 @@ namespace osu.Game.Overlays.Chat
             // remove non-existent channels from the link list
             message.Links.RemoveAll(link => link.Action == LinkAction.OpenChannel && chatManager?.AvailableChannels.Any(c => c.Name == link.Argument.ToString()) != true);
 
-            isMention = MessageNotifier.CheckContainsUsername(message.DisplayContent, api.LocalUser.Value.Username);
+            isMention = MessageNotifier.MatchUsername(message.DisplayContent, api.LocalUser.Value.Username).Success;
 
             drawableContentFlow.Clear();
             drawableContentFlow.AddLinks(message.DisplayContent, message.Links);

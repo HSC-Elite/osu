@@ -4,14 +4,18 @@
 using System;
 using System.Linq;
 using osu.Framework.Allocation;
+using osu.Framework.Audio;
 using osu.Framework.Bindables;
 using osu.Framework.Extensions.Color4Extensions;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
+using osu.Framework.Graphics.Rendering;
 using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Sprites;
 using osu.Framework.Graphics.Textures;
+using osu.Framework.Graphics.Veldrid;
 using osu.Framework.Threading;
+using osu.Framework.Utils;
 using osu.Game.Graphics;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Overlays.Settings;
@@ -38,6 +42,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
         private MemoryBasedIPCWithMatchListener ipc = null!;
         private Sprite slotSprite = null!;
         private Sprite fetchFailedWarning = null!;
+        private SettingsNumberBox frameRateInputBox = null!;
 
         private PlayerArea redArea = null!;
         private PlayerArea blueArea = null!;
@@ -56,6 +61,15 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
         [Resolved]
         private MatchHeader header { get; set; } = null!;
+
+        [Resolved]
+        private AudioManager audio { get; set; } = null!;
+
+        [Resolved]
+        private IRenderer renderer { get; set; } = null!;
+
+        [Resolved]
+        private OsuColour colours { get; set; } = null!;
 
         private Drawable chroma = null!;
 
@@ -228,12 +242,26 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     Current = LadderInfo.ChromaKeyWidth,
                     KeyboardStep = 1,
                 },
-                OperatingSystem.IsWindows()
-                    ? new SettingsSlider<int>
+                new SettingsSlider<int>
+                {
+                    LabelText = "Frame rate",
+                    Current = LadderInfo.FrameRate,
+                    KeyboardStep = 1,
+                },
+                frameRateInputBox = new SettingsNumberBox
+                {
+                    LabelText = "Frame rate",
+                },
+                !D3D11Interop.TryGetD3D11Device(renderer, out _, out _, out _)
+                    ? new TournamentSpriteText
                     {
-                        LabelText = "抓取帧数限制",
-                        Current = LadderInfo.FrameRate,
-                        KeyboardStep = 1,
+                        Colour = colours.Orange1,
+                        Padding = new MarginPadding
+                        {
+                            Horizontal = 5
+                        },
+                        RelativeSizeAxes = Axes.X,
+                        Text = "目前的渲染器不是D3D11，无法使用WGC捕捉，已回滚至bitblt，可能会有延迟或者性能损失"
                     }
                     : Empty(),
                 new SettingsSlider<int>
@@ -243,9 +271,44 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     KeyboardStep = 1,
                 },
                 new ControlPanel.Spacer(),
+                new SettingsSlider<double>
+                {
+                    LabelText = "Master Volume",
+                    Current = audio.Volume
+                },
+                new SettingsSlider<double>
+                {
+                    LabelText = "Track Volume",
+                    Current = audio.VolumeTrack
+                },
+                new SettingsSlider<double>
+                {
+                    LabelText = "Sample Volume",
+                    Current = audio.VolumeSample
+                },
+                new ControlPanel.Spacer(),
                 new MatchRoundNameTextBox
                 {
                     RelativeSizeAxes = Axes.X,
+                },
+                new TourneyButton
+                {
+                    Text = "红飞",
+                    Action = redArea.Launch
+                },
+                new TourneyButton
+                {
+                    Text = "蓝飞",
+                    Action = blueArea.Launch
+                },
+                new TourneyButton
+                {
+                    Text = "飞重置",
+                    Action = () =>
+                    {
+                        redArea.Reset();
+                        blueArea.Reset();
+                    }
                 },
                 new TourneyButton
                 {
@@ -381,6 +444,15 @@ namespace osu.Game.Tournament.Screens.Gameplay
             });
 
             ipc.MatchFinished += getResult;
+
+            LadderInfo.FrameRate.BindValueChanged(f => frameRateInputBox.Current.Value = f.NewValue, true);
+            frameRateInputBox.Current.BindValueChanged(f =>
+            {
+                if (f.NewValue == null)
+                    return;
+
+                LadderInfo.FrameRate.Value = f.NewValue.Value;
+            });
         }
 
         private bool roundPreviewShow;
@@ -444,7 +516,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
         {
             base.LoadComplete();
 
-            State.BindTo(ipc.State);
+            State.BindTo(IPC.State);
             State.BindValueChanged(_ => updateState(), true);
             //LadderInfo.InvertScoreColour.BindValueChanged(v => scoreDisplay.InvertTextColor = v.NewValue, true);
         }
@@ -742,6 +814,8 @@ namespace osu.Game.Tournament.Screens.Gameplay
             private TeamColour teamColour;
             private Container? loseTextContainer;
 
+            private ScheduledDelegate? textCrazyScheduled;
+
             public PlayerArea(TeamColour teamColour)
             {
                 this.teamColour = teamColour;
@@ -755,6 +829,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
             public void Launch()
             {
+                textCrazyScheduled?.Cancel();
                 double delayTime = 0;
                 bool clockWise = true;
 
@@ -769,11 +844,20 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     clockWise = !clockWise;
                 }
 
-                loseTextContainer?.RotateTo(150).Delay(delayTime + 1200).FadeIn(1000).RotateTo(0, 1000, Easing.OutCubic);
+                loseTextContainer?.RotateTo(150).Delay(delayTime + 1200).FadeIn(1000).RotateTo(0, 1000, Easing.OutCubic).Then()
+                                 .Schedule(() =>
+                                 {
+                                     textCrazyScheduled = Scheduler.AddDelayed(() =>
+                                     {
+                                         loseTextContainer.MoveTo(new Vector2(RNG.NextSingle(-20, 20), RNG.NextSingle(-20, 20)), 50);
+                                     }, 50, true);
+                                 });
             }
 
             public void Reset()
             {
+                textCrazyScheduled?.Cancel();
+                loseTextContainer?.MoveTo(new Vector2(0));
                 double delayTime = 0;
 
                 foreach (var player in InternalChildren.OfType<PlayerWindow>())
@@ -805,6 +889,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
                                     Height = 0.5f,
                                     Anchor = Anchor.TopCentre,
                                     Origin = Anchor.TopCentre,
+                                    Colour = Color4.Green,
                                 },
                                 new Box
                                 {
@@ -812,6 +897,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
                                     Anchor = Anchor.BottomLeft,
                                     Origin = Anchor.BottomLeft,
                                     Height = 0.5f,
+                                    Colour = Color4.Green,
                                 },
                             };
                             break;
@@ -820,120 +906,120 @@ namespace osu.Game.Tournament.Screens.Gameplay
                             InternalChild = new Box
                             {
                                 RelativeSizeAxes = Axes.Both,
+                                Colour = Color4.Green,
                             };
                             break;
                     }
-
-                    AddInternal(loseTextSprite());
-                    return;
                 }
-
-                int clientIndex = teamColour == TeamColour.Red ? 0 : playerCount.NewValue;
-
-                switch (playerCount.NewValue)
+                else
                 {
-                    case 1:
-                        InternalChildren = new Drawable[]
-                        {
-                            new PlayerWindow(clientIndex)
-                            {
-                                Anchor = Anchor.Centre,
-                                Origin = Anchor.Centre,
-                                RelativeSizeAxes = Axes.Both,
-                            }
-                        };
-                        break;
+                    int clientIndex = teamColour == TeamColour.Red ? 0 : playerCount.NewValue;
 
-                    case 2:
-                        InternalChildren = new Drawable[]
-                        {
-                            new PlayerWindow(clientIndex++)
+                    switch (playerCount.NewValue)
+                    {
+                        case 1:
+                            InternalChildren = new Drawable[]
                             {
-                                RelativeSizeAxes = Axes.Both,
-                                Height = 0.5f,
-                                RelativeAnchorPosition = new Vector2(0.25f, 0.5f),
-                                Origin = Anchor.Centre,
-                            },
-                            new PlayerWindow(clientIndex)
-                            {
-                                RelativeSizeAxes = Axes.Both,
-                                Height = 0.5f,
-                                RelativeAnchorPosition = new Vector2(0.75f, 0.5f),
-                                Origin = Anchor.Centre,
-                            }
-                        };
-                        break;
+                                new PlayerWindow(clientIndex)
+                                {
+                                    Anchor = Anchor.Centre,
+                                    Origin = Anchor.Centre,
+                                    RelativeSizeAxes = Axes.Both,
+                                }
+                            };
+                            break;
 
-                    case 3:
-                        InternalChildren = new Drawable[]
-                        {
-                            new PlayerWindow(clientIndex++)
+                        case 2:
+                            InternalChildren = new Drawable[]
                             {
-                                RelativeSizeAxes = Axes.Both,
-                                Width = 0.5f,
-                                Height = 0.5f,
-                                RelativeAnchorPosition = new Vector2(0.5f, 0.25f),
-                                Origin = Anchor.Centre,
-                            },
-                            new PlayerWindow(clientIndex++)
-                            {
-                                RelativeSizeAxes = Axes.Both,
-                                Width = 0.5f,
-                                Height = 0.5f,
-                                RelativeAnchorPosition = new Vector2(0.25f, 0.75f),
-                                Origin = Anchor.Centre,
-                            },
-                            new PlayerWindow(clientIndex)
-                            {
-                                RelativeSizeAxes = Axes.Both,
-                                Width = 0.5f,
-                                Height = 0.5f,
-                                RelativeAnchorPosition = new Vector2(0.75f, 0.75f),
-                                Origin = Anchor.Centre,
-                            },
-                        };
-                        break;
+                                new PlayerWindow(clientIndex++)
+                                {
+                                    RelativeSizeAxes = Axes.Both,
+                                    Height = 0.5f,
+                                    RelativeAnchorPosition = new Vector2(0.25f, 0.5f),
+                                    Origin = Anchor.Centre,
+                                },
+                                new PlayerWindow(clientIndex)
+                                {
+                                    RelativeSizeAxes = Axes.Both,
+                                    Height = 0.5f,
+                                    RelativeAnchorPosition = new Vector2(0.75f, 0.5f),
+                                    Origin = Anchor.Centre,
+                                }
+                            };
+                            break;
 
-                    case 4:
-                        InternalChildren = new Drawable[]
-                        {
-                            new PlayerWindow(clientIndex++)
+                        case 3:
+                            InternalChildren = new Drawable[]
                             {
-                                RelativeSizeAxes = Axes.Both,
-                                Width = 0.5f,
-                                Height = 0.5f,
-                                RelativeAnchorPosition = new Vector2(0.25f, 0.25f),
-                                Origin = Anchor.Centre,
-                            },
-                            new PlayerWindow(clientIndex++)
-                            {
-                                RelativeSizeAxes = Axes.Both,
-                                Width = 0.5f,
-                                Height = 0.5f,
-                                RelativeAnchorPosition = new Vector2(0.75f, 0.25f),
-                                Origin = Anchor.Centre,
-                            },
-                            new PlayerWindow(clientIndex++)
-                            {
-                                RelativeSizeAxes = Axes.Both,
-                                Width = 0.5f,
-                                Height = 0.5f,
-                                RelativeAnchorPosition = new Vector2(0.25f, 0.75f),
-                                Origin = Anchor.Centre,
-                            },
-                            new PlayerWindow(clientIndex)
-                            {
-                                RelativeSizeAxes = Axes.Both,
-                                Width = 0.5f,
-                                Height = 0.5f,
-                                RelativeAnchorPosition = new Vector2(0.75f, 0.75f),
-                                Origin = Anchor.Centre,
-                            },
-                        };
-                        break;
+                                new PlayerWindow(clientIndex++)
+                                {
+                                    RelativeSizeAxes = Axes.Both,
+                                    Width = 0.5f,
+                                    Height = 0.5f,
+                                    RelativeAnchorPosition = new Vector2(0.5f, 0.25f),
+                                    Origin = Anchor.Centre,
+                                },
+                                new PlayerWindow(clientIndex++)
+                                {
+                                    RelativeSizeAxes = Axes.Both,
+                                    Width = 0.5f,
+                                    Height = 0.5f,
+                                    RelativeAnchorPosition = new Vector2(0.25f, 0.75f),
+                                    Origin = Anchor.Centre,
+                                },
+                                new PlayerWindow(clientIndex)
+                                {
+                                    RelativeSizeAxes = Axes.Both,
+                                    Width = 0.5f,
+                                    Height = 0.5f,
+                                    RelativeAnchorPosition = new Vector2(0.75f, 0.75f),
+                                    Origin = Anchor.Centre,
+                                },
+                            };
+                            break;
 
-                    default:
-                        throw new ArgumentException("Not Support this player count");
+                        case 4:
+                            InternalChildren = new Drawable[]
+                            {
+                                new PlayerWindow(clientIndex++)
+                                {
+                                    RelativeSizeAxes = Axes.Both,
+                                    Width = 0.5f,
+                                    Height = 0.5f,
+                                    RelativeAnchorPosition = new Vector2(0.25f, 0.25f),
+                                    Origin = Anchor.Centre,
+                                },
+                                new PlayerWindow(clientIndex++)
+                                {
+                                    RelativeSizeAxes = Axes.Both,
+                                    Width = 0.5f,
+                                    Height = 0.5f,
+                                    RelativeAnchorPosition = new Vector2(0.75f, 0.25f),
+                                    Origin = Anchor.Centre,
+                                },
+                                new PlayerWindow(clientIndex++)
+                                {
+                                    RelativeSizeAxes = Axes.Both,
+                                    Width = 0.5f,
+                                    Height = 0.5f,
+                                    RelativeAnchorPosition = new Vector2(0.25f, 0.75f),
+                                    Origin = Anchor.Centre,
+                                },
+                                new PlayerWindow(clientIndex)
+                                {
+                                    RelativeSizeAxes = Axes.Both,
+                                    Width = 0.5f,
+                                    Height = 0.5f,
+                                    RelativeAnchorPosition = new Vector2(0.75f, 0.75f),
+                                    Origin = Anchor.Centre,
+                                },
+                            };
+                            break;
+
+                        default:
+                            throw new ArgumentException("Not Support this player count");
+                    }
                 }
 
                 AddInternal(loseTextSprite());

@@ -9,6 +9,7 @@ using osu.Framework.Graphics.Containers;
 using osu.Framework.Localisation;
 using osu.Game.Beatmaps;
 using osu.Game.Graphics;
+using osu.Game.Overlays;
 using osu.Game.Tournament.Models;
 
 namespace osu.Game.Tournament.Components
@@ -20,13 +21,13 @@ namespace osu.Game.Tournament.Components
 
         private readonly Bindable<ColourInfo?> songBarColour = new Bindable<ColourInfo?>();
 
-        public SongBarBeatmapPanel(RoundBeatmap beatmap, int? id = null, bool isMappool = false)
-            : base(beatmap, id, isMappool)
+        public SongBarBeatmapPanel(RoundBeatmap beatmap, int? id = null)
+            : base(beatmap, id)
         {
         }
 
-        public SongBarBeatmapPanel(IBeatmapInfo? beatmap, string mod = "", bool isMappool = false)
-            : base(beatmap, mod, isMappool)
+        public SongBarBeatmapPanel(IBeatmapInfo? beatmap, string mod = "")
+            : base(beatmap, mod)
         {
         }
 
@@ -35,28 +36,26 @@ namespace osu.Game.Tournament.Components
             base.LoadComplete();
 
             songBarColour.BindTo(songBar.SongBarColour);
-            songBarColour.BindValueChanged(c =>
-            {
-                if (c.NewValue == null)
-                {
-                    MainContainer.BorderThickness = 0;
-                    return;
-                }
+            songBarColour.BindValueChanged(_ => updateColor(), true);
+        }
 
-                MainContainer.BorderThickness = 6;
-                MainContainer.BorderColour = c.NewValue.Value;
-            }, true);
+        private void updateColor()
+        {
+            // 如果没有自定义的 songBar 颜色 则使用 beatmapPanel 自己的颜色
+            // 不要将 BorderThickness 设为 0
+            if (songBarColour.Value == null)
+            {
+                return;
+            }
+
+            MainContainer.BorderThickness = 6;
+            MainContainer.BorderColour = songBarColour.Value.Value;
         }
 
         protected override void UpdateState()
         {
             base.UpdateState();
-
-            if (songBarColour.Value == null)
-                return;
-
-            MainContainer.BorderThickness = 6;
-            MainContainer.BorderColour = songBarColour.Value.Value;
+            updateColor();
         }
 
         protected override Drawable[] CreateInformation(IBeatmapInfo? beatmap = null)
@@ -65,12 +64,24 @@ namespace osu.Game.Tournament.Components
 
             return new Drawable[]
             {
-                new TournamentSpriteText
+                new Container
                 {
-                    Text = beatmap?.GetDisplayTitleRomanisable(false, false) ?? (LocalisableString)@"未知",
-                    Font = OsuFont.Torus.With(weight: FontWeight.Bold, size: 20),
                     Origin = Anchor.Centre,
                     Anchor = Anchor.Centre,
+                    RelativeSizeAxes = Axes.X,
+                    AutoSizeAxes = Axes.Y,
+                    Padding = new MarginPadding { Horizontal = 10 },
+                    Masking = true,
+                    Child = new MarqueeContainer
+                    {
+                        OverflowSpacing = 30,
+                        NonOverflowingContentAnchor = Anchor.Centre,
+                        CreateContent = () => new TournamentSpriteText
+                        {
+                            Text = Beatmap?.GetDisplayTitleRomanisable(false, false) ?? (LocalisableString)@"未知",
+                            Font = OsuFont.Torus.With(weight: FontWeight.Bold, size: 20),
+                        }
+                    },
                 },
                 new Container
                 {
@@ -100,7 +111,7 @@ namespace osu.Game.Tournament.Components
                                 },
                                 new TournamentSpriteText
                                 {
-                                    Text = beatmap?.Metadata.Author.Username ?? "未知",
+                                    Text = Beatmap?.Metadata.Author.Username ?? "未知",
                                     Padding = new MarginPadding { Right = 5 },
                                     Font = OsuFont.Torus.With(weight: FontWeight.Bold, size: 15)
                                 },
@@ -122,7 +133,7 @@ namespace osu.Game.Tournament.Components
                                 },
                                 new TournamentSpriteText
                                 {
-                                    Text = beatmap?.DifficultyName ?? "未知",
+                                    Text = Beatmap?.DifficultyName ?? "未知",
                                     Padding = new MarginPadding { Left = 5 },
                                     Font = OsuFont.Torus.With(weight: FontWeight.Bold, size: 15)
                                 },

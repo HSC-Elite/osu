@@ -7,6 +7,10 @@ concurrency:
 permissions:
   contents: read # to fetch code (actions/checkout)
 
+defaults:
+  run:
+    working-directory: ./osu
+
 jobs:
   inspect-code:
     name: Code Quality
@@ -14,6 +18,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          path: osu
+
+      - name: Checkout framework
+        uses: actions/checkout@v4
+        with:
+          repository: shanden-tournament/osu-framework
+          path: osu-framework
+          ref: shanden-custom
 
       - name: Install .NET 8.0.x
         uses: actions/setup-dotnet@v4
@@ -29,7 +42,7 @@ jobs:
       - name: Restore inspectcode cache
         uses: actions/cache@v4
         with:
-          path: ${{ github.workspace }}/inspectcode
+          path: ${{ github.workspace }}/osu/inspectcode
           key: inspectcode-${{ hashFiles('.config/dotnet-tools.json', '.github/workflows/ci.yml', 'osu.sln*', 'osu*.slnf', '.editorconfig', '.globalconfig', 'CodeAnalysis/*', '**/*.csproj', '**/*.props') }}
 
       - name: Dotnet code style
@@ -52,7 +65,7 @@ jobs:
         run: dotnet jb inspectcode $(pwd)/osu.Desktop.slnf --no-build --output="inspectcodereport.xml" --caches-home="inspectcode" --verbosity=WARN
 
       - name: NVika
-        run: dotnet nvika parsereport "${{github.workspace}}/inspectcodereport.xml" --treatwarningsaserrors
+        run: dotnet nvika parsereport "${{github.workspace}}/osu/inspectcodereport.xml" --treatwarningsaserrors
 
   test:
     name: Test
@@ -66,12 +79,22 @@ jobs:
             - { prettyname: Windows, fullname: windows-latest }
             # macOS runner performance has gotten unbearably slow so let's turn them off temporarily.
             # - { prettyname: macOS, fullname: macos-latest }
-            - { prettyname: Linux, fullname: ubuntu-latest }
+            # tournament 目前为 windows only, 禁用 linux
+            # - { prettyname: Linux, fullname: ubuntu-latest }
           threadingMode: ['SingleThread', 'MultiThreaded']
     timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          path: osu
+
+      - name: Checkout framework
+        uses: actions/checkout@v4
+        with:
+          repository: shanden-tournament/osu-framework
+          path: osu-framework
+          ref: shanden-custom
 
       - name: Install .NET 8.0.x
         uses: actions/setup-dotnet@v4
@@ -102,48 +125,53 @@ jobs:
         if: ${{ always() }}
         with:
           name: osu-test-results-${{matrix.os.prettyname}}-${{matrix.threadingMode}}
-          path: ${{github.workspace}}/TestResults/TestResults-${{matrix.os.prettyname}}-${{matrix.threadingMode}}.trx
+          path: ${{github.workspace}}/osu/TestResults/TestResults-${{matrix.os.prettyname}}-${{matrix.threadingMode}}.trx
 
-  build-only-android:
-    name: Build only (Android)
-    runs-on: windows-latest
-    timeout-minutes: 60
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+  # build-only-android:
+  #   name: Build only (Android)
+  #   runs-on: windows-latest
+  #   timeout-minutes: 60
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v4
 
-      - name: Setup JDK 11
-        uses: actions/setup-java@v4
-        with:
-          distribution: microsoft
-          java-version: 11
+  #     - name: Setup JDK 11
+  #       uses: actions/setup-java@v4
+  #       with:
+  #         distribution: microsoft
+  #         java-version: 11
 
-      - name: Install .NET 8.0.x
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "8.0.x"
+  #     - name: Install .NET 8.0.x
+  #       uses: actions/setup-dotnet@v4
+  #       with:
+  #         dotnet-version: "8.0.x"
 
-      - name: Install .NET workloads
-        run: dotnet workload install android
+  #     - name: Install .NET workloads
+  #       run: dotnet workload install android
 
-      - name: Compile
-        run: dotnet build -c Debug osu.Android.slnf
+  #     - name: Compile
+  #       run: dotnet build -c Debug osu.Android.slnf
 
-  build-only-ios:
-    name: Build only (iOS)
-    runs-on: macos-latest
-    timeout-minutes: 60
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+  # build-only-ios:
+  #   name: Build only (iOS)
+  #   runs-on: macos-15
+  #   timeout-minutes: 60
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v4
 
-      - name: Install .NET 8.0.x
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "8.0.x"
+  #     - name: Install .NET 8.0.x
+  #       uses: actions/setup-dotnet@v4
+  #       with:
+  #         dotnet-version: "8.0.x"
 
-      - name: Install .NET Workloads
-        run: dotnet workload install ios --from-rollback-file https://raw.githubusercontent.com/ppy/osu-framework/refs/heads/master/workloads.json
+  #     - name: Install .NET Workloads
+  #       run: dotnet workload install ios
 
-      - name: Build
-        run: dotnet build -c Debug osu.iOS.slnf
+  #     # https://github.com/dotnet/macios/issues/19157
+  #     # https://github.com/actions/runner-images/issues/12758
+  #     - name: Use Xcode 16.4
+  #       run: sudo xcode-select -switch /Applications/Xcode_16.4.app
+
+  #     - name: Build
+  #       run: dotnet build -c Debug osu.iOS.slnf

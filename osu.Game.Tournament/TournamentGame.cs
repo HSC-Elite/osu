@@ -10,6 +10,8 @@ using osu.Framework.Graphics;
 using osu.Framework.Input.Handlers.Mouse;
 using osu.Framework.Logging;
 using osu.Framework.Platform;
+using osu.Game.Configuration;
+using osu.Game.Graphics;
 using osu.Game.Graphics.Cursor;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Overlays;
@@ -47,13 +49,12 @@ namespace osu.Game.Tournament
         [Cached(typeof(IDialogOverlay))]
         private readonly DialogOverlay dialogOverlay = new DialogOverlay();
 
+        public bool IsFirstRun { get; init; }
+
         [BackgroundDependencyLoader]
         private void load(FrameworkConfigManager frameworkConfig, GameHost host)
         {
             frameworkConfig.BindWith(FrameworkSetting.WindowedSize, windowSize);
-
-            var version = AssemblyVersion;
-            host.Window.Title = $"超酷炫无敌重金属HSC直播端 {version.Major}.{version.Minor}.{version.Build}";
 
             windowMode = frameworkConfig.GetBindable<WindowMode>(FrameworkSetting.WindowMode);
 
@@ -122,6 +123,10 @@ namespace osu.Game.Tournament
                     }), true);
                 });
             }));
+
+            // TODO: 添加新版本
+            if (IsFirstRun)
+                LocalConfig.SetValue(OsuSetting.ReleaseStream, ReleaseStream.General);
         }
     }
 }

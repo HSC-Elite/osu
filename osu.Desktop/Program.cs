@@ -21,12 +21,14 @@ namespace osu.Desktop
     public static class Program
     {
 #if DEBUG
-        private const string base_game_name = @"osu-development";
+        private const string base_game_name = @"osu-shanden-development";
 #else
-        private const string base_game_name = @"osu";
+        private const string base_game_name = @"osu-shanden";
 #endif
 
         private static LegacyTcpIpcProvider? legacyIpc;
+
+        private static bool isFirstRun;
 
         [STAThread]
         public static void Main(string[] args)
@@ -34,7 +36,7 @@ namespace osu.Desktop
             // IMPORTANT DON'T IGNORE: For general sanity, velopack's setup needs to run before anything else.
             // This has bitten us in the rear before (bricked updater), and although the underlying issue from
             // last time has been fixed, let's not tempt fate.
-            setupVelopack();
+            setupVelopack(args);
 
             if (OperatingSystem.IsWindows())
             {
@@ -82,6 +84,10 @@ namespace osu.Desktop
                 switch (key)
                 {
                     case "--normal":
+                        tournamentClient = false;
+                        break;
+
+                    case "--lazer":
                         tournamentClient = false;
                         break;
 
@@ -133,9 +139,19 @@ namespace osu.Desktop
                 }
 
                 if (tournamentClient)
-                    host.Run(new TournamentGame());
+                {
+                    host.Run(new TournamentGame
+                    {
+                        IsFirstRun = isFirstRun
+                    });
+                }
                 else
-                    host.Run(new OsuGameDesktop(args));
+                {
+                    host.Run(new OsuGameDesktop(args)
+                    {
+                        IsFirstRun = isFirstRun
+                    });
+                }
             }
         }
 
@@ -167,7 +183,7 @@ namespace osu.Desktop
             return false;
         }
 
-        private static void setupVelopack()
+        private static void setupVelopack(string[] args)
         {
             if (OsuGameDesktop.IsPackageManaged)
             {
@@ -177,8 +193,11 @@ namespace osu.Desktop
 
             var app = VelopackApp.Build();
 
-            if (OperatingSystem.IsWindows())
-                configureWindows(app);
+            app.OnFirstRun(_ => isFirstRun = true);
+
+            // don't configure association for tournament client.
+            //if (OperatingSystem.IsWindows())
+            //    configureWindows(app);
 
             app.Run();
         }
@@ -186,9 +205,9 @@ namespace osu.Desktop
         [SupportedOSPlatform("windows")]
         private static void configureWindows(VelopackApp app)
         {
-            app.WithFirstRun(_ => WindowsAssociationManager.InstallAssociations());
-            app.WithAfterUpdateFastCallback(_ => WindowsAssociationManager.UpdateAssociations());
-            app.WithBeforeUninstallFastCallback(_ => WindowsAssociationManager.UninstallAssociations());
+            app.OnFirstRun(_ => WindowsAssociationManager.InstallAssociations());
+            app.OnAfterUpdateFastCallback(_ => WindowsAssociationManager.UpdateAssociations());
+            app.OnBeforeUninstallFastCallback(_ => WindowsAssociationManager.UninstallAssociations());
         }
     }
 }
