@@ -11,7 +11,6 @@ using osu.Framework.Input.Handlers.Mouse;
 using osu.Framework.Logging;
 using osu.Framework.Platform;
 using osu.Game.Configuration;
-using osu.Game.Graphics;
 using osu.Game.Graphics.Cursor;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Overlays;
@@ -124,9 +123,8 @@ namespace osu.Game.Tournament
                 });
             }));
 
-            // TODO: 添加新版本
             if (IsFirstRun)
-                LocalConfig.SetValue(OsuSetting.ReleaseStream, ReleaseStream.General);
+                LocalConfig.SetValue(OsuSetting.ReleaseStream, ReleaseStream.MulCoin);
         }
     }
 }
