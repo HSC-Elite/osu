@@ -10,6 +10,9 @@ namespace osu.Game.Configuration
         [Description("通用端")]
         General,
 
+        [Description("提现端")]
+        MulCoin,
+
         [Description("Lazer比赛直播端")]
         LazerMatch
     }
