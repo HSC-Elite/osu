@@ -21,10 +21,12 @@ using osu.Game.Configuration;
 using osu.Game.Database;
 using osu.Game.Graphics;
 using osu.Game.Online;
+using osu.Game.Online.API;
 using osu.Game.Online.API.Requests;
 using osu.Game.Tournament.IO;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.IPC.MemoryIPC;
+using osu.Game.Tournament.MultiWindow;
 using osu.Game.Tournament.Models;
 using osu.Game.Users;
 using osuTK.Input;
@@ -40,6 +42,11 @@ namespace osu.Game.Tournament
         private DependencyContainer dependencies = null!;
         private MatchIPCInfo ipc = null!;
         private BeatmapLookupCache beatmapCache = null!;
+
+        [Cached]
+        protected readonly TournamentStageState StageState = new TournamentStageState();
+
+        public TournamentWindowRole WindowRole { get; init; } = TournamentWindowRole.Primary;
 
         [Resolved]
         private GameHost host { get; set; } = null!;
@@ -61,12 +68,25 @@ namespace osu.Game.Tournament
             return new ProductionEndpointConfiguration();
         }
 
+        protected override IAPIProvider CreateAPIProvider(EndpointConfiguration endpoints)
+        {
+            if (WindowRole != TournamentWindowRole.Control)
+                return base.CreateAPIProvider(endpoints);
+
+            var dummyAPI = new DummyAPIAccess();
+            dummyAPI.Logout();
+            return dummyAPI;
+        }
+
         public override void SetHost(GameHost host)
         {
             base.SetHost(host);
 
             if (host.Window != null)
-                host.Window.Title = $"HSC - Tournamnet 20w14∞ [{randomTitle}] {versionSniffer} 版本:{Version}";
+            {
+                string suffix = WindowRole == TournamentWindowRole.Control ? " [Control]" : string.Empty;
+                host.Window.Title = $"HSC - Tournamnet 20w14∞ [{randomTitle}] {versionSniffer} 版本:{Version}{suffix}";
+            }
         }
 
         private static readonly string[] titles =

@@ -108,6 +108,8 @@ namespace osu.Game
 
         protected override OnlineStore CreateOnlineStore() => new TrustedDomainOnlineStore();
 
+        protected virtual IAPIProvider CreateAPIProvider(EndpointConfiguration endpoints) => new APIAccess(this, LocalConfig, endpoints, VersionHash);
+
         public virtual Version AssemblyVersion => Assembly.GetEntryAssembly()?.GetName().Version ?? new Version();
 
         protected CustomConfigManager CustomConfig;
@@ -306,7 +308,7 @@ namespace osu.Game
 
             CurrentLanguage.BindValueChanged(val => frameworkLocale.Value = val.NewValue.ToCultureCode());
 
-            dependencies.CacheAs(API ??= new APIAccess(this, LocalConfig, endpoints, VersionHash));
+            dependencies.CacheAs(API ??= CreateAPIProvider(endpoints));
 
             var defaultBeatmap = new DummyWorkingBeatmap(Audio, Textures);
 
@@ -368,8 +370,8 @@ namespace osu.Game
             base.Content.Add(LeaderboardManager);
 
             // add api components to hierarchy.
-            if (API is APIAccess apiAccess)
-                base.Content.Add(apiAccess);
+            if (API is Component apiComponent)
+                base.Content.Add(apiComponent);
 
             base.Content.Add(SpectatorClient);
             base.Content.Add(MultiplayerClient);

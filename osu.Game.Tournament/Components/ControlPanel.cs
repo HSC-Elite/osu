@@ -6,6 +6,7 @@ using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Containers;
+using System.Collections.Generic;
 using osuTK;
 using osuTK.Graphics;
 
@@ -20,6 +21,8 @@ namespace osu.Game.Tournament.Components
         private readonly FillFlowContainer buttons;
 
         protected override Container<Drawable> Content => buttons;
+
+        public IEnumerable<Drawable> PanelItems => buttons.Children;
 
         public ControlPanel()
         {

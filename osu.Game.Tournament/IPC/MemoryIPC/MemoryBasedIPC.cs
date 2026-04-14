@@ -237,6 +237,8 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
         {
             base.Update();
 
+            if(!OperatingSystem.IsWindows()) return;
+
             lastUpdateTime += Time.Elapsed;
 
             if (lastUpdateTime < 1000.0 / update_hz)
