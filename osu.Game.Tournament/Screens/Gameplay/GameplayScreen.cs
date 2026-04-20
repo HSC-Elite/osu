@@ -282,7 +282,12 @@ namespace osu.Game.Tournament.Screens.Gameplay
             sceneManager?.CurrentScreen.BindValueChanged(s =>
             {
                 if (s.OldValue == typeof(MapPoolScreen) && s.NewValue == typeof(GameplayScreen))
+                {
                     switchFromMappool = true;
+                    return;
+                }
+
+                switchFromMappool = false;
             });
 
             LadderInfo.FrameRate.BindValueChanged(f => frameRateInputBox.Current.Value = f.NewValue, true);
