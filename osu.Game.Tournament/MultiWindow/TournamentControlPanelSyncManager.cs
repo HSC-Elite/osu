@@ -145,8 +145,8 @@ namespace osu.Game.Tournament.MultiWindow
                 if (isSettingsDropdown(source) || hasProperty(source, "Items"))
                     return createDropdownProxy(source, current, valueType);
 
-                if (valueType == typeof(int?))
-                    return createNullableIntTextBoxProxy(source, current);
+                if (isNullableNumericType(valueType))
+                    return createNullableNumericTextBoxProxy(source, current, valueType);
 
                 if (isNumericType(valueType))
                     return createSliderProxy(source, current, valueType);
@@ -232,21 +232,31 @@ namespace osu.Game.Tournament.MultiWindow
             };
         }
 
-        private Drawable createNullableIntTextBoxProxy(Drawable source, IBindable current)
+        private Drawable createNullableNumericTextBoxProxy(Drawable source, IBindable current, Type valueType)
         {
             string key = nextKey("number");
-            var bindable = (Bindable<int?>)current;
+
+            return (Drawable)typeof(TournamentControlPanelSyncManager)
+                             .GetMethod(nameof(createTypedNullableNumericTextBoxProxy), BindingFlags.NonPublic | BindingFlags.Instance)!
+                             .MakeGenericMethod(Nullable.GetUnderlyingType(valueType)!)
+                             .Invoke(this, new object[] { source, current, key })!;
+        }
+
+        private Drawable createTypedNullableNumericTextBoxProxy<T>(Drawable source, IBindable current, string key)
+            where T : struct, System.Numerics.INumberBase<T>, ISpanParsable<T>, ISpanFormattable
+        {
+            var bindable = (Bindable<T?>)current;
 
             operationHandlers[key] = (operation, jsonValue) =>
             {
                 if (operation == "set" && jsonValue != null)
-                    bindable.Value = JsonConvert.DeserializeObject<int?>(jsonValue);
+                    bindable.Value = JsonConvert.DeserializeObject<T?>(jsonValue);
             };
 
             subscribeCurrent(key, bindable, "current");
             subscribeDisabled(key, bindable);
 
-            return new TournamentSynchronisedNullableIntTextBox
+            return new TournamentSynchronisedNullableNumberTextBox<T>
             {
                 KeyBindable = { Value = key },
                 LabelBindable = { Value = getLabel(source) ?? key },
@@ -420,6 +430,12 @@ namespace osu.Game.Tournament.MultiWindow
         {
             Type type = Nullable.GetUnderlyingType(valueType) ?? valueType;
             return type == typeof(int) || type == typeof(double);
+        }
+
+        private static bool isNullableNumericType(Type valueType)
+        {
+            Type? type = Nullable.GetUnderlyingType(valueType);
+            return type == typeof(int) || type == typeof(float) || type == typeof(double) || type == typeof(decimal);
         }
 
         private string nextKey(string prefix)
