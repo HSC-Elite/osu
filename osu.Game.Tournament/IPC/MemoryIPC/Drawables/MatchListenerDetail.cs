@@ -53,7 +53,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC.Drawables
                 return;
 
             currentListeningText.Text = $"监听状态: {(ipc.CurrentlyListening.Value ? "监听中" : "未监听")}";
-            currentlyPlayingText.Text = $"游玩状态: {(ipc.CurrentlyListening.Value ? "游玩中" : "未游玩")}";
+            currentlyPlayingText.Text = $"游玩状态: {(ipc.CurrentlyPlaying.Value ? "游玩中" : "未游玩")}";
             latestMatchEventIDText.Text = $"最后一个EventID: {ipc.LatestMatchEventID}";
             abortedText.Text = $"Aborted: {ipc.Aborted}";
         }

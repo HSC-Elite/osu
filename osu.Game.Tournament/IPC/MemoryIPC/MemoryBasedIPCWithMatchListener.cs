@@ -96,12 +96,14 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             currentMatchFinished = false;
             currentlyPlaying.Value = false;
             currentlyListening.Value = false;
+
+            fetchTimeOutScheduleDelegate?.Cancel();
+            fetchTimeOutScheduleDelegate = null;
         }
 
         public void CurrentRoundAborted()
         {
             if (!currentlyPlaying.Value
-                || LatestMatchEvent?.Game == null
                 || State.Value != TourneyState.Idle
                 || abortedEventId == currentGameID)
                 return;
@@ -144,6 +146,9 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
             fetchTimeOutScheduleDelegate = Scheduler.AddDelayed(() =>
             {
+                if (currentlyListening.Value == false)
+                    return;
+
                 Logger.Log($"MatchListener:Match {currentMatch} finished, timeout from api");
 
                 if (pendingBindChoice != null)
@@ -263,7 +268,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                 return;
 
             int redOnlineId = Ladder.CurrentMatch.Value?.GetTeamByColor(TeamColour.Red)?.Players.FirstOrDefault()?.OnlineID ?? -1;
-            int blueOnlineId = Ladder.CurrentMatch.Value?.GetTeamByColor(TeamColour.Red)?.Players.FirstOrDefault()?.OnlineID ?? -1;
+            int blueOnlineId = Ladder.CurrentMatch.Value?.GetTeamByColor(TeamColour.Blue)?.Players.FirstOrDefault()?.OnlineID ?? -1;
 
             events.Add(new APIMatchEvent
             {
@@ -286,6 +291,10 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                             UserID = blueOnlineId,
                         }
                     }
+                },
+                Detail = new MatchEventDetail
+                {
+                    Type = MatchEventType.Other,
                 }
             });
 
@@ -314,6 +323,9 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
             req.Success += content =>
             {
+                if (content.APIMatch.ID != currentMatch || (req.AfterEvent.HasValue && req.AfterEvent != LatestMatchEventID))
+                    return;
+
                 var newEvents = content.Events.Where(e => e.Game == null || e.Game?.Scores.Count != 0).ExceptBy(Events.Select(e => e.Id), e => e.Id);
 
                 if (content.CurrentGameID == null)
@@ -386,7 +398,8 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                     return LegacyMods.Relax;
 
                 default:
-                    throw new ArgumentOutOfRangeException(nameof(modString), modString, $"Cannot prase to {nameof(LegacyMods)}.");
+                    Logger.Log($"Cannot prase {nameof(modString)}: {modString} to {nameof(LegacyMods)}.", level: LogLevel.Error);
+                    return LegacyMods.None;
             }
         }
     }
