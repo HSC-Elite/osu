@@ -14,6 +14,7 @@ using osu.Game.Configuration;
 using osu.Game.Graphics.Cursor;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Overlays;
+using osu.Game.Tournament.MultiWindow;
 using osu.Game.Tournament.Models;
 using osuTK.Graphics;
 
@@ -39,6 +40,7 @@ namespace osu.Game.Tournament
         public const double LOSS_MAX_OBTAINABLE = 91;
 
         private Drawable heightWarning = null!;
+        private TournamentCompanionManager? companionManager;
 
         private Bindable<WindowMode> windowMode = null!;
         private readonly BindableSize windowSize = new BindableSize();
@@ -48,7 +50,18 @@ namespace osu.Game.Tournament
         [Cached(typeof(IDialogOverlay))]
         private readonly DialogOverlay dialogOverlay = new DialogOverlay();
 
+        private DependencyContainer dependencies = null!;
+
+        protected override IReadOnlyDependencyContainer CreateChildDependencies(IReadOnlyDependencyContainer parent)
+        {
+            return dependencies = new DependencyContainer(base.CreateChildDependencies(parent));
+        }
+
         public bool IsFirstRun { get; init; }
+
+        public string? LocalSyncPipeName { get; init; }
+
+        public string? RemoteSyncPipeName { get; init; }
 
         [BackgroundDependencyLoader]
         private void load(FrameworkConfigManager frameworkConfig, GameHost host)
@@ -86,7 +99,8 @@ namespace osu.Game.Tournament
                     return;
                 }
 
-                LoadComponentsAsync(new[]
+                Drawable sceneManager;
+                var components = new[]
                 {
                     new SaveChangesOverlay
                     {
@@ -101,10 +115,21 @@ namespace osu.Game.Tournament
                     new OsuContextMenuContainer
                     {
                         RelativeSizeAxes = Axes.Both,
-                        Child = new TournamentSceneManager()
+                        Child = sceneManager = new TournamentSceneManager()
                     },
-                    dialogOverlay
-                }, drawables =>
+                    new TournamentControlPanelSyncManager(),
+                    dialogOverlay,
+                };
+
+                dependencies.Cache(sceneManager);
+
+                if (!string.IsNullOrEmpty(LocalSyncPipeName) && !string.IsNullOrEmpty(RemoteSyncPipeName))
+                {
+                    Add(companionManager = new TournamentCompanionManager(WindowRole, LocalSyncPipeName, RemoteSyncPipeName));
+                    dependencies.Cache(companionManager);
+                }
+
+                LoadComponentsAsync(components, drawables =>
                 {
                     loadingSpinner.Hide();
                     loadingSpinner.Expire();
@@ -126,5 +151,7 @@ namespace osu.Game.Tournament
             if (IsFirstRun)
                 LocalConfig.SetValue(OsuSetting.ReleaseStream, ReleaseStream.MulCoin);
         }
+
+        public void OpenControlWindow() => companionManager?.OpenControlWindow();
     }
 }

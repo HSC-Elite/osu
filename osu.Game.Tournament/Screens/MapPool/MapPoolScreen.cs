@@ -11,6 +11,7 @@ using osu.Framework.Graphics.Textures;
 using osu.Framework.Input.Events;
 using osu.Game.Beatmaps;
 using osu.Game.Graphics.UserInterface;
+using osu.Game.Overlays.Settings;
 using osu.Game.Tournament.Components;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.Models;
@@ -149,7 +150,7 @@ namespace osu.Game.Tournament.Screens.MapPool
                             Action = reset
                         },
                         new ControlPanel.Spacer(),
-                        new OsuCheckbox
+                        new SettingsCheckbox
                         {
                             LabelText = "Split display by mods",
                             Current = LadderInfo.SplitMapPoolByMods,
