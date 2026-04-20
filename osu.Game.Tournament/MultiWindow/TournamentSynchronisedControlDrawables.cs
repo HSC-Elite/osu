@@ -2,6 +2,7 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
+using System.Globalization;
 using System.Numerics;
 using Newtonsoft.Json;
 using osu.Framework.Allocation;
@@ -9,7 +10,6 @@ using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Sprites;
-using osu.Framework.Graphics.UserInterface;
 using osu.Game.Configuration;
 using osu.Game.Graphics.Sprites;
 using osu.Game.Graphics.UserInterface;
@@ -228,23 +228,24 @@ namespace osu.Game.Tournament.MultiWindow
         }
     }
 
-    public partial class TournamentSynchronisedNullableIntTextBox : TournamentSynchronisedControlDrawable, ITournamentSynchronisedStatefulDrawable
+    public partial class TournamentSynchronisedNullableNumberTextBox<T> : TournamentSynchronisedControlDrawable, ITournamentSynchronisedStatefulDrawable
+        where T : struct, INumberBase<T>, ISpanParsable<T>, ISpanFormattable
     {
         [SettingSource("label")]
         public Bindable<string> LabelBindable { get; } = new Bindable<string>(string.Empty);
 
         [SettingSource("current")]
-        public Bindable<int?> CurrentBindable { get; } = new Bindable<int?>();
+        public Bindable<T?> CurrentBindable { get; } = new Bindable<T?>();
 
         private bool suppressChanges;
 
-        public TournamentSynchronisedNullableIntTextBox()
+        public TournamentSynchronisedNullableNumberTextBox()
         {
             RelativeSizeAxes = Axes.X;
             AutoSizeAxes = Axes.Y;
 
             OsuSpriteText label;
-            BasicTextBox textBox;
+            OsuTextBox textBox;
 
             InternalChild = new FillFlowContainer
             {
@@ -259,10 +260,11 @@ namespace osu.Game.Tournament.MultiWindow
                         Font = FrameworkFont.Condensed.With(size: 18),
                         Colour = new Color4(220, 220, 220, 255),
                     },
-                    textBox = new NullableIntTextBox
+                    textBox = new OsuTextBox
                     {
                         RelativeSizeAxes = Axes.X,
                         Height = 30,
+                        CommitOnFocusLost = true,
                     },
                 }
             };
@@ -272,7 +274,7 @@ namespace osu.Game.Tournament.MultiWindow
             CurrentBindable.BindValueChanged(v =>
             {
                 suppressChanges = true;
-                textBox.Current.Value = v.NewValue?.ToString() ?? string.Empty;
+                textBox.Current.Value = v.NewValue?.ToString(null, CultureInfo.InvariantCulture) ?? string.Empty;
                 suppressChanges = false;
             }, true);
             textBox.OnCommit += (_, _) =>
@@ -282,14 +284,14 @@ namespace osu.Game.Tournament.MultiWindow
 
                 if (string.IsNullOrWhiteSpace(textBox.Text))
                 {
-                    SendOperation("set", (int?)null);
+                    SendOperation("set", (T?)null);
                     return;
                 }
 
-                if (int.TryParse(textBox.Text, out int value))
-                    SendOperation("set", (int?)value);
+                if (T.TryParse(textBox.Text.AsSpan(), NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out T value))
+                    SendOperation("set", (T?)value);
                 else
-                    textBox.Current.Value = CurrentBindable.Value?.ToString() ?? string.Empty;
+                    textBox.Current.Value = CurrentBindable.Value?.ToString(null, CultureInfo.InvariantCulture) ?? string.Empty;
             };
         }
 
@@ -300,7 +302,7 @@ namespace osu.Game.Tournament.MultiWindow
             switch (property)
             {
                 case "current":
-                    CurrentBindable.Value = Deserialise<int?>(jsonValue);
+                    CurrentBindable.Value = Deserialise<T?>(jsonValue);
                     break;
 
                 case "enabled":
@@ -311,11 +313,6 @@ namespace osu.Game.Tournament.MultiWindow
                     LabelBindable.Value = Deserialise<string>(jsonValue) ?? string.Empty;
                     break;
             }
-        }
-
-        private partial class NullableIntTextBox : BasicTextBox
-        {
-            protected override bool CanAddCharacter(char character) => char.IsAsciiDigit(character);
         }
     }
 
