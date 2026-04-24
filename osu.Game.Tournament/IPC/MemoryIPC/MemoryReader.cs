@@ -36,77 +36,80 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
         public int ReadInt32(IntPtr address)
         {
-            if (!IsAttached)
-                throw new InvalidOperationException("Process is not attached or has exited.");
+            ThrowIfNotAttached();
 
-            byte[] buffer = new byte[4];
+            Span<byte> buffer = stackalloc byte[4];
             WindowsAPI.ReadProcessMemory(ProcessHandle, address, buffer, buffer.Length, out _);
-            return BitConverter.ToInt32(buffer, 0);
+            return BitConverter.ToInt32(buffer);
         }
 
         public long ReadInt64(IntPtr address)
         {
-            if (!IsAttached)
-                throw new InvalidOperationException("Process is not attached or has exited.");
+            ThrowIfNotAttached();
 
-            byte[] buffer = new byte[8];
+            Span<byte> buffer = stackalloc byte[8];
             WindowsAPI.ReadProcessMemory(ProcessHandle, address, buffer, buffer.Length, out _);
-            return BitConverter.ToInt64(buffer, 0);
+            return BitConverter.ToInt64(buffer);
         }
 
         public short ReadShort(IntPtr address)
         {
-            if (!IsAttached)
-                throw new InvalidOperationException("Process is not attached or has exited.");
+            ThrowIfNotAttached();
 
-            byte[] buffer = new byte[2];
+            Span<byte> buffer = stackalloc byte[2];
             WindowsAPI.ReadProcessMemory(ProcessHandle, address, buffer, buffer.Length, out _);
-            return BitConverter.ToInt16(buffer, 0);
+            return BitConverter.ToInt16(buffer);
         }
 
         public float ReadFloat(IntPtr address)
         {
-            if (!IsAttached)
-                throw new InvalidOperationException("Process is not attached or has exited.");
+            ThrowIfNotAttached();
 
-            byte[] buffer = new byte[4];
+            Span<byte> buffer = stackalloc byte[4];
             WindowsAPI.ReadProcessMemory(ProcessHandle, address, buffer, buffer.Length, out _);
-            return BitConverter.ToSingle(buffer, 0);
+            return BitConverter.ToSingle(buffer);
         }
 
         public double ReadDouble(IntPtr address)
         {
-            if (!IsAttached)
-                throw new InvalidOperationException("Process is not attached or has exited.");
+            ThrowIfNotAttached();
 
-            byte[] buffer = new byte[8];
+            Span<byte> buffer = stackalloc byte[8];
             WindowsAPI.ReadProcessMemory(ProcessHandle, address, buffer, buffer.Length, out _);
-            return BitConverter.ToDouble(buffer, 0);
+            return BitConverter.ToDouble(buffer);
         }
 
         public byte[] ReadBytes(IntPtr address, int length)
         {
-            if (!IsAttached)
-                throw new InvalidOperationException("Process is not attached or has exited.");
+            ThrowIfNotAttached();
 
             byte[] buffer = new byte[length];
             WindowsAPI.ReadProcessMemory(ProcessHandle, address, buffer, length, out _);
             return buffer;
         }
 
+        public void ReadBytes(IntPtr address, Span<byte> buffer)
+        {
+            ThrowIfNotAttached();
+
+            WindowsAPI.ReadProcessMemory(ProcessHandle, address, buffer, buffer.Length, out _);
+        }
+
         public string ReadString(IntPtr address, int length)
         {
-            if (!IsAttached)
-                throw new InvalidOperationException("Process is not attached or has exited.");
+            ThrowIfNotAttached();
 
             byte[] bytes = ReadBytes(address, length);
-            return System.Text.Encoding.UTF8.GetString(bytes).TrimEnd('\0');
+
+            int nullIndex = Array.IndexOf(bytes, (byte)0);
+            int strLength = (nullIndex >= 0) ? nullIndex : length;
+
+            return System.Text.Encoding.UTF8.GetString(bytes, 0, strLength);
         }
 
         public T Read<T>(IntPtr address) where T : struct
         {
-            if (!IsAttached)
-                throw new InvalidOperationException("Process is not attached or has exited.");
+            ThrowIfNotAttached();
 
             int byteSize = Marshal.SizeOf(typeof(T));
 
@@ -119,8 +122,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
         public IntPtr GetModuleBase(string moduleName)
         {
-            if (!IsAttached)
-                throw new InvalidOperationException("Process is not attached or has exited.");
+            ThrowIfNotAttached();
 
             foreach (ProcessModule mod in Process!.Modules)
             {
@@ -197,6 +199,26 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             return baseAddress + pattern.Offset;
         }
 
+        public IntPtr?[] ResolveFromPatternInfos(PatternInfo[] patterns, IEnumerable<MemoryRegion>? regions = null)
+        {
+            byte?[][] rawPatterns = new byte?[patterns.Length][];
+
+            for (int i = 0; i < patterns.Length; i++)
+                rawPatterns[i] = patterns[i].Pattern;
+
+            IntPtr?[] baseAddresses = (regions != null)
+                ? FindPatterns(regions, ProcessHandle, rawPatterns)
+                : FindPatterns(ProcessHandle, rawPatterns);
+
+            for (int i = 0; i < baseAddresses.Length; i++)
+            {
+                if (baseAddresses[i] != null)
+                    baseAddresses[i] = baseAddresses[i]!.Value + patterns[i].Offset;
+            }
+
+            return baseAddresses;
+        }
+
         public static IntPtr? FindPattern(IntPtr processHandle, byte?[] pattern)
         {
             var regions = QueryMemoryRegions(processHandle);
@@ -205,12 +227,38 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
         public static IntPtr? FindPattern(IEnumerable<MemoryRegion> regions, IntPtr processHandle, byte?[] pattern)
         {
+            return FindPatterns(regions, processHandle, new[] { pattern })[0];
+        }
+
+        public static IntPtr?[] FindPatterns(IntPtr processHandle, byte?[][] patterns)
+        {
+            var regions = QueryMemoryRegions(processHandle);
+            return FindPatterns(regions, processHandle, patterns);
+        }
+
+        public static IntPtr?[] FindPatterns(IEnumerable<MemoryRegion> regions, IntPtr processHandle, byte?[][] patterns)
+        {
             const int buffer_size = 64 * 1024;
-            int patternLength = pattern.Length;
+
+            IntPtr?[] results = new IntPtr?[patterns.Length];
+
+            if (patterns.Length == 0)
+                return results;
+
+            int maxPatternLength = 0;
+
+            foreach (byte?[] pattern in patterns)
+            {
+                if (pattern.Length == 0)
+                    throw new ArgumentException("Pattern cannot be empty.", nameof(patterns));
+
+                maxPatternLength = Math.Max(maxPatternLength, pattern.Length);
+            }
 
             // 保留该块到下一块
             // 设置为 patternLength - 1 后总能让新块的第一个字节开始进行匹配
-            int headSize = patternLength - 1;
+            int headSize = maxPatternLength - 1;
+            int remainingPatterns = patterns.Length;
 
             byte[] sharedBuffer = ArrayPool<byte>.Shared.Rent(buffer_size + headSize);
 
@@ -233,36 +281,44 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
                         int readSize = Math.Min(buffer_size + headSize - copiedTail, regionSize - offset);
 
-                        int bytesRead;
+                        IntPtr bytesRead;
 
                         IntPtr targetPtr = Marshal.UnsafeAddrOfPinnedArrayElement(sharedBuffer, copiedTail);
-                        if (!WindowsAPI.ReadProcessMemory(processHandle, regionStart + offset, targetPtr, readSize, out bytesRead)
-                            || bytesRead < patternLength - copiedTail)
-                            continue;
 
-                        int totalSize = bytesRead + copiedTail;
-                        int maxIndex = totalSize - patternLength + 1;
+                        if (!WindowsAPI.ReadProcessMemory(processHandle, regionStart + offset, targetPtr, readSize, out bytesRead)
+                            || bytesRead <= 0)
+                        {
+                            copiedTail = 0;
+                            continue;
+                        }
+
+                        int totalSize = bytesRead.ToInt32() + copiedTail;
 
                         // 滑动窗口查找
-                        for (int i = 0; i < maxIndex; i++)
+                        for (int i = 0; i < totalSize && remainingPatterns > 0; i++)
                         {
-                            bool matched = true;
-
-                            for (int j = 0; j < patternLength; j++)
+                            for (int p = 0; p < patterns.Length; p++)
                             {
-                                if (pattern[j] != null && sharedBuffer[i + j] != pattern[j])
+                                if (results[p] != null)
+                                    continue;
+
+                                byte?[] pattern = patterns[p];
+
+                                if (i > totalSize - pattern.Length || !matchesPattern(sharedBuffer, i, pattern))
+                                    continue;
+
+                                results[p] = new IntPtr(regionStart + offset + i - copiedTail);
+                                remainingPatterns--;
+
+                                if (remainingPatterns == 0)
                                 {
-                                    matched = false;
-                                    break;
+                                    return results;
                                 }
                             }
-
-                            if (matched)
-                                return new IntPtr(regionStart + offset + i - copiedTail);
                         }
 
                         // 实际逻辑上 bytesRead 不会小于 headSize
-                        if (bytesRead >= headSize)
+                        if (headSize > 0 && totalSize >= headSize)
                         {
                             Array.Copy(sharedBuffer, totalSize - headSize, sharedBuffer, buffer_size, headSize);
                             copiedTail = headSize;
@@ -274,13 +330,24 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                     }
                 }
 
-                return null;
+                return results;
             }
             finally
             {
                 handle.Free();
                 ArrayPool<byte>.Shared.Return(sharedBuffer);
             }
+        }
+
+        private static bool matchesPattern(byte[] buffer, int offset, byte?[] pattern)
+        {
+            for (int i = 0; i < pattern.Length; i++)
+            {
+                if (pattern[i] != null && buffer[offset + i] != pattern[i])
+                    return false;
+            }
+
+            return true;
         }
 
         public IntPtr? FindPattern(byte?[] pattern) => FindPattern(ProcessHandle, pattern);
@@ -319,6 +386,12 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
         }
 
         #endregion
+
+        protected void ThrowIfNotAttached()
+        {
+            if (!IsAttached)
+                throw new InvalidOperationException("Process is not attached or has exited.");
+        }
     }
 
     public class MemoryRegion

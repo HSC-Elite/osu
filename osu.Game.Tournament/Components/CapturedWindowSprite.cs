@@ -7,7 +7,6 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using System.Text;
 using System.Threading;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
@@ -23,6 +22,7 @@ using osu.Game.Tournament.Models;
 using SixLabors.ImageSharp.PixelFormats;
 using Vortice.Direct3D11;
 using FillMode = osu.Framework.Graphics.FillMode;
+using static osu.Game.Tournament.WindowsAPI;
 
 namespace osu.Game.Tournament.Components
 {
@@ -37,6 +37,8 @@ namespace osu.Game.Tournament.Components
         private IntPtr targetHwnd;
         private bool d3d11Available;
         private Thread? windowWatcherThread;
+        private readonly ManualResetEventSlim watcherStop = new ManualResetEventSlim();
+        private bool watcherStopDisposed;
         private volatile bool watcherRunning;
         private IntPtr watchedHwnd;
         private volatile bool watchedAlive;
@@ -76,7 +78,7 @@ namespace osu.Game.Tournament.Components
             d3d11Available = D3D11Interop.TryGetD3D11Device(renderer, out var device, out _, out _);
 
             if (d3d11Available)
-                capture = new WgcCaptureSource(new WgcCapture(device));
+                capture = new WgcCaptureSource(new WgcCapture(device!));
             else
                 capture = new BitBltCaptureSource();
 
@@ -151,16 +153,18 @@ namespace osu.Game.Tournament.Components
 
         private void consumePendingFrame(CaptureFrame frame, IRenderer renderer)
         {
-            if (capture == null || !frame.IsValid)
+            if (!frame.IsValid)
                 return;
+
+            bool resourceOwnershipTransferred = false;
 
             try
             {
-                capture.ApplyFrame(frame, renderer, sprite, ref externalTexture, ref cpuTexture);
+                resourceOwnershipTransferred = capture?.ApplyFrame(frame, renderer, sprite, ref externalTexture, ref cpuTexture) == true;
             }
             finally
             {
-                frame.ReleaseResources(discardUpload: false);
+                frame.ReleaseResources(discardUpload: !resourceOwnershipTransferred);
             }
         }
 
@@ -227,7 +231,8 @@ namespace osu.Game.Tournament.Components
                     watchedAlive = false;
                 }
 
-                Thread.Sleep(500);
+                if (watcherStop.Wait(500))
+                    break;
             }
         }
 
@@ -239,72 +244,18 @@ namespace osu.Game.Tournament.Components
             cpuTexture?.Dispose();
 
             watcherRunning = false;
-            windowWatcherThread?.Join();
-        }
 
-        #region Windows API
+            if (watcherStopDisposed)
+                return;
 
-        [DllImport("user32.dll")]
-        private static extern IntPtr FindWindow(string? lpClassName, string lpWindowName);
+            watcherStop.Set();
 
-        [DllImport("user32.dll")]
-        private static extern IntPtr GetWindowDC(IntPtr hWnd);
-
-        [DllImport("user32.dll")]
-        private static extern bool ReleaseDC(IntPtr hWnd, IntPtr hDC);
-
-        [DllImport("gdi32.dll")]
-        private static extern bool BitBlt(IntPtr hdcDest, int xDest, int yDest, int w, int h,
-                                          IntPtr hdcSrc, int xSrc, int ySrc, int rop);
-
-        [DllImport("user32.dll")]
-        private static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
-
-        [DllImport("user32.dll")]
-        private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
-
-        [DllImport("user32.dll")]
-        private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
-
-        [DllImport("user32.dll")]
-        private static extern bool IsWindow(IntPtr hWnd);
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct RECT
-        {
-            public int Left;
-            public int Top;
-            public int Right;
-            public int Bottom;
-        }
-
-        private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-
-        public static IntPtr FindWindowByPartialTitle(string partialTitle)
-        {
-            IntPtr result = FindWindow(null, partialTitle);
-
-            if (result != IntPtr.Zero)
-                return result;
-
-            EnumWindows((hWnd, lParam) =>
+            if (windowWatcherThread == null || windowWatcherThread.Join(1000))
             {
-                StringBuilder sb = new StringBuilder(256);
-                GetWindowText(hWnd, sb, sb.Capacity);
-
-                if (sb.ToString().Contains(partialTitle))
-                {
-                    result = hWnd;
-                    return false; // 停止遍历
-                }
-
-                return true;
-            }, IntPtr.Zero);
-
-            return result;
+                watcherStop.Dispose();
+                watcherStopDisposed = true;
+            }
         }
-
-        #endregion
 
         private interface ICaptureSource : IDisposable
         {
@@ -312,7 +263,7 @@ namespace osu.Game.Tournament.Components
             void StartForWindow(IntPtr hwnd);
             void Stop();
             bool TryAcquireLatestFrame(out CaptureFrame frame);
-            void ApplyFrame(CaptureFrame frame, IRenderer renderer, Sprite sprite, ref D3D11ExternalTexture? externalTexture, ref Texture? cpuTexture);
+            bool ApplyFrame(CaptureFrame frame, IRenderer renderer, Sprite sprite, ref D3D11ExternalTexture? externalTexture, ref Texture? cpuTexture);
         }
 
         private readonly struct CaptureFrame
@@ -385,10 +336,10 @@ namespace osu.Game.Tournament.Components
                 return false;
             }
 
-            public void ApplyFrame(CaptureFrame frame, IRenderer renderer, Sprite sprite, ref D3D11ExternalTexture? externalTexture, ref Texture? cpuTexture)
+            public bool ApplyFrame(CaptureFrame frame, IRenderer renderer, Sprite sprite, ref D3D11ExternalTexture? externalTexture, ref Texture? cpuTexture)
             {
                 if (frame.Kind != CaptureFrameKind.D3D11Texture || frame.D3D11Texture == null)
-                    return;
+                    return false;
 
                 if (externalTexture == null || externalTexture.Width != frame.Width || externalTexture.Height != frame.Height)
                 {
@@ -398,6 +349,7 @@ namespace osu.Game.Tournament.Components
                 }
 
                 externalTexture.UpdateFrom(frame.D3D11Texture);
+                return false;
             }
 
             public void Dispose() => capture.Dispose();
@@ -448,8 +400,8 @@ namespace osu.Game.Tournament.Components
 
                 if (bitmapPool == null || graphicsPool == null || poolWidth != width || poolHeight != height)
                 {
-                    bitmapPool?.Dispose();
                     graphicsPool?.Dispose();
+                    bitmapPool?.Dispose();
 
                     bitmapPool = new System.Drawing.Bitmap(width, height, PixelFormat.Format24bppRgb);
                     graphicsPool = System.Drawing.Graphics.FromImage(bitmapPool);
@@ -467,31 +419,67 @@ namespace osu.Game.Tournament.Components
                     poolHeight = height;
                 }
 
+                ArrayPoolTextureUpload? upload = null;
+
                 try
                 {
-                    IntPtr hdcDest = graphicsPool.GetHdc();
-                    IntPtr hdcSrc = GetWindowDC(hwnd);
-                    BitBlt(hdcDest, 0, 0, width, height, hdcSrc, 0, 0, 0x00CC0020);
-                    graphicsPool.ReleaseHdc(hdcDest);
-                    ReleaseDC(hwnd, hdcSrc);
+                    copyWindowToBitmap(hwnd, graphicsPool, width, height);
+                    copyBitmapToRawBuffer(bitmapPool, rawBufferPool!);
 
-                    var bmpData = bitmapPool.LockBits(
-                        new Rectangle(0, 0, width, height),
-                        ImageLockMode.ReadOnly,
-                        PixelFormat.Format24bppRgb);
-
-                    Marshal.Copy(bmpData.Scan0, rawBufferPool!, 0, rawBufferPool!.Length);
-                    bitmapPool.UnlockBits(bmpData);
-
-                    var upload = new ArrayPoolTextureUpload(width, height);
+                    upload = new ArrayPoolTextureUpload(width, height);
                     convertRgr24ToRgba32(rawBufferPool!, width, height, poolStride, upload.RawData);
 
                     frame = CaptureFrame.FromUpload(upload, width, height);
+                    upload = null;
                     return true;
                 }
                 catch
                 {
+                    upload?.Dispose();
                     return false;
+                }
+            }
+
+            private static void copyWindowToBitmap(IntPtr hwnd, System.Drawing.Graphics graphics, int width, int height)
+            {
+                IntPtr hdcDest = IntPtr.Zero;
+                IntPtr hdcSrc = IntPtr.Zero;
+
+                try
+                {
+                    hdcDest = graphics.GetHdc();
+                    hdcSrc = GetWindowDC(hwnd);
+
+                    if (hdcSrc == IntPtr.Zero || !BitBlt(hdcDest, 0, 0, width, height, hdcSrc, 0, 0, 0x00CC0020))
+                        throw new InvalidOperationException("Failed to capture window contents.");
+                }
+                finally
+                {
+                    if (hdcDest != IntPtr.Zero)
+                        graphics.ReleaseHdc(hdcDest);
+
+                    if (hdcSrc != IntPtr.Zero)
+                        ReleaseDC(hwnd, hdcSrc);
+                }
+            }
+
+            private static void copyBitmapToRawBuffer(System.Drawing.Bitmap bitmap, byte[] rawBuffer)
+            {
+                BitmapData? bmpData = null;
+
+                try
+                {
+                    bmpData = bitmap.LockBits(
+                        new Rectangle(0, 0, bitmap.Width, bitmap.Height),
+                        ImageLockMode.ReadOnly,
+                        PixelFormat.Format24bppRgb);
+
+                    Marshal.Copy(bmpData.Scan0, rawBuffer, 0, rawBuffer.Length);
+                }
+                finally
+                {
+                    if (bmpData != null)
+                        bitmap.UnlockBits(bmpData);
                 }
             }
 
@@ -515,10 +503,10 @@ namespace osu.Game.Tournament.Components
                 }
             }
 
-            public void ApplyFrame(CaptureFrame frame, IRenderer renderer, Sprite sprite, ref D3D11ExternalTexture? externalTexture, ref Texture? cpuTexture)
+            public bool ApplyFrame(CaptureFrame frame, IRenderer renderer, Sprite sprite, ref D3D11ExternalTexture? externalTexture, ref Texture? cpuTexture)
             {
                 if (frame.Kind != CaptureFrameKind.CpuUpload || frame.Upload == null)
-                    return;
+                    return false;
 
                 if (cpuTexture == null || cpuTexture.Width != frame.Width || cpuTexture.Height != frame.Height)
                 {
@@ -528,12 +516,13 @@ namespace osu.Game.Tournament.Components
                 }
 
                 cpuTexture.SetData(frame.Upload);
+                return true;
             }
 
             public void Dispose()
             {
-                bitmapPool?.Dispose();
                 graphicsPool?.Dispose();
+                bitmapPool?.Dispose();
             }
         }
     }

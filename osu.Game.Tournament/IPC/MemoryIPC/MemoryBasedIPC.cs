@@ -280,7 +280,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                     case AttachStatus.Attached:
                     {
                         if (!FetchDataFromMemory)
-                            return;
+                            continue;
 
                         try
                         {

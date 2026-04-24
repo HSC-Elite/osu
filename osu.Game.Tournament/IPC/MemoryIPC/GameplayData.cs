@@ -5,7 +5,7 @@ using osu.Game.Beatmaps.Legacy;
 
 namespace osu.Game.Tournament.IPC.MemoryIPC
 {
-    public class GameplayData
+    public record class GameplayData
     {
         public string PlayerName = string.Empty;
         public LegacyMods Mods;
