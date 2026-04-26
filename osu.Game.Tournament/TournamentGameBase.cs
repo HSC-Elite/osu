@@ -28,6 +28,8 @@ using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.IPC.MemoryIPC;
 using osu.Game.Tournament.MultiWindow;
 using osu.Game.Tournament.Models;
+using osu.Game.Tournament.StableClient;
+using osu.Game.Tournament.StableClient.IPC;
 using osu.Game.Users;
 using osuTK.Input;
 
@@ -246,7 +248,12 @@ namespace osu.Game.Tournament
                 Ruleset.BindTo(ladder.Ruleset);
 
                 dependencies.Cache(ladder);
-                dependencies.CacheAs(ipc = new MemoryBasedIPC());
+
+                StableBanchoClient banchoClient;
+                dependencies.Cache(banchoClient = new StableBanchoClient("", ""));
+                Add(banchoClient);
+
+                dependencies.CacheAs<MatchIPCInfo>(ipc = new StableMatchIPCInfo());
                 Add(ipc);
 
                 bracketLoadTaskCompletionSource.SetResult(true);

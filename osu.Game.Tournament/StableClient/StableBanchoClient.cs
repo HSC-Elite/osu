@@ -23,9 +23,9 @@ namespace osu.Game.Tournament.StableClient
     /// </summary>
     public partial class StableBanchoClient : Component, IDisposable
     {
-        private readonly string username;
-        private readonly string passwordHash;
-        private string clientHashes;
+        public string Username { get; private set; } = string.Empty;
+        private string passwordHash = string.Empty;
+        private string clientHashes = string.Empty;
         private string? version;
 
         private string? token;
@@ -42,7 +42,7 @@ namespace osu.Game.Tournament.StableClient
 
         public StableBanchoClient(string username, string passwordHash, string clientHashes = "", string version = "")
         {
-            this.username = username;
+            Username = username;
             this.passwordHash = passwordHash;
             this.clientHashes = clientHashes;
             this.version = version;
@@ -84,8 +84,11 @@ namespace osu.Game.Tournament.StableClient
             });
         }
 
-        public async Task ConnectAsync()
+        public async Task ConnectAsync(string username, string passwordHash)
         {
+            Username = username;
+            this.passwordHash = passwordHash;
+
             try
             {
                 // 等待 load 中的异步初始化完成
@@ -96,7 +99,7 @@ namespace osu.Game.Tournament.StableClient
             }
             catch (Exception e)
             {
-                Logger.Error(e, $"StableClient [{username}] connection/initialization failed.");
+                Logger.Error(e, $"StableClient [{Username}] connection/initialization failed.");
             }
         }
 
@@ -108,14 +111,14 @@ namespace osu.Game.Tournament.StableClient
         {
             int utcOffset = (int)DateTimeOffset.Now.Offset.TotalHours;
             var loginData = new StringBuilder();
-            loginData.AppendLine(username);
+            loginData.AppendLine(Username);
             loginData.AppendLine(passwordHash);
             loginData.AppendLine($"{version}|{utcOffset}|0|{clientHashes}|0");
 
             await performRequestAsync(Encoding.UTF8.GetBytes(loginData.ToString()), includeTokenHeader: false, includeVersionHeader: true, updateTokenFromResponse: true).ConfigureAwait(false);
 
             if (!string.IsNullOrEmpty(token))
-                Logger.Log($"StableClient [{username}] logged in, token: {token}");
+                Logger.Log($"StableClient [{Username}] logged in, token: {token}");
         }
 
         private async Task pollLoop()

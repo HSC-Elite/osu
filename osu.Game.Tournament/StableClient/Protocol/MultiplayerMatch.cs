@@ -40,7 +40,7 @@ namespace osu.Game.Tournament.StableClient.Protocol
         public string BeatmapChecksum;
         public byte[] SlotStatuses = new byte[16];
         public byte[] SlotTeams = new byte[16];
-        public List<int> SlotUserIds = new List<int>();
+        public int[] SlotUserIds = new int[16];
         public int HostId;
         public byte PlayMode;
         public byte ScoringType;
@@ -68,7 +68,7 @@ namespace osu.Game.Tournament.StableClient.Protocol
             {
                 // 如果 SlotStatus 包含 HasPlayer (124 掩码用于排除 Open/Locked 等状态)
                 if ((SlotStatuses[i] & 124) != 0)
-                    SlotUserIds.Add(reader.ReadInt32());
+                    SlotUserIds[i] = reader.ReadInt32();
             }
 
             HostId = reader.ReadInt32();

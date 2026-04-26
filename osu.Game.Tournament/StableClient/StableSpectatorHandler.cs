@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
-using osu.Framework.Graphics;
+using osu.Framework.Graphics.Containers;
 using osu.Framework.Logging;
 using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.Legacy;
@@ -27,12 +27,13 @@ namespace osu.Game.Tournament.StableClient
     /// <summary>
     /// 绑定到特定用户 ID 的消费者，负责将 Stable 协议数据转换为 Lazer 可消费的 FrameDataBundle。
     /// </summary>
-    public partial class StableSpectatorHandler : Component
+    public partial class StableSpectatorHandler : CompositeDrawable
     {
         public readonly int UserId;
 
-        [Resolved]
-        private StableBanchoClient banchoClient { get; set; } = null!;
+        private readonly StableBanchoClient banchoClient;
+        private readonly string username;
+        private readonly string passwordHash;
 
         [Resolved]
         private BeatmapManager beatmapManager { get; set; } = null!;
@@ -68,16 +69,27 @@ namespace osu.Game.Tournament.StableClient
         private GetBeatmapRequest? beatmapLookupRequest;
         private LegacyReplayFrame? lastReplayFrame;
 
-        public StableSpectatorHandler(int userId)
+        public StableSpectatorHandler(int userId, string username, string passwordHash)
         {
             UserId = userId;
+            this.username = username;
+            this.passwordHash = passwordHash;
+            banchoClient = new StableBanchoClient(username, passwordHash);
         }
 
         [BackgroundDependencyLoader]
         private void load()
         {
+            AddInternal(banchoClient);
+
             banchoClient.OnUserStatusChanged += handleUserStatus;
             banchoClient.OnReplayFramesReceived += handleReplayFrames;
+
+            banchoClient.ConnectAsync(username, passwordHash).ContinueWith(t => 
+            {
+                if (!t.IsFaulted)
+                    banchoClient.StartSpectating(UserId);
+            });
         }
 
         private void handleUserStatus(StableUserStatus status)

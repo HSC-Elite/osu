@@ -27,6 +27,7 @@ using osu.Game.Tournament.Screens.Setup;
 using osu.Game.Tournament.Screens.Showcase;
 using osu.Game.Tournament.Screens.TeamIntro;
 using osu.Game.Tournament.Screens.TeamWin;
+using osu.Game.Tournament.StableClient.Screens;
 using osuTK;
 using osuTK.Graphics;
 using osuTK.Input;
@@ -100,6 +101,7 @@ namespace osu.Game.Tournament
                                 Children = new Drawable[]
                                 {
                                     new SetupScreen(),
+                                    new StableSetupScreen(),
                                     new ScheduleScreen(),
                                     new LadderScreen(),
                                     new LadderEditorScreen(),
@@ -152,6 +154,7 @@ namespace osu.Game.Tournament
                                     Children = new Drawable[]
                                     {
                                         new ScreenButton(typeof(SetupScreen)) { Text = "Setup", RequestSelection = SetScreen },
+                                        new ScreenButton(typeof(StableSetupScreen)) { Text = "Stable Setup", RequestSelection = SetScreen },
                                         new ToggleControlWindowButton(ladderInfo.UseExternalStageDisplay),
                                         new Separator(),
                                         new ScreenButton(typeof(TeamEditorScreen)) { Text = "Team Editor", RequestSelection = SetScreen },
