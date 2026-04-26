@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using osu.Framework.Allocation;
 using osu.Framework.Graphics;
 using osu.Framework.Logging;
+using osu.Game.Beatmaps.Legacy;
 using osu.Game.Online.API;
 using osu.Game.Online.Multiplayer;
 using osu.Game.Tournament.StableClient.Protocol;
@@ -30,13 +31,14 @@ namespace osu.Game.Tournament.StableClient
         private string? token;
         private readonly CancellationTokenSource cts = new CancellationTokenSource();
         private readonly TaskCompletionSource<bool> initializationSource = new TaskCompletionSource<bool>();
+        private readonly SemaphoreSlim requestSemaphore = new SemaphoreSlim(1, 1);
 
         public event Action<int>? OnLoginSuccess;
         public event Action<bReplayFrameBundle>? OnReplayFramesReceived;
         public event Action<MultiplayerMatch>? OnMatchCreated;
         public event Action<MultiplayerMatch>? OnMatchUpdated;
         public event Action<int>? OnMatchDisbanded;
-        public event Action<int, string, byte>? OnUserStatusChanged;
+        public event Action<StableUserStatus>? OnUserStatusChanged;
 
         public StableBanchoClient(string username, string passwordHash, string clientHashes = "", string version = "")
         {
@@ -90,7 +92,7 @@ namespace osu.Game.Tournament.StableClient
                 await initializationSource.Task.ConfigureAwait(false);
 
                 await loginAsync().ConfigureAwait(false);
-                _ = Task.Run(pollLoop, cts.Token);
+                Task.Run(pollLoop, cts.Token).FireAndForget();
             }
             catch (Exception e)
             {
@@ -104,29 +106,16 @@ namespace osu.Game.Tournament.StableClient
 
         private async Task loginAsync()
         {
+            int utcOffset = (int)DateTimeOffset.Now.Offset.TotalHours;
             var loginData = new StringBuilder();
             loginData.AppendLine(username);
             loginData.AppendLine(passwordHash);
-            loginData.AppendLine($"{version}|8|1|{clientHashes}|0");
+            loginData.AppendLine($"{version}|{utcOffset}|0|{clientHashes}|0");
 
-            var request = new OsuWebRequest("https://c.ppy.sh");
-            request.Method = HttpMethod.Post;
-            request.AddRaw(Encoding.UTF8.GetBytes(loginData.ToString()));
-            request.AddHeader("osu-version", version!);
-
-            await request.PerformAsync(cts.Token).ConfigureAwait(false);
-
-            if (request.ResponseHeaders!.TryGetValues("cho-token", out var tokens))
-                token = tokens.FirstOrDefault();
+            await performRequestAsync(Encoding.UTF8.GetBytes(loginData.ToString()), includeTokenHeader: false, includeVersionHeader: true, updateTokenFromResponse: true).ConfigureAwait(false);
 
             if (!string.IsNullOrEmpty(token))
                 Logger.Log($"StableClient [{username}] logged in, token: {token}");
-
-            using (var stream = request.ResponseStream)
-            using (var reader = new BinaryReader(stream))
-            {
-                parsePackets(reader);
-            }
         }
 
         private async Task pollLoop()
@@ -141,17 +130,7 @@ namespace osu.Game.Tournament.StableClient
                         continue;
                     }
 
-                    var request = new OsuWebRequest("https://c.ppy.sh");
-                    request.Method = HttpMethod.Post;
-                    request.AddHeader("osu-token", token);
-
-                    await request.PerformAsync(cts.Token).ConfigureAwait(false);
-
-                    using (var stream = request.ResponseStream)
-                    using (var reader = new BinaryReader(stream))
-                    {
-                        parsePackets(reader);
-                    }
+                    await sendEmptyPacket(PacketType.Osu_Pong).ConfigureAwait(false);
                 }
                 catch (Exception e)
                 {
@@ -182,6 +161,10 @@ namespace osu.Game.Tournament.StableClient
             {
                 switch (type)
                 {
+                    case PacketType.Bancho_Ping:
+                        sendEmptyPacket(PacketType.Osu_Pong).FireAndForget();
+                        break;
+
                     case PacketType.Bancho_LoginReply:
                         int userId = reader.ReadInt32();
                         if (userId > 0) OnLoginSuccess?.Invoke(userId);
@@ -214,13 +197,14 @@ namespace osu.Game.Tournament.StableClient
         private void handleUserStatus(BinaryReader reader)
         {
             int userId = reader.ReadInt32();
-            reader.ReadByte(); // Action
-            reader.ReadBString(); // StatusText
+            byte status = reader.ReadByte();
+            string statusText = reader.ReadBString();
             string beatmapChecksum = reader.ReadBString();
-            reader.ReadInt32(); // Mods
+            LegacyMods mods = (LegacyMods)reader.ReadUInt32();
             byte playMode = reader.ReadByte();
+            int beatmapId = reader.ReadInt32();
 
-            OnUserStatusChanged?.Invoke(userId, beatmapChecksum, playMode);
+            OnUserStatusChanged?.Invoke(new StableUserStatus(userId, status, statusText, beatmapChecksum, mods, playMode, beatmapId));
         }
 
         public void StartSpectating(int userId)
@@ -232,10 +216,6 @@ namespace osu.Game.Tournament.StableClient
         {
             if (token == null) return;
 
-            var request = new OsuWebRequest("https://c.ppy.sh");
-            request.Method = HttpMethod.Post;
-            request.AddHeader("osu-token", token);
-
             using (var ms = new MemoryStream())
             using (var writer = new BinaryWriter(ms))
             {
@@ -243,19 +223,13 @@ namespace osu.Game.Tournament.StableClient
                 writer.Write((byte)0);
                 writer.Write(0);
 
-                request.AddRaw(ms.ToArray());
+                await performRequestAsync(ms.ToArray()).ConfigureAwait(false);
             }
-
-            await request.PerformAsync(cts.Token).ConfigureAwait(false);
         }
 
         private async Task sendPacket(PacketType type, int value)
         {
             if (token == null) return;
-
-            var request = new OsuWebRequest("https://c.ppy.sh");
-            request.Method = HttpMethod.Post;
-            request.AddHeader("osu-token", token);
 
             using (var ms = new MemoryStream())
             using (var writer = new BinaryWriter(ms))
@@ -265,23 +239,72 @@ namespace osu.Game.Tournament.StableClient
                 writer.Write(4);
                 writer.Write(value);
 
-                request.AddRaw(ms.ToArray());
+                await performRequestAsync(ms.ToArray()).ConfigureAwait(false);
             }
+        }
 
-            await request.PerformAsync(cts.Token).ConfigureAwait(false);
+        private async Task performRequestAsync(byte[] payload, bool includeTokenHeader = true, bool includeVersionHeader = false, bool updateTokenFromResponse = false)
+        {
+            await requestSemaphore.WaitAsync(cts.Token).ConfigureAwait(false);
+
+            try
+            {
+                var request = new OsuWebRequest("https://c.ppy.sh");
+                request.Method = HttpMethod.Post;
+
+                if (includeVersionHeader)
+                    request.AddHeader("osu-version", version!);
+
+                if (includeTokenHeader && !string.IsNullOrEmpty(token))
+                    request.AddHeader("osu-token", token);
+
+                request.AddRaw(payload);
+
+                await request.PerformAsync(cts.Token).ConfigureAwait(false);
+
+                if (updateTokenFromResponse && request.ResponseHeaders?.TryGetValues("cho-token", out var tokens) == true)
+                    token = tokens.FirstOrDefault();
+
+                if (request.ResponseStream == null || !request.ResponseStream.CanRead)
+                    return;
+
+                if (request.ResponseStream.CanSeek && request.ResponseStream.Length == 0)
+                    return;
+
+                using (var reader = new BinaryReader(request.ResponseStream, Encoding.UTF8, leaveOpen: false))
+                {
+                    parsePackets(reader);
+                }
+            }
+            finally
+            {
+                requestSemaphore.Release();
+            }
         }
 
         protected override void Dispose(bool isDisposing)
         {
             cts.Cancel();
             cts.Dispose();
+            requestSemaphore.Dispose();
             base.Dispose(isDisposing);
         }
     }
 
+    public readonly record struct StableUserStatus(
+        int UserId,
+        byte Status,
+        string StatusText,
+        string BeatmapChecksum,
+        LegacyMods Mods,
+        byte PlayMode,
+        int BeatmapId);
+
     public enum PacketType : short
     {
+        Osu_Pong = 4,
         Bancho_LoginReply = 5,
+        Bancho_Ping = 8,
         Bancho_SpectateFrames = 15,
         Osu_StartSpectating = 16,
         Bancho_MatchUpdate = 26,

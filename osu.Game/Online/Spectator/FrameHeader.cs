@@ -17,6 +17,12 @@ namespace osu.Game.Online.Spectator
     public class FrameHeader
     {
         /// <summary>
+        /// The scoring semantics used by this header.
+        /// </summary>
+        [Key(8)]
+        public FrameScoreSource ScoreSource { get; set; }
+
+        /// <summary>
         /// The total score.
         /// </summary>
         [Key(0)]
@@ -70,6 +76,12 @@ namespace osu.Game.Online.Spectator
         public APIMod[]? Mods { get; set; }
 
         /// <summary>
+        /// Whether the player is considered to have passed at this point in time.
+        /// </summary>
+        [Key(9)]
+        public bool? Passed { get; set; }
+
+        /// <summary>
         /// Construct header summary information from a point-in-time reference to a score which is actively being played.
         /// </summary>
         /// <param name="score">The score for reference.</param>
@@ -83,13 +95,14 @@ namespace osu.Game.Online.Spectator
             // copy for safety
             Statistics = new Dictionary<HitResult, int>(score.Statistics);
             Mods = score.APIMods.ToArray();
-
+            ScoreSource = FrameScoreSource.Standardised;
+            Passed = score.Passed;
             ScoreProcessorStatistics = statistics;
         }
 
         [JsonConstructor]
         [SerializationConstructor]
-        public FrameHeader(long totalScore, double accuracy, int combo, int maxCombo, Dictionary<HitResult, int> statistics, ScoreProcessorStatistics scoreProcessorStatistics, DateTimeOffset receivedTime)
+        public FrameHeader(long totalScore, double accuracy, int combo, int maxCombo, Dictionary<HitResult, int> statistics, ScoreProcessorStatistics scoreProcessorStatistics, DateTimeOffset receivedTime, APIMod[]? mods = null, FrameScoreSource scoreSource = FrameScoreSource.Standardised, bool? passed = null)
         {
             TotalScore = totalScore;
             Accuracy = accuracy;
@@ -98,6 +111,15 @@ namespace osu.Game.Online.Spectator
             Statistics = statistics;
             ScoreProcessorStatistics = scoreProcessorStatistics;
             ReceivedTime = receivedTime;
+            Mods = mods;
+            ScoreSource = scoreSource;
+            Passed = passed;
         }
+    }
+
+    public enum FrameScoreSource
+    {
+        Standardised,
+        StableRaw,
     }
 }

@@ -16,29 +16,31 @@ namespace osu.Game.Tournament.StableClient
     [SupportedOSPlatform("windows")]
     public static class HardwareIdentification
     {
-        public static string GenerateClientHashes(string? osuFileMd5 = null)
+        private const string default_osu_path_md5 = "cd4a25cbe1d5793e8bf577217497c701";
+
+        public static string GenerateClientHashes(string? osuPath = null)
         {
-            const string default_md5 = "cd4a25cbe1d5793e8bf577217497c701";
             string macAddressesStr = getMacAddressesString();
             string macAddressesMd5 = getMd5(macAddressesStr);
-            string uninstallIdMd5 = getMd5(getUninstallId());
-            string diskSignatureMd5 = getMd5(getDiskSignature());
+            string uninstallIdMd5 = getMd5(getMd5(getUninstallId()));
+            string diskSignatureMd5 = getMd5(getMd5(getDiskSignature()));
+            string osuPathMd5 = osuPath ?? default_osu_path_md5;
 
-            return $"{osuFileMd5 ?? default_md5}:{macAddressesStr}:{macAddressesMd5}:{uninstallIdMd5}:{diskSignatureMd5}";
+            // Stable sends a trailing ':' here; some bancho implementations rely on it when parsing.
+            return $"{osuPathMd5}:{macAddressesStr}:{macAddressesMd5}:{uninstallIdMd5}:{diskSignatureMd5}:";
         }
 
         private static string getMacAddressesString()
         {
             var macs = NetworkInterface.GetAllNetworkInterfaces()
-                                       .Where(n => n.OperationalStatus == OperationalStatus.Up &&
-                                                   n.NetworkInterfaceType != NetworkInterfaceType.Loopback)
-                                       .Select(n => n.GetPhysicalAddress().ToString())
-                                       .Where(s => !string.IsNullOrEmpty(s))
-                                       .ToList();
+                                       .Where(n => !n.Name.Contains('-') &&
+                                                   n.NetworkInterfaceType != NetworkInterfaceType.Loopback &&
+                                                   n.NetworkInterfaceType != NetworkInterfaceType.Tunnel &&
+                                                   n.OperationalStatus != OperationalStatus.NotPresent &&
+                                                   n.OperationalStatus != OperationalStatus.Unknown)
+                                       .Select(n => n.GetPhysicalAddress()?.ToString() ?? string.Empty);
 
-            if (macs.Count == 0) return "runningunderwine.";
-
-            return string.Join(".", macs) + ".";
+            return string.Concat(macs.Select(m => $"{m}."));
         }
 
         [SupportedOSPlatform("windows")]

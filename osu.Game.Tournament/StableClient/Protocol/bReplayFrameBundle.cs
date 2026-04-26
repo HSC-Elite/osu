@@ -6,11 +6,24 @@ using System.IO;
 
 namespace osu.Game.Tournament.StableClient.Protocol
 {
+    public enum ReplayAction : byte
+    {
+        Standard,
+        NewSong,
+        Skip,
+        Completion,
+        Fail,
+        Pause,
+        Unpause,
+        SongSelect,
+        WatchingOther
+    }
+
     public class bReplayFrameBundle
     {
         public int Extra;
         public List<bReplayFrame> Frames = new List<bReplayFrame>();
-        public byte Action;
+        public ReplayAction Action;
         public bScoreFrame ScoreFrame;
         public ushort Sequence;
 
@@ -24,7 +37,7 @@ namespace osu.Game.Tournament.StableClient.Protocol
                 Frames.Add(new bReplayFrame(sr));
             }
 
-            Action = sr.ReadByte();
+            Action = (ReplayAction)sr.ReadByte();
             ScoreFrame = new bScoreFrame(sr);
             Sequence = sr.ReadUInt16();
         }
@@ -63,8 +76,11 @@ namespace osu.Game.Tournament.StableClient.Protocol
         public ushort CurrentCombo;
         public bool Perfect;
         public byte Hp;
+        public bool Pass;
         public byte Tag;
         public bool ScoreV2;
+        public double ComboPortion;
+        public double BonusPortion;
 
         public bScoreFrame(BinaryReader sr)
         {
@@ -83,12 +99,16 @@ namespace osu.Game.Tournament.StableClient.Protocol
             Hp = sr.ReadByte();
             Tag = sr.ReadByte();
             ScoreV2 = sr.ReadBoolean();
+            ComboPortion = ScoreV2 ? sr.ReadDouble() : 0;
+            BonusPortion = ScoreV2 ? sr.ReadDouble() : 0;
 
-            if (ScoreV2)
+            if (Hp == 254)
             {
-                sr.ReadDouble(); // Combo portion
-                sr.ReadDouble(); // Bonus portion
+                Hp = 0;
+                Pass = false;
             }
+            else
+                Pass = true;
         }
     }
 }

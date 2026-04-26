@@ -11,6 +11,7 @@ using osu.Framework.Localisation;
 using osu.Game.Beatmaps;
 using osu.Game.Extensions;
 using osu.Game.Localisation;
+using osu.Game.Online.Spectator;
 using osu.Game.Rulesets.Judgements;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Rulesets.Objects;
@@ -494,6 +495,37 @@ namespace osu.Game.Rulesets.Scoring
 
             if (frame.Header == null)
                 return;
+
+            if (frame.Header.ScoreSource == FrameScoreSource.StableRaw)
+            {
+                Combo.Value = frame.Header.Combo;
+                HighestCombo.Value = frame.Header.MaxCombo;
+                TotalScore.Value = frame.Header.TotalScore;
+                TotalScoreWithoutMods.Value = frame.Header.TotalScore;
+                Accuracy.Value = frame.Header.Accuracy;
+                MinimumAccuracy.Value = frame.Header.Accuracy;
+                MaximumAccuracy.Value = frame.Header.Accuracy;
+
+                ScoreResultCounts.Clear();
+                ScoreResultCounts.AddRange(frame.Header.Statistics);
+
+                SetScoreProcessorStatistics(frame.Header.ScoreProcessorStatistics);
+
+                ScoreRank newRank = frame.Header.Passed == false
+                    ? ScoreRank.F
+                    : RankFromScore(Accuracy.Value, ScoreResultCounts);
+
+                if (newRank != ScoreRank.F)
+                {
+                    foreach (var mod in Mods.Value.OfType<IApplicableToScoreProcessor>())
+                        newRank = mod.AdjustRank(newRank, Accuracy.Value);
+                }
+
+                rank.Value = newRank;
+
+                OnResetFromReplayFrame?.Invoke();
+                return;
+            }
 
             Combo.Value = frame.Header.Combo;
             HighestCombo.Value = frame.Header.MaxCombo;
