@@ -40,10 +40,8 @@ namespace osu.Game.Tournament.StableClient
         public event Action<int>? OnMatchDisbanded;
         public event Action<StableUserStatus>? OnUserStatusChanged;
 
-        public StableBanchoClient(string username, string passwordHash, string clientHashes = "", string version = "")
+        public StableBanchoClient(string clientHashes = "", string version = "")
         {
-            Username = username;
-            this.passwordHash = passwordHash;
             this.clientHashes = clientHashes;
             this.version = version;
         }

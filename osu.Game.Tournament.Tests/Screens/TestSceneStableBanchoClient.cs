@@ -157,7 +157,7 @@ namespace osu.Game.Tournament.Tests.Screens
             statusText.Text = $"Connecting as {username}...";
             replayStatusText.Text = "No replay frames yet.";
 
-            var newClient = new StableBanchoClient(username, password.ComputeMD5Hash());
+            var newClient = new StableBanchoClient();
 
             newClient.OnLoginSuccess += userId => Schedule(() =>
             {
@@ -192,7 +192,7 @@ namespace osu.Game.Tournament.Tests.Screens
             {
                 client = loadedClient;
                 Add(loadedClient);
-                loadedClient.ConnectAsync().FireAndForget();
+                loadedClient.ConnectAsync(username, password.ComputeMD5Hash()).FireAndForget();
             });
         }
 
@@ -267,7 +267,7 @@ namespace osu.Game.Tournament.Tests.Screens
                                 Font = OsuFont.GetFont(size: 24, weight: FontWeight.Bold),
                             },
                             createLine($"Beatmap: {match.BeatmapName} ({match.BeatmapId})"),
-                            createLine($"Players: {match.SlotUserIds.Count} | Host: {match.HostId} | First user: {(firstUserId == 0 ? "none" : firstUserId.ToString())}"),
+                            createLine($"Players: {match.SlotUserIds.Count(i => i > 0)} | Host: {match.HostId} | First user: {(firstUserId == 0 ? "none" : firstUserId.ToString())}"),
                             createLine($"In progress: {match.InProgress} | Mode: {match.PlayMode} | Score type: {match.ScoringType}"),
                             new TourneyButton
                             {
