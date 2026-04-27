@@ -13,9 +13,13 @@ using osu.Framework.Logging;
 using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.Legacy;
 using osu.Game.Database;
+using osu.Game.Online;
 using osu.Game.Online.API;
+using osu.Game.Online.API.Requests.Responses;
+using osu.Game.Online.Rooms;
 using osu.Game.Online.Spectator;
 using osu.Game.Rulesets;
+using osu.Game.Screens.OnlinePlay;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.Models;
 using osu.Game.Tournament.StableClient.Protocol;
@@ -37,9 +41,23 @@ namespace osu.Game.Tournament.StableClient.IPC
         private BeatmapLookupCache beatmapLookupCache { get; set; } = null!;
 
         [Resolved]
+        private BeatmapModelDownloader beatmapDownloader { get; set; } = null!;
+
+        [Resolved]
         private TournamentGameBase game { get; set; } = null!;
 
+        [Resolved]
+        private LadderInfo ladder { get; set; } = null!;
+
+        [Resolved]
+        private Bindable<WorkingBeatmap> workingBeatmap { get; set; } = null!;
+
+        [Resolved]
+        private Bindable<RulesetInfo> ruleset { get; set; } = null!;
+
         public readonly Bindable<MultiplayerMatch?> CurrentMatch = new Bindable<MultiplayerMatch?>();
+
+        private readonly StableBeatmapAvailabilityTracker beatmapAvailabilityTracker = new StableBeatmapAvailabilityTracker();
 
         private double waitingForIdle;
         private const int time_to_idle_from_ranking = 15000;
@@ -50,6 +68,12 @@ namespace osu.Game.Tournament.StableClient.IPC
         private readonly StableSpectatorHandler?[] spectatorHandlers = new StableSpectatorHandler?[16];
         private readonly Dictionary<int, long> userScores = new Dictionary<int, long>();
 
+        private int lastBeatmapId;
+
+        public StableMatchIPCInfo()
+        {
+        }
+
         public void SetCredentials(string username, string passwordHash)
         {
             credentialsUsername = username;
@@ -59,6 +83,8 @@ namespace osu.Game.Tournament.StableClient.IPC
         [BackgroundDependencyLoader]
         private void load()
         {
+            game.Add(beatmapAvailabilityTracker);
+
             client.OnMatchCreated += onMatchUpdated;
             client.OnMatchUpdated += onMatchUpdated;
             client.OnMatchDisbanded += onMatchDisbanded;
@@ -69,6 +95,16 @@ namespace osu.Game.Tournament.StableClient.IPC
                 {
                     updateMatchState(e.NewValue, true);
                     updateSpectatorHandlers(e.NewValue);
+                }
+            });
+
+            beatmapAvailabilityTracker.Availability.BindValueChanged(avail =>
+            {
+                if (avail.NewValue.State == DownloadState.LocallyAvailable && lastBeatmapId > 0)
+                {
+                    var local = beatmaps.QueryBeatmap(b => b.OnlineID == lastBeatmapId);
+                    if (local != null)
+                        Schedule(() => workingBeatmap.Value = beatmaps.GetWorkingBeatmap(local));
                 }
             });
         }
@@ -83,7 +119,7 @@ namespace osu.Game.Tournament.StableClient.IPC
                 if (previousMatch != null && !previousMatch.InProgress && match.InProgress)
                 {
                     State.Value = TourneyState.Playing;
-                    userScores.Clear(); // Clear scores on new gameplay
+                    userScores.Clear(); 
                 }
                 else if (previousMatch != null && previousMatch.InProgress && !match.InProgress)
                 {
@@ -108,17 +144,52 @@ namespace osu.Game.Tournament.StableClient.IPC
 
         private void updateMatchState(MultiplayerMatch match, bool forceUpdate)
         {
-            if (forceUpdate || match.BeatmapId != Beatmap.Value?.OnlineID)
+            if (forceUpdate || match.BeatmapId != lastBeatmapId)
             {
-                beatmapLookupCache.GetBeatmapAsync(match.BeatmapId).ContinueWith(t =>
+                lastBeatmapId = match.BeatmapId;
+
+                beatmapAvailabilityTracker.PlaylistItem.Value = new PlaylistItem(new APIBeatmap { OnlineID = match.BeatmapId });
+
+                var existing = ladder.CurrentMatch.Value?.Round.Value?.Beatmaps.FirstOrDefault(b => b.ID == match.BeatmapId);
+
+                if (existing != null)
                 {
-                    var beatmap = t.GetResultSafely();
-                    if (beatmap != null)
+                    Beatmap.Value = existing.Beatmap;
+                }
+                else
+                {
+                    beatmapLookupCache.GetBeatmapAsync(match.BeatmapId).ContinueWith(t =>
                     {
-                        Schedule(() => Beatmap.Value = new TournamentBeatmap(beatmap));
-                    }
-                });
+                        var apiBeatmap = t.GetResultSafely();
+                        if (apiBeatmap != null && lastBeatmapId == match.BeatmapId)
+                        {
+                            Schedule(() => Beatmap.Value = new TournamentBeatmap(apiBeatmap));
+                        }
+                    });
+                }
+
+                var localBeatmap = beatmaps.QueryBeatmap(b => b.OnlineID == match.BeatmapId);
+                if (localBeatmap != null)
+                {
+                    Schedule(() => workingBeatmap.Value = beatmaps.GetWorkingBeatmap(localBeatmap));
+                }
+                else
+                {
+                    beatmapLookupCache.GetBeatmapAsync(match.BeatmapId).ContinueWith(t =>
+                    {
+                        var apiBeatmap = t.GetResultSafely();
+                        if (apiBeatmap?.BeatmapSet != null)
+                        {
+                            if (!beatmaps.IsAvailableLocally(new BeatmapSetInfo { OnlineID = apiBeatmap.BeatmapSet.OnlineID }))
+                                beatmapDownloader.Download(apiBeatmap.BeatmapSet);
+                        }
+                    });
+                }
             }
+
+            var rulesetInfo = rulesets.GetRuleset(match.PlayMode);
+            if (rulesetInfo != null)
+                Schedule(() => ruleset.Value = rulesetInfo);
 
             Mods.Value = (LegacyMods)match.Mods;
 
@@ -134,7 +205,8 @@ namespace osu.Game.Tournament.StableClient.IPC
             {
                 try
                 {
-                    var req = new OsuWebRequest($"https://osu.ppy.sh/web/osu-getchannelid.php?u={Uri.EscapeDataString(credentialsUsername)}&h={Uri.EscapeDataString(credentialsPasswordHash)}&mp={matchId}");
+                    var req = new OsuWebRequest(
+                        $"https://osu.ppy.sh/web/osu-getchannelid.php?u={Uri.EscapeDataString(credentialsUsername)}&h={Uri.EscapeDataString(credentialsPasswordHash)}&mp={matchId}");
                     await req.PerformAsync().ConfigureAwait(false);
 
                     if (int.TryParse(req.GetResponseString(), out int channelId) && channelId > 0)
@@ -157,14 +229,12 @@ namespace osu.Game.Tournament.StableClient.IPC
 
                 if (spectatorHandlers[i]?.UserId != userId)
                 {
-                    // Dispose old handler if it exists
                     if (spectatorHandlers[i] != null)
                     {
                         spectatorHandlers[i]!.Expire();
                         spectatorHandlers[i] = null;
                     }
 
-                    // Create new handler if user is present
                     if (userId > 0)
                     {
                         var handler = new StableSpectatorHandler(userId, credentialsUsername, credentialsPasswordHash);
@@ -247,6 +317,11 @@ namespace osu.Game.Tournament.StableClient.IPC
 
             clearSpectatorHandlers();
             base.Dispose(isDisposing);
+        }
+
+        private partial class StableBeatmapAvailabilityTracker : OnlinePlayBeatmapAvailabilityTracker
+        {
+            public new Bindable<PlaylistItem?> PlaylistItem => base.PlaylistItem;
         }
     }
 }

@@ -4,6 +4,7 @@
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Game.Beatmaps.Legacy;
+using osu.Game.Rulesets;
 using osu.Game.Tournament.Models;
 
 namespace osu.Game.Tournament.IPC
@@ -11,6 +12,7 @@ namespace osu.Game.Tournament.IPC
     public partial class MatchIPCInfo : Component
     {
         public Bindable<TournamentBeatmap?> Beatmap { get; } = new Bindable<TournamentBeatmap?>();
+        public Bindable<RulesetInfo?> Ruleset { get; } = new Bindable<RulesetInfo?>();
         public Bindable<LegacyMods> Mods { get; } = new Bindable<LegacyMods>();
         public Bindable<TourneyState> State { get; } = new Bindable<TourneyState>();
         public Bindable<int> ChatChannel { get; } = new Bindable<int>();
