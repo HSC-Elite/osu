@@ -92,11 +92,7 @@ namespace osu.Game.Tournament.StableClient.Screens
             string username = usernameBox.Text;
             string pass = passwordBox.Text;
 
-            if (!string.IsNullOrEmpty(pass) && pass.Length != 32)
-            {
-                byte[] hash = System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(pass));
-                pass = BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
-            }
+            pass = getHashedPassword(pass);
 
             connectButton.Enabled.Value = false;
             connectButton.Text = "Connecting...";
@@ -114,6 +110,17 @@ namespace osu.Game.Tournament.StableClient.Screens
                 connectButton.Text = "Connected! Joining Lobby...";
                 banchoClient.JoinLobby();
             }));
+        }
+
+        private static string getHashedPassword(string pass)
+        {
+            if (!string.IsNullOrEmpty(pass) && pass.Length != 32)
+            {
+                byte[] hash = System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(pass));
+                pass = BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+            }
+
+            return pass;
         }
 
         private void addOrUpdateMatch(MultiplayerMatch match)
@@ -137,6 +144,7 @@ namespace osu.Game.Tournament.StableClient.Screens
         private void refreshMatchesList()
         {
             matchesFlow.Clear();
+
             foreach (var match in availableMatches.Values)
             {
                 matchesFlow.Add(new MatchButton(match, () =>
@@ -149,10 +157,10 @@ namespace osu.Game.Tournament.StableClient.Screens
                         }
                     }
 
-                    ipcInfo.SetCredentials(usernameBox.Text, passwordBox.Text);
+                    ipcInfo.SetCredentials(usernameBox.Text, getHashedPassword(passwordBox.Text));
                     ipcInfo.CurrentMatch.Value = match;
                     banchoClient.SpecialJoinMatchChannel(match.Id);
-                    
+
                     refreshMatchesList();
                 })
                 {

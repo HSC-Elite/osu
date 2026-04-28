@@ -15,7 +15,6 @@ using osu.Game.Graphics.Containers;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Online.Multiplayer;
-using osu.Game.Overlays.Settings;
 using osu.Game.Tournament.StableClient;
 using osu.Game.Tournament.StableClient.Protocol;
 using osuTK;

@@ -205,7 +205,10 @@ namespace osu.Game.Tournament.StableClient
             byte playMode = reader.ReadByte();
             int beatmapId = reader.ReadInt32();
 
-            OnUserStatusChanged?.Invoke(new StableUserStatus(userId, status, statusText, beatmapChecksum, mods, playMode, beatmapId));
+            // 在锦标赛协议中，statusText 通常直接包含 Username
+            string username = statusText;
+
+            OnUserStatusChanged?.Invoke(new StableUserStatus(userId, username, status, statusText, beatmapChecksum, mods, playMode, beatmapId));
         }
 
         public void StartSpectating(int userId)
@@ -294,6 +297,7 @@ namespace osu.Game.Tournament.StableClient
 
     public readonly record struct StableUserStatus(
         int UserId,
+        string Username,
         byte Status,
         string StatusText,
         string BeatmapChecksum,

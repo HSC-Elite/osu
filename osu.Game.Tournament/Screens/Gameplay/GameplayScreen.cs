@@ -17,6 +17,9 @@ using osu.Framework.Threading;
 using osu.Framework.Utils;
 using osu.Game.Graphics;
 using osu.Game.Graphics.UserInterface;
+using osu.Game.Beatmaps;
+using osu.Game.Graphics.UserInterfaceV2;
+using osu.Game.Screens;
 using osu.Game.Overlays.Settings;
 using osu.Game.Tournament.Components;
 using osu.Game.Tournament.IPC;
@@ -27,6 +30,8 @@ using osu.Game.Tournament.Screens.MapPool;
 using osu.Game.Tournament.Screens.TeamWin;
 using osuTK;
 using osuTK.Graphics;
+using osu.Game.Tournament.StableClient;
+using osu.Game.Tournament.StableClient.IPC;
 
 namespace osu.Game.Tournament.Screens.Gameplay
 {
@@ -39,11 +44,9 @@ namespace osu.Game.Tournament.Screens.Gameplay
         private Sprite slotSprite = null!;
         private SettingsNumberBox frameRateInputBox = null!;
 
-        private PlayerArea redArea = null!;
-        private PlayerArea blueArea = null!;
-
         private MatchHeader header = null!;
         private RoundInformationPreview roundPreview = null!;
+        private StableMatchIPCInfo stableIpc = null!;
 
         [Resolved]
         private TournamentSceneManager? sceneManager { get; set; }
@@ -63,7 +66,10 @@ namespace osu.Game.Tournament.Screens.Gameplay
         [Resolved]
         private OsuColour colours { get; set; } = null!;
 
-        private Drawable chroma = null!;
+        [Resolved]
+        private Bindable<WorkingBeatmap> globalWorkingBeatmap { get; set; } = null!;
+
+        private OsuScreenStack chroma = null!;
 
         protected override SongBar CreateSongBar() => new GameplaySongBar
         {
@@ -81,6 +87,8 @@ namespace osu.Game.Tournament.Screens.Gameplay
         [BackgroundDependencyLoader]
         private void load(TextureStore store)
         {
+            this.stableIpc = (StableMatchIPCInfo)IPC;
+
             AddRangeInternal(new Drawable[]
             {
                 new TourneyVideo("gameplay")
@@ -102,32 +110,13 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     Y = 110,
                     Anchor = Anchor.TopCentre,
                     Origin = Anchor.TopCentre,
-                    Children = new[]
+                    Child = chroma = new OsuScreenStack
                     {
-                        chroma = new Container
-                        {
-                            Anchor = Anchor.TopCentre,
-                            Origin = Anchor.TopCentre,
-                            Height = 512,
-                            Width = 1366,
-                            Children = new Drawable[]
-                            {
-                                redArea = new PlayerArea(TeamColour.Red)
-                                {
-                                    Name = "Left PlayerArea",
-                                    RelativeSizeAxes = Axes.Both,
-                                    Width = 0.5f,
-                                },
-                                blueArea = new PlayerArea(TeamColour.Blue)
-                                {
-                                    Name = "Right PlayerArea",
-                                    RelativeSizeAxes = Axes.Both,
-                                    Anchor = Anchor.TopRight,
-                                    Origin = Anchor.TopRight,
-                                    Width = 0.5f,
-                                }
-                            }
-                        },
+                        RelativeSizeAxes = Axes.None,
+                        Anchor = Anchor.TopCentre,
+                        Origin = Anchor.TopCentre,
+                        Height = 512,
+                        Width = 1366,
                     }
                 },
                 scoreDisplay = new TournamentMatchScoreDisplay
@@ -229,25 +218,25 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 {
                     RelativeSizeAxes = Axes.X,
                 },
-                new TourneyButton
-                {
-                    Text = "红飞",
-                    Action = redArea.Launch
-                },
-                new TourneyButton
-                {
-                    Text = "蓝飞",
-                    Action = blueArea.Launch
-                },
-                new TourneyButton
-                {
-                    Text = "飞重置",
-                    Action = () =>
-                    {
-                        redArea.Reset();
-                        blueArea.Reset();
-                    }
-                },
+                // new TourneyButton
+                // {
+                //     Text = "红飞",
+                //     Action = redArea.Launch
+                // },
+                // new TourneyButton
+                // {
+                //     Text = "蓝飞",
+                //     Action = blueArea.Launch
+                // },
+                // new TourneyButton
+                // {
+                //     Text = "飞重置",
+                //     Action = () =>
+                //     {
+                //         redArea.Reset();
+                //         blueArea.Reset();
+                //     }
+                // },
                 new TourneyButton
                 {
                     RelativeSizeAxes = Axes.X,
@@ -298,6 +287,8 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
                 LadderInfo.FrameRate.Value = f.NewValue.Value;
             });
+
+            chroma.Push(new StableTournamentIdleScreen());
         }
 
         private bool roundPreviewShow;
@@ -447,9 +438,12 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 switch (State.Value)
                 {
                     case TourneyState.Idle:
+                        if (chroma.CurrentScreen is StableTournamentMultiSpectatorScreen)
+                            chroma.Exit();
+
                         contract();
 
-                        if (LadderInfo.AutoProgressScreens.Value)
+                        if (LadderInfo.AutoProgressScreens.Value && lastState == TourneyState.Ranking && !warmup.Value)
                         {
                             const float delay_before_progression = 4000;
 
@@ -467,6 +461,13 @@ namespace osu.Game.Tournament.Screens.Gameplay
                             }
                         }
 
+                        break;
+
+                    case TourneyState.Playing:
+                        if (chroma.CurrentScreen is not StableTournamentMultiSpectatorScreen)
+                            chroma.Push(new StableTournamentMultiSpectatorScreen(globalWorkingBeatmap.Value));
+
+                        expand();
                         break;
 
                     case TourneyState.Ranking:

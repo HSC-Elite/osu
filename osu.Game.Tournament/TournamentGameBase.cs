@@ -64,9 +64,6 @@ namespace osu.Game.Tournament
 
         public override EndpointConfiguration CreateEndpoints()
         {
-            if (UseDevelopmentServer)
-                return base.CreateEndpoints();
-
             return new ProductionEndpointConfiguration();
         }
 
@@ -253,7 +250,8 @@ namespace osu.Game.Tournament
                 dependencies.Cache(banchoClient = new StableBanchoClient("", ""));
                 Add(banchoClient);
 
-                dependencies.CacheAs<MatchIPCInfo>(ipc = new StableMatchIPCInfo());
+                dependencies.CacheAs(ipc = new StableMatchIPCInfo());
+                dependencies.CacheAs((StableMatchIPCInfo)ipc);
                 Add(ipc);
 
                 bracketLoadTaskCompletionSource.SetResult(true);

@@ -32,7 +32,7 @@ namespace osu.Game.Tournament.StableClient
         public readonly int UserId;
 
         private readonly StableBanchoClient banchoClient;
-        private readonly string username;
+        private readonly string username_credential;
         private readonly string passwordHash;
 
         [Resolved]
@@ -64,6 +64,8 @@ namespace osu.Game.Tournament.StableClient
         /// </summary>
         public event Action<ReplayAction, int>? OnReplayActionReceived;
 
+        public string? Username { get; private set; }
+
         private string? currentBeatmapHash;
         private LegacyMods currentLegacyMods;
         private GetBeatmapRequest? beatmapLookupRequest;
@@ -72,9 +74,9 @@ namespace osu.Game.Tournament.StableClient
         public StableSpectatorHandler(int userId, string username, string passwordHash)
         {
             UserId = userId;
-            this.username = username;
+            this.username_credential = username;
             this.passwordHash = passwordHash;
-            banchoClient = new StableBanchoClient(username, passwordHash);
+            banchoClient = new StableBanchoClient();
         }
 
         [BackgroundDependencyLoader]
@@ -85,7 +87,7 @@ namespace osu.Game.Tournament.StableClient
             banchoClient.OnUserStatusChanged += handleUserStatus;
             banchoClient.OnReplayFramesReceived += handleReplayFrames;
 
-            banchoClient.ConnectAsync(username, passwordHash).ContinueWith(t => 
+            banchoClient.ConnectAsync(username_credential, passwordHash).ContinueWith(t =>
             {
                 if (!t.IsFaulted)
                     banchoClient.StartSpectating(UserId);
@@ -97,6 +99,7 @@ namespace osu.Game.Tournament.StableClient
             if (status.UserId != UserId)
                 return;
 
+            Username = status.Username;
             currentLegacyMods = status.Mods;
 
             if (currentBeatmapHash == status.BeatmapChecksum && Ruleset.Value?.OnlineID == status.PlayMode)
@@ -181,7 +184,7 @@ namespace osu.Game.Tournament.StableClient
 
             var scoreInfo = new ScoreInfo
             {
-                User = new APIUser { Id = UserId },
+                User = new APIUser { Id = UserId, Username = Username ?? UserId.ToString() },
                 Ruleset = rulesetInfo,
                 BeatmapInfo = Beatmap.Value?.BeatmapInfo,
                 BeatmapHash = currentBeatmapHash ?? string.Empty,

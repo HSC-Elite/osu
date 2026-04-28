@@ -8,7 +8,6 @@ using System.Threading.Tasks;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Extensions;
-using osu.Framework.Graphics;
 using osu.Framework.Logging;
 using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.Legacy;
@@ -70,6 +69,36 @@ namespace osu.Game.Tournament.StableClient.IPC
 
         private int lastBeatmapId;
 
+        public IEnumerable<StableSpectatorHandler> GetActiveSpectatorHandlers() => spectatorHandlers.Where(h => h != null).Cast<StableSpectatorHandler>();
+
+        public int GetSlotIndexForUser(int userId)
+        {
+            var match = CurrentMatch.Value;
+            if (match == null) return -1;
+
+            for (int i = 0; i < 16; i++)
+            {
+                if (match.SlotUserIds[i] == userId)
+                    return i;
+            }
+
+            return -1;
+        }
+
+        public int GetTeamForUser(int userId)
+        {
+            var match = CurrentMatch.Value;
+            if (match == null) return 0;
+
+            for (int i = 0; i < 16; i++)
+            {
+                if (match.SlotUserIds[i] == userId)
+                    return match.SlotTeams[i];
+            }
+
+            return 0;
+        }
+
         public StableMatchIPCInfo()
         {
         }
@@ -119,7 +148,7 @@ namespace osu.Game.Tournament.StableClient.IPC
                 if (previousMatch != null && !previousMatch.InProgress && match.InProgress)
                 {
                     State.Value = TourneyState.Playing;
-                    userScores.Clear(); 
+                    userScores.Clear();
                 }
                 else if (previousMatch != null && previousMatch.InProgress && !match.InProgress)
                 {
@@ -129,6 +158,7 @@ namespace osu.Game.Tournament.StableClient.IPC
 
                 updateMatchState(match, false);
                 updateSpectatorHandlers(match);
+                fetchChannelId(match.Id);
             }
         }
 
@@ -192,8 +222,6 @@ namespace osu.Game.Tournament.StableClient.IPC
                 Schedule(() => ruleset.Value = rulesetInfo);
 
             Mods.Value = (LegacyMods)match.Mods;
-
-            fetchChannelId(match.Id);
         }
 
         private void fetchChannelId(int matchId)
@@ -240,7 +268,10 @@ namespace osu.Game.Tournament.StableClient.IPC
                         var handler = new StableSpectatorHandler(userId, credentialsUsername, credentialsPasswordHash);
                         handler.OnFramesReceived += bundle => onFramesReceived(userId, bundle);
                         spectatorHandlers[i] = handler;
-                        game.Add(handler);
+                        Scheduler.Add(() =>
+                        {
+                            game.Add(handler);
+                        });
                     }
                 }
             }
