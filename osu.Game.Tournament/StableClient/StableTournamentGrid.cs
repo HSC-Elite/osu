@@ -7,32 +7,31 @@ using osu.Framework.Graphics.Containers;
 
 namespace osu.Game.Tournament.StableClient
 {
-    /// <summary>
-    /// 统一的玩家布局网格，用于保证 Idle 和 Playing 状态下的画面位置完全对齐。
-    /// 参照 shanden-lazer 的 TournamentPlayerGrid 实现。
-    /// </summary>
     public partial class StableTournamentGrid : CompositeDrawable
     {
-        private readonly int playersPerTeam;
-        private readonly Container redTeamContainer;
-        private readonly Container blueTeamContainer;
+        public readonly int PlayersPerTeam;
+
+        public int SlotCount => PlayersPerTeam * 2;
+
+        private readonly Container leftContainer;
+        private readonly Container rightContainer;
 
         public StableTournamentGrid(int playersPerTeam)
         {
             if (playersPerTeam > 4)
                 throw new ArgumentException("Not Support this player count");
 
-            this.playersPerTeam = playersPerTeam;
+            PlayersPerTeam = playersPerTeam;
             RelativeSizeAxes = Axes.Both;
 
             InternalChildren = new Drawable[]
             {
-                redTeamContainer = new Container
+                leftContainer = new Container
                 {
                     RelativeSizeAxes = Axes.Both,
                     Width = 0.5f,
                 },
-                blueTeamContainer = new Container
+                rightContainer = new Container
                 {
                     RelativeSizeAxes = Axes.Both,
                     Width = 0.5f,
@@ -41,13 +40,13 @@ namespace osu.Game.Tournament.StableClient
                 }
             };
 
-            setLayout(redTeamContainer);
-            setLayout(blueTeamContainer);
+            setLayout(leftContainer);
+            setLayout(rightContainer);
         }
 
         private void setLayout(Container container)
         {
-            switch (playersPerTeam)
+            switch (PlayersPerTeam)
             {
                 case 1:
                     container.Children = new Drawable[] { new Container { RelativeSizeAxes = Axes.Both, Masking = true } };
@@ -82,21 +81,15 @@ namespace osu.Game.Tournament.StableClient
             }
         }
 
-        private int redIndex = 0;
-        private int blueIndex = 0;
-
-        public bool AddRedPlayer(Drawable player)
+        public Container GetSlot(int slotIndex)
         {
-            if (redIndex >= redTeamContainer.Count) return false;
-            ((Container)redTeamContainer[redIndex++]).Child = player.With(p => p.RelativeSizeAxes = Axes.Both);
-            return true;
-        }
+            if (slotIndex < 0 || slotIndex >= SlotCount)
+                throw new ArgumentOutOfRangeException(nameof(slotIndex));
 
-        public bool AddBluePlayer(Drawable player)
-        {
-            if (blueIndex >= blueTeamContainer.Count) return false;
-            ((Container)blueTeamContainer[blueIndex++]).Child = player.With(p => p.RelativeSizeAxes = Axes.Both);
-            return true;
+            if (slotIndex < PlayersPerTeam)
+                return (Container)leftContainer[slotIndex];
+
+            return (Container)rightContainer[slotIndex - PlayersPerTeam];
         }
     }
 }

@@ -2,6 +2,7 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using osu.Framework.Allocation;
+using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Game.Screens;
 using osu.Game.Tournament.Models;
@@ -17,42 +18,28 @@ namespace osu.Game.Tournament.StableClient
         [Resolved]
         private LadderInfo ladderInfo { get; set; } = null!;
 
+        private StableTournamentGrid grid = null!;
+
         [BackgroundDependencyLoader]
         private void load()
         {
             RelativeSizeAxes = Axes.Both;
 
-            ladderInfo.PlayersPerTeam.BindValueChanged(_ => updateLayout(), true);
+            ladderInfo.PlayersPerTeam.BindValueChanged(_ => rebuildLayout(), true);
         }
 
-        private void updateLayout()
-        {
-            InternalChild = createGrid();
-        }
-
-        private StableTournamentGrid createGrid()
+        private void rebuildLayout()
         {
             int playersPerTeam = ladderInfo.PlayersPerTeam.Value;
-            var grid = new StableTournamentGrid(playersPerTeam);
+            grid = new StableTournamentGrid(playersPerTeam);
 
-            var match = stableIpc.CurrentMatch.Value;
-            if (match == null) return grid;
-
-            for (int i = 0; i < 16; i++)
+            for (int i = 0; i < grid.SlotCount; i++)
             {
-                int userId = match.SlotUserIds[i];
-                if (userId <= 0) continue;
-
-                // 使用我们新创建的、绑定了 StableIpc 的 IdlePlayer 组件
-                var idlePlayer = new StableTournamentIdlePlayer(i, match.SlotTeams[i] == 1 ? TeamColour.Blue : TeamColour.Red);
-
-                if (match.SlotTeams[i] == 1)
-                    grid.AddBluePlayer(idlePlayer);
-                else if (match.SlotTeams[i] == 2)
-                    grid.AddRedPlayer(idlePlayer);
+                var idlePlayer = new StableTournamentIdlePlayer(i, playersPerTeam);
+                grid.GetSlot(i).Add(idlePlayer.With(p => p.RelativeSizeAxes = Axes.Both));
             }
 
-            return grid;
+            InternalChild = grid;
         }
     }
 }

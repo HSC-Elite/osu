@@ -14,7 +14,7 @@ using osu.Game.Rulesets.Replays.Types;
 using osu.Game.Scoring;
 using osu.Game.Screens.Play;
 using osu.Game.Screens.Ranking;
-using osu.Game.Screens.Play.Leaderboards;
+using osu.Game.Screens.Select.Leaderboards;
 
 namespace osu.Game.Tournament.StableClient
 {

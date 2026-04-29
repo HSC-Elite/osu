@@ -66,21 +66,18 @@ namespace osu.Game.Tournament.StableClient
                 }
             };
 
-            // 获取该队伍的所有 Handler，并按 SlotIndex 排序
             var handlers = stableIpc.GetActiveSpectatorHandlers().ToList();
 
-            // 根据 Team 分发到 Grid 的红蓝插槽
             foreach (var handler in handlers.OrderBy(h => stableIpc.GetSlotIndexForUser(h.UserId)))
             {
-                int teamId = stableIpc.GetTeamForUser(handler.UserId);
+                int slotIndex = stableIpc.GetSlotIndexForUser(handler.UserId);
+                if (slotIndex < 0 || slotIndex >= grid.SlotCount) continue;
+
                 var playerArea = new StablePlayerArea(handler, syncManager.CreateManagedClock());
                 playerArea.OnFinished = onPlayerFinished;
                 instances.Add(playerArea);
 
-                if (teamId == 1) // Blue
-                    grid.AddBluePlayer(playerArea);
-                else if (teamId == 2) // Red
-                    grid.AddRedPlayer(playerArea);
+                grid.GetSlot(slotIndex).Add(playerArea.With(p => p.RelativeSizeAxes = Axes.Both));
             }
 
             if (instances.Any())

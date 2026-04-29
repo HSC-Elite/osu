@@ -10,6 +10,7 @@ using osu.Game.Graphics;
 using osu.Game.Screens.Menu;
 using osu.Game.Tournament.Models;
 using osu.Game.Tournament.StableClient.IPC;
+using osu.Game.Tournament.StableClient.Protocol;
 using osuTK;
 
 namespace osu.Game.Tournament.StableClient
@@ -17,22 +18,21 @@ namespace osu.Game.Tournament.StableClient
     public partial class StableTournamentIdlePlayer : CompositeDrawable
     {
         private readonly int slotIndex;
-        private readonly TeamColour colour;
+        private readonly int playersPerTeam;
         private readonly TournamentSpriteText userText;
-        private readonly OsuLogo logo;
 
         [Resolved]
         private StableMatchIPCInfo stableIpc { get; set; } = null!;
 
-        public StableTournamentIdlePlayer(int slotIndex, TeamColour colour)
+        public StableTournamentIdlePlayer(int slotIndex, int playersPerTeam)
         {
             this.slotIndex = slotIndex;
-            this.colour = colour;
+            this.playersPerTeam = playersPerTeam;
             RelativeSizeAxes = Axes.Both;
 
             InternalChildren = new Drawable[]
             {
-                logo = new OsuLogo
+                new OsuLogo
                 {
                     Scale = new Vector2(0.5f),
                     Anchor = Anchor.Centre,
@@ -45,7 +45,9 @@ namespace osu.Game.Tournament.StableClient
                     Anchor = Anchor.BottomRight,
                     Origin = Anchor.BottomRight,
                     Font = OsuFont.Default.With(size: 60),
-                    Colour = colour == TeamColour.Red ? Color4Extensions.FromHex("#FB8B96") : Color4Extensions.FromHex("#AFF0F7")
+                    Colour = slotIndex < playersPerTeam
+                        ? Color4Extensions.FromHex("#AFF0F7")
+                        : Color4Extensions.FromHex("#FB8B96")
                 }
             };
         }
@@ -53,12 +55,13 @@ namespace osu.Game.Tournament.StableClient
         [BackgroundDependencyLoader]
         private void load()
         {
-            stableIpc.CurrentMatch.BindValueChanged(_ => updateUsername(), true);
+            stableIpc.CurrentMatch.BindValueChanged(_ => updateDisplay(), true);
         }
 
-        private void updateUsername()
+        private void updateDisplay()
         {
             var match = stableIpc.CurrentMatch.Value;
+
             if (match == null)
             {
                 userText.Text = string.Empty;
@@ -72,10 +75,20 @@ namespace osu.Game.Tournament.StableClient
                 return;
             }
 
-            // 在 Stable 协议中，目前我们只能通过 SpectatorHandler 获取 Username
-            // 这里我们通过遍历已激活的处理器来寻找匹配的用户
             var handler = stableIpc.GetActiveSpectatorHandlers().FirstOrDefault(h => h.UserId == userId);
             userText.Text = handler?.Username ?? userId.ToString();
+
+            updateColour(match);
+        }
+
+        private void updateColour(MultiplayerMatch match)
+        {
+            byte team = match.SlotTeams[slotIndex];
+
+            if (team == 1)
+                userText.Colour = Color4Extensions.FromHex("#AFF0F7");
+            else if (team == 2)
+                userText.Colour = Color4Extensions.FromHex("#FB8B96");
         }
     }
 }

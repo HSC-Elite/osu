@@ -239,7 +239,7 @@ namespace osu.Game.Tournament.StableClient.IPC
 
                     if (int.TryParse(req.GetResponseString(), out int channelId) && channelId > 0)
                     {
-                        Schedule(() => ChatChannel.Value = channelId.ToString());
+                        Schedule(() => ChatChannel.Value = channelId);
                     }
                 }
                 catch (Exception e)

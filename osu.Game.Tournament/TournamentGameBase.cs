@@ -25,7 +25,6 @@ using osu.Game.Online.API;
 using osu.Game.Online.API.Requests;
 using osu.Game.Tournament.IO;
 using osu.Game.Tournament.IPC;
-using osu.Game.Tournament.IPC.MemoryIPC;
 using osu.Game.Tournament.MultiWindow;
 using osu.Game.Tournament.Models;
 using osu.Game.Tournament.StableClient;
