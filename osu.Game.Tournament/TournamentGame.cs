@@ -16,8 +16,8 @@ using osu.Game.Graphics;
 using osu.Game.Graphics.Cursor;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Overlays;
-using osu.Game.Tournament.MultiWindow;
 using osu.Game.Tournament.Models;
+using osu.Game.Tournament.MultiWindow;
 using osuTK.Graphics;
 
 namespace osu.Game.Tournament

@@ -8,7 +8,6 @@ using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Game.Graphics;
 using osu.Game.Screens.Menu;
-using osu.Game.Tournament.Models;
 using osu.Game.Tournament.StableClient.IPC;
 using osu.Game.Tournament.StableClient.Protocol;
 using osuTK;

@@ -5,7 +5,9 @@ using System;
 using System.Threading.Tasks;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
+using osu.Framework.Graphics;
 using osu.Framework.Platform;
+using osu.Framework.Screens;
 using osu.Game.Configuration;
 using osu.Game.Localisation;
 using osu.Game.Online;
@@ -13,6 +15,7 @@ using osu.Game.Online.API;
 using osu.Game.Online.API.Requests.Responses;
 using osu.Game.Online.Chat;
 using osu.Game.Online.Notifications.WebSocket;
+using osu.Game.Tournament.Components;
 using osu.Game.Users;
 
 namespace osu.Game.Tournament.Screens
@@ -29,6 +32,21 @@ namespace osu.Game.Tournament.Screens
         private OsuConfigManager config { get; set; } = null!;
 
         private NestedOsuGame? nestedGame;
+
+        public OsuGameScreen()
+        {
+            AddInternal(new ControlPanel
+            {
+                Children = new Drawable[]
+                {
+                    new TourneyButton
+                    {
+                        Text = "Push stable spectator",
+                        Action = () => nestedGame?.PerformFromScreen(s => s.Push(new ))
+                    }
+                }
+            });
+        }
 
         public override void Show()
         {

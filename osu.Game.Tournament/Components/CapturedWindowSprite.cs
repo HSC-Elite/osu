@@ -21,8 +21,8 @@ using osu.Framework.Logging;
 using osu.Game.Tournament.Models;
 using SixLabors.ImageSharp.PixelFormats;
 using Vortice.Direct3D11;
-using FillMode = osu.Framework.Graphics.FillMode;
 using static osu.Game.Tournament.WindowsAPI;
+using FillMode = osu.Framework.Graphics.FillMode;
 
 namespace osu.Game.Tournament.Components
 {

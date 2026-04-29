@@ -15,12 +15,11 @@ using osu.Framework.Graphics.Textures;
 using osu.Framework.Graphics.Veldrid;
 using osu.Framework.Threading;
 using osu.Framework.Utils;
+using osu.Game.Beatmaps;
 using osu.Game.Graphics;
 using osu.Game.Graphics.UserInterface;
-using osu.Game.Beatmaps;
-using osu.Game.Graphics.UserInterfaceV2;
-using osu.Game.Screens;
 using osu.Game.Overlays.Settings;
+using osu.Game.Screens;
 using osu.Game.Tournament.Components;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.Models;
@@ -28,10 +27,10 @@ using osu.Game.Tournament.Screens.Gameplay.Components;
 using osu.Game.Tournament.Screens.Gameplay.Components.MatchHeader;
 using osu.Game.Tournament.Screens.MapPool;
 using osu.Game.Tournament.Screens.TeamWin;
-using osuTK;
-using osuTK.Graphics;
 using osu.Game.Tournament.StableClient;
 using osu.Game.Tournament.StableClient.IPC;
+using osuTK;
+using osuTK.Graphics;
 
 namespace osu.Game.Tournament.Screens.Gameplay
 {

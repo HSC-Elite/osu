@@ -4,12 +4,12 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Management;
 using System.Net.NetworkInformation;
+using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
-using System.Runtime.Versioning;
 using Microsoft.Win32;
-using System.Management;
 
 namespace osu.Game.Tournament.StableClient
 {
