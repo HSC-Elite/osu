@@ -6,8 +6,10 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
+using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Diagnostics.CodeAnalysis;
 using osu.Framework.Allocation;
 using osu.Framework.Graphics;
 using osu.Framework.Logging;
@@ -32,6 +34,10 @@ namespace osu.Game.Tournament.StableClient
         private readonly CancellationTokenSource cts = new CancellationTokenSource();
         private readonly TaskCompletionSource<bool> initializationSource = new TaskCompletionSource<bool>();
         private readonly SemaphoreSlim requestSemaphore = new SemaphoreSlim(1, 1);
+        private readonly ConcurrentDictionary<int, string> knownUsernames = new ConcurrentDictionary<int, string>();
+        private Task? pollTask;
+        private int disposeState;
+        private int? localUserId;
 
         public event Action<int>? OnLoginSuccess;
         public event Action<bReplayFrameBundle>? OnReplayFramesReceived;
@@ -39,6 +45,14 @@ namespace osu.Game.Tournament.StableClient
         public event Action<MultiplayerMatch>? OnMatchUpdated;
         public event Action<int>? OnMatchDisbanded;
         public event Action<StableUserStatus>? OnUserStatusChanged;
+        public event Action<bMessage>? OnMessageReceived;
+        public event Action<int>? OnSpectatorJoined;
+        public event Action<int>? OnSpectatorLeft;
+        public event Action<int>? OnFellowSpectatorJoined;
+        public event Action<int>? OnFellowSpectatorLeft;
+        public event Action<int>? OnSpectatorCantSpectate;
+
+        public int? LocalUserId => localUserId;
 
         public StableBanchoClient(string clientHashes = "", string version = "")
         {
@@ -84,6 +98,9 @@ namespace osu.Game.Tournament.StableClient
 
         public async Task ConnectAsync(string username, string passwordHash)
         {
+            if (IsDisposing)
+                return;
+
             Username = username;
             this.passwordHash = passwordHash;
 
@@ -93,11 +110,12 @@ namespace osu.Game.Tournament.StableClient
                 await initializationSource.Task.ConfigureAwait(false);
 
                 await loginAsync().ConfigureAwait(false);
-                Task.Run(pollLoop, cts.Token).FireAndForget();
+                pollTask = Task.Run(pollLoop, cts.Token);
             }
             catch (Exception e)
             {
-                Logger.Error(e, $"StableClient [{Username}] connection/initialization failed.");
+                if (!IsShuttingDown(e))
+                    Logger.Error(e, $"StableClient [{Username}] connection/initialization failed.");
             }
         }
 
@@ -108,12 +126,20 @@ namespace osu.Game.Tournament.StableClient
         private async Task loginAsync()
         {
             int utcOffset = (int)DateTimeOffset.Now.Offset.TotalHours;
-            var loginData = new StringBuilder();
-            loginData.AppendLine(Username);
-            loginData.AppendLine(passwordHash);
-            loginData.AppendLine($"{version}|{utcOffset}|0|{clientHashes}|0");
+            byte[] loginPayload;
 
-            await performRequestAsync(Encoding.UTF8.GetBytes(loginData.ToString()), includeTokenHeader: false, includeVersionHeader: true, updateTokenFromResponse: true).ConfigureAwait(false);
+            using (var ms = new MemoryStream())
+            using (var writer = new StreamWriter(ms, Encoding.UTF8, leaveOpen: true))
+            {
+                writer.NewLine = "\n";
+                writer.WriteLine(Username);
+                writer.WriteLine(passwordHash);
+                writer.WriteLine($"{version}|{utcOffset}|0|{clientHashes}|0");
+                writer.Flush();
+                loginPayload = ms.ToArray();
+            }
+
+            await performRequestAsync(loginPayload, includeTokenHeader: false, includeVersionHeader: true, updateTokenFromResponse: true).ConfigureAwait(false);
 
             if (!string.IsNullOrEmpty(token))
                 Logger.Log($"StableClient [{Username}] logged in, token: {token}");
@@ -133,12 +159,24 @@ namespace osu.Game.Tournament.StableClient
 
                     await sendEmptyPacket(PacketType.Osu_Pong).ConfigureAwait(false);
                 }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
                 catch (Exception e)
                 {
-                    Logger.Error(e, "Bancho poll error");
+                    if (!IsShuttingDown(e))
+                        Logger.Error(e, "Bancho poll error");
                 }
 
-                await Task.Delay(1000, cts.Token).ConfigureAwait(false);
+                try
+                {
+                    await Task.Delay(1000, cts.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
             }
         }
 
@@ -163,17 +201,38 @@ namespace osu.Game.Tournament.StableClient
                 switch (type)
                 {
                     case PacketType.Bancho_Ping:
-                        sendEmptyPacket(PacketType.Osu_Pong).FireAndForget();
+                        if (!IsDisposing)
+                            sendEmptyPacket(PacketType.Osu_Pong).FireAndForget();
                         break;
 
                     case PacketType.Bancho_LoginReply:
                         int userId = reader.ReadInt32();
-                        if (userId > 0) OnLoginSuccess?.Invoke(userId);
+                        if (userId > 0)
+                        {
+                            localUserId = userId;
+                            OnLoginSuccess?.Invoke(userId);
+                        }
+                        break;
+
+                    case PacketType.Bancho_SendMessage:
+                        OnMessageReceived?.Invoke(new bMessage(reader));
+                        break;
+
+                    case PacketType.Bancho_SpectatorJoined:
+                        OnSpectatorJoined?.Invoke(reader.ReadInt32());
+                        break;
+
+                    case PacketType.Bancho_SpectatorLeft:
+                        OnSpectatorLeft?.Invoke(reader.ReadInt32());
                         break;
 
                     case PacketType.Bancho_SpectateFrames:
                         var bundle = new bReplayFrameBundle(reader);
                         OnReplayFramesReceived?.Invoke(bundle);
+                        break;
+
+                    case PacketType.Bancho_SpectatorCantSpectate:
+                        OnSpectatorCantSpectate?.Invoke(reader.ReadInt32());
                         break;
 
                     case PacketType.Bancho_MatchNew:
@@ -188,11 +247,40 @@ namespace osu.Game.Tournament.StableClient
                         OnMatchDisbanded?.Invoke(reader.ReadInt32());
                         break;
 
+                    case PacketType.Bancho_UserPresence:
+                        handleUserPresence(reader);
+                        break;
+
+                    case PacketType.Bancho_UserPresenceSingle:
+                    case PacketType.Bancho_UserPresenceBundle:
+                    case PacketType.Bancho_HandleUserQuit:
+                        break;
+
+                    case PacketType.Bancho_FellowSpectatorJoined:
+                        OnFellowSpectatorJoined?.Invoke(reader.ReadInt32());
+                        break;
+
+                    case PacketType.Bancho_FellowSpectatorLeft:
+                        OnFellowSpectatorLeft?.Invoke(reader.ReadInt32());
+                        break;
+
                     case PacketType.Bancho_HandleOsuUpdate:
                         handleUserStatus(reader);
                         break;
                 }
             }
+        }
+
+        private void handleUserPresence(BinaryReader reader)
+        {
+            int userId = reader.ReadInt32();
+
+            if (userId < 0)
+                userId = -userId;
+
+            string username = reader.ReadBString();
+
+            knownUsernames[userId] = username;
         }
 
         private void handleUserStatus(BinaryReader reader)
@@ -205,8 +293,9 @@ namespace osu.Game.Tournament.StableClient
             byte playMode = reader.ReadByte();
             int beatmapId = reader.ReadInt32();
 
-            // 在锦标赛协议中，statusText 通常直接包含 Username
-            string username = statusText;
+            string username = knownUsernames.TryGetValue(userId, out string? knownUsername)
+                ? knownUsername
+                : userId.ToString();
 
             OnUserStatusChanged?.Invoke(new StableUserStatus(userId, username, status, statusText, beatmapChecksum, mods, playMode, beatmapId));
         }
@@ -218,7 +307,7 @@ namespace osu.Game.Tournament.StableClient
 
         private async Task sendEmptyPacket(PacketType type)
         {
-            if (token == null) return;
+            if (token == null || IsDisposing || cts.IsCancellationRequested) return;
 
             using (var ms = new MemoryStream())
             using (var writer = new BinaryWriter(ms))
@@ -233,7 +322,7 @@ namespace osu.Game.Tournament.StableClient
 
         private async Task sendPacket(PacketType type, int value)
         {
-            if (token == null) return;
+            if (token == null || IsDisposing || cts.IsCancellationRequested) return;
 
             using (var ms = new MemoryStream())
             using (var writer = new BinaryWriter(ms))
@@ -249,10 +338,16 @@ namespace osu.Game.Tournament.StableClient
 
         private async Task performRequestAsync(byte[] payload, bool includeTokenHeader = true, bool includeVersionHeader = false, bool updateTokenFromResponse = false)
         {
+            if (IsDisposing || cts.IsCancellationRequested)
+                return;
+
             await requestSemaphore.WaitAsync(cts.Token).ConfigureAwait(false);
 
             try
             {
+                if (IsDisposing || cts.IsCancellationRequested)
+                    return;
+
                 var request = new OsuWebRequest("https://c.ppy.sh");
                 request.Method = HttpMethod.Post;
 
@@ -288,11 +383,16 @@ namespace osu.Game.Tournament.StableClient
 
         protected override void Dispose(bool isDisposing)
         {
+            Interlocked.Exchange(ref disposeState, 1);
+            token = null;
             cts.Cancel();
-            cts.Dispose();
-            requestSemaphore.Dispose();
             base.Dispose(isDisposing);
         }
+
+        private bool IsDisposing => Volatile.Read(ref disposeState) != 0;
+
+        private bool IsShuttingDown([NotNullWhen(true)] Exception? exception) =>
+            IsDisposing || cts.IsCancellationRequested || exception is OperationCanceledException || exception is ObjectDisposedException;
     }
 
     public readonly record struct StableUserStatus(
@@ -309,15 +409,27 @@ namespace osu.Game.Tournament.StableClient
     {
         Osu_Pong = 4,
         Bancho_LoginReply = 5,
+        Bancho_SendMessage = 7,
         Bancho_Ping = 8,
+        Bancho_HandleOsuUpdate = 11,
+        Bancho_HandleUserQuit = 12,
+        Bancho_SpectatorJoined = 13,
+        Bancho_SpectatorLeft = 14,
         Bancho_SpectateFrames = 15,
         Osu_StartSpectating = 16,
+        Osu_StopSpectating = 17,
+        Osu_CantSpectate = 21,
+        Bancho_SpectatorCantSpectate = 22,
         Bancho_MatchUpdate = 26,
         Bancho_MatchNew = 27,
         Bancho_MatchDisband = 28,
+        Bancho_FellowSpectatorJoined = 42,
+        Bancho_FellowSpectatorLeft = 43,
         Osu_LobbyPart = 29,
         Osu_LobbyJoin = 30,
-        Bancho_HandleOsuUpdate = 95,
+        Bancho_UserPresence = 83,
+        Bancho_UserPresenceSingle = 95,
+        Bancho_UserPresenceBundle = 96,
         Osu_SpecialJoinMatchChannel = 108,
     }
 }

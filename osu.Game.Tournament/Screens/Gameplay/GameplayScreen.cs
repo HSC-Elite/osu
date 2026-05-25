@@ -341,7 +341,8 @@ namespace osu.Game.Tournament.Screens.Gameplay
             base.LoadComplete();
 
             State.BindTo(IPC.State);
-            State.BindValueChanged(_ => updateState(), true);
+            State.BindValueChanged(_ => Schedule(updateState), true);
+            State.BindValueChanged(s => LadderInfo.PlayersPerTeam.Disabled = s.NewValue == TourneyState.Playing, true);
             LadderInfo.InvertScoreColour.BindValueChanged(v => scoreDisplay.InvertTextColor = v.NewValue, true);
         }
 
@@ -463,6 +464,9 @@ namespace osu.Game.Tournament.Screens.Gameplay
                         break;
 
                     case TourneyState.Playing:
+                        if (lastState == TourneyState.Ranking && chroma.CurrentScreen is StableTournamentMultiSpectatorScreen)
+                            chroma.Exit();
+
                         if (chroma.CurrentScreen is not StableTournamentMultiSpectatorScreen)
                             chroma.Push(new StableTournamentMultiSpectatorScreen(globalWorkingBeatmap.Value));
 

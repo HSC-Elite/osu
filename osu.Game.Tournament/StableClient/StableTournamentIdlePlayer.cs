@@ -7,6 +7,8 @@ using osu.Framework.Extensions.Color4Extensions;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Game.Graphics;
+using osu.Game.Screens;
+using osu.Game.Screens.Backgrounds;
 using osu.Game.Screens.Menu;
 using osu.Game.Tournament.StableClient.IPC;
 using osu.Game.Tournament.StableClient.Protocol;
@@ -14,8 +16,10 @@ using osuTK;
 
 namespace osu.Game.Tournament.StableClient
 {
-    public partial class StableTournamentIdlePlayer : CompositeDrawable
+    public partial class StableTournamentIdlePlayer : OsuScreen
     {
+        protected override BackgroundScreen CreateBackground() => new BackgroundScreenDefault();
+
         private readonly int slotIndex;
         private readonly int playersPerTeam;
         private readonly TournamentSpriteText userText;

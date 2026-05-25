@@ -16,6 +16,7 @@ using osu.Game.Online.API.Requests.Responses;
 using osu.Game.Online.Chat;
 using osu.Game.Online.Notifications.WebSocket;
 using osu.Game.Tournament.Components;
+using osu.Game.Tournament.StableClient;
 using osu.Game.Users;
 
 namespace osu.Game.Tournament.Screens
@@ -42,7 +43,7 @@ namespace osu.Game.Tournament.Screens
                     new TourneyButton
                     {
                         Text = "Push stable spectator",
-                        Action = () => nestedGame?.PerformFromScreen(s => s.Push(new ))
+                        Action = () => nestedGame?.PerformFromScreen(s => s.Push(new StableSoloSpectatorScreen()))
                     }
                 }
             });

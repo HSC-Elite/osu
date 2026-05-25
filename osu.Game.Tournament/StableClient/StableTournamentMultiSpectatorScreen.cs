@@ -9,6 +9,7 @@ using osu.Framework.Audio;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
+using osu.Framework.Logging;
 using osu.Game.Beatmaps;
 using osu.Game.Online.API.Requests.Responses;
 using osu.Game.Replays;
@@ -169,12 +170,21 @@ namespace osu.Game.Tournament.StableClient
             protected override void LoadComplete()
             {
                 base.LoadComplete();
-                Handler.OnFramesReceived += _ => Schedule(checkAndLoadPlayer);
+                Handler.OnFramesReceived += _ => checkAndLoadPlayer();
+                Handler.Beatmap.BindValueChanged(_ => checkAndLoadPlayer(), true);
+                Handler.Ruleset.BindValueChanged(_ => checkAndLoadPlayer(), true);
+                checkAndLoadPlayer();
             }
 
-            private void checkAndLoadPlayer()
+            private void checkAndLoadPlayer() => Scheduler.AddOnce(() =>
             {
                 if (CurrentScore != null || Handler.Beatmap.Value == null || Handler.Ruleset.Value == null) return;
+
+                var ruleset = Handler.Ruleset.Value.CreateInstance();
+                Mod[] mods = Handler.CreateMods(ruleset);
+
+                Logger.Log(
+                    $"StableTournamentMultiSpectatorScreen: creating player area for user {UserId}, beatmap={Handler.Beatmap.Value.BeatmapInfo.OnlineID}, ruleset={Handler.Ruleset.Value.ShortName}");
 
                 CurrentScore = new Score
                 {
@@ -183,12 +193,12 @@ namespace osu.Game.Tournament.StableClient
                         User = new APIUser { Id = UserId },
                         BeatmapInfo = Handler.Beatmap.Value.BeatmapInfo,
                         Ruleset = Handler.Ruleset.Value,
-                        Mods = Array.Empty<Mod>()
+                        Mods = mods
                     },
                     Replay = new Replay()
                 };
 
-                gameplayContent.Child = new PlayerIsolationContainer(Handler.Beatmap.Value, Handler.Ruleset.Value, Array.Empty<Mod>())
+                gameplayContent.Child = new PlayerIsolationContainer(Handler.Beatmap.Value, Handler.Ruleset.Value, mods)
                 {
                     RelativeSizeAxes = Axes.Both,
                     Child = stack = new OsuScreenStack()
@@ -197,10 +207,14 @@ namespace osu.Game.Tournament.StableClient
                 stack.Push(new PlayerLoader(() =>
                 {
                     var p = new StableMultiSpectatorPlayer(CurrentScore, SpectatorPlayerClock, Handler);
-                    p.PlayerFinished += () => { IsFinished = true; OnFinished?.Invoke(); };
+                    p.PlayerFinished += () =>
+                    {
+                        IsFinished = true;
+                        OnFinished?.Invoke();
+                    };
                     return p;
                 }));
-            }
+            });
 
             private partial class PlayerIsolationContainer : Container
             {

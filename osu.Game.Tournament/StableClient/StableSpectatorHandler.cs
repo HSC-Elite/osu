@@ -50,6 +50,11 @@ namespace osu.Game.Tournament.StableClient
         public readonly Bindable<WorkingBeatmap?> Beatmap = new Bindable<WorkingBeatmap?>();
 
         /// <summary>
+        /// 当前谱面在线元数据。
+        /// </summary>
+        public readonly Bindable<APIBeatmap?> OnlineBeatmap = new Bindable<APIBeatmap?>();
+
+        /// <summary>
         /// 当前玩家的规则集。
         /// </summary>
         public readonly Bindable<RulesetInfo?> Ruleset = new Bindable<RulesetInfo?>();
@@ -66,10 +71,19 @@ namespace osu.Game.Tournament.StableClient
 
         public string? Username { get; private set; }
 
+        private const double spectate_retry_interval = 5000;
+        private const double frame_timeout = 7000;
+
         private string? currentBeatmapHash;
         private LegacyMods currentLegacyMods;
+        private bool currentScoreV2;
+        private byte currentStatus;
         private GetBeatmapRequest? beatmapLookupRequest;
         private LegacyReplayFrame? lastReplayFrame;
+        private bool receivedFramesForCurrentBeatmap;
+        private double lastStatusUpdateTime;
+        private double lastFrameReceivedTime;
+        private double lastSpectateAttemptTime;
 
         public StableSpectatorHandler(int userId, string username, string passwordHash)
         {
@@ -86,11 +100,16 @@ namespace osu.Game.Tournament.StableClient
 
             banchoClient.OnUserStatusChanged += handleUserStatus;
             banchoClient.OnReplayFramesReceived += handleReplayFrames;
+            banchoClient.OnSpectatorJoined += handleSpectatorJoined;
+            banchoClient.OnSpectatorLeft += handleSpectatorLeft;
+            banchoClient.OnFellowSpectatorJoined += handleFellowSpectatorJoined;
+            banchoClient.OnFellowSpectatorLeft += handleFellowSpectatorLeft;
+            banchoClient.OnSpectatorCantSpectate += handleSpectatorCantSpectate;
 
             banchoClient.ConnectAsync(username_credential, passwordHash).ContinueWith(t =>
             {
                 if (!t.IsFaulted)
-                    banchoClient.StartSpectating(UserId);
+                    Schedule(requestSpectate);
             });
         }
 
@@ -101,11 +120,16 @@ namespace osu.Game.Tournament.StableClient
 
             Username = status.Username;
             currentLegacyMods = status.Mods;
+            currentStatus = status.Status;
+            lastStatusUpdateTime = Time.Current;
 
             if (currentBeatmapHash == status.BeatmapChecksum && Ruleset.Value?.OnlineID == status.PlayMode)
                 return;
 
             currentBeatmapHash = status.BeatmapChecksum;
+            receivedFramesForCurrentBeatmap = false;
+            lastReplayFrame = null;
+            OnlineBeatmap.Value = null;
 
             Schedule(() =>
             {
@@ -129,6 +153,7 @@ namespace osu.Game.Tournament.StableClient
                         if (currentBeatmapHash != status.BeatmapChecksum)
                             return;
 
+                        OnlineBeatmap.Value = lookup;
                         Logger.Log($"StableSpectatorHandler: Found beatmap online: {lookup.BeatmapSet?.Title}");
                     });
                     beatmapLookupRequest.Failure += _ => Schedule(() =>
@@ -143,8 +168,29 @@ namespace osu.Game.Tournament.StableClient
             });
         }
 
+        public void RefreshBeatmapAvailability()
+        {
+            Schedule(() =>
+            {
+                if (string.IsNullOrEmpty(currentBeatmapHash))
+                    return;
+
+                var beatmap = beatmapManager.QueryBeatmap(b => b.MD5Hash == currentBeatmapHash);
+
+                if (beatmap != null)
+                    Beatmap.Value = beatmapManager.GetWorkingBeatmap(beatmap);
+            });
+        }
+
         private void handleReplayFrames(bReplayFrameBundle bundle)
         {
+            lastFrameReceivedTime = Time.Current;
+            receivedFramesForCurrentBeatmap = true;
+
+            //Logger.Log(
+            //    $"StableSpectatorHandler: action={bundle.Action}, extra={bundle.Extra}, frames={bundle.Frames.Count}, " +
+            //    $"scoreTime={bundle.ScoreFrame.Time}, score={bundle.ScoreFrame.TotalScore}, combo={bundle.ScoreFrame.CurrentCombo}, passed={bundle.ScoreFrame.Pass}");
+
             if (bundle.Action != ReplayAction.Standard)
                 OnReplayActionReceived?.Invoke(bundle.Action, bundle.Extra);
 
@@ -156,6 +202,8 @@ namespace osu.Game.Tournament.StableClient
                 lastReplayFrame = null;
             }
 
+            currentScoreV2 = bundle.ScoreFrame.ScoreV2;
+
             var convertedFrames = new List<LegacyReplayFrame>();
 
             foreach (var bFrame in bundle.Frames)
@@ -165,17 +213,29 @@ namespace osu.Game.Tournament.StableClient
                 lastReplayFrame = replayFrame;
             }
 
-            if (convertedFrames.Count == 0)
+            if (convertedFrames.Count > 0)
             {
-                lastReplayFrame = createSyntheticFrame(bundle.ScoreFrame.Time);
-                convertedFrames.Add(lastReplayFrame);
+                var first = convertedFrames[0];
+                var last = convertedFrames[^1];
+                //Logger.Log(
+                //    $"StableSpectatorHandler: converted {convertedFrames.Count} legacy frames, " +
+                //    $"first=({first.Time}, {first.MouseX}, {first.MouseY}, {first.ButtonState}), " +
+                //    $"last=({last.Time}, {last.MouseX}, {last.MouseY}, {last.ButtonState})");
             }
 
-            var rulesetInfo = Ruleset.Value ?? rulesets.GetRuleset(0);
+            if (convertedFrames.Count == 0)
+            {
+                if (bundle.Action == ReplayAction.Standard)
+                    Logger.Log("StableSpectatorHandler: Received standard replay bundle without frames.");
+
+                return;
+            }
+
+            var rulesetInfo = Ruleset.Value;
 
             if (rulesetInfo == null)
             {
-                Logger.Log("StableSpectatorHandler: Received replay frames before ruleset was known.");
+                Logger.Log($"StableSpectatorHandler: Received replay frames before ruleset was known. BeatmapHash={currentBeatmapHash ?? "<null>"}");
                 return;
             }
 
@@ -194,7 +254,7 @@ namespace osu.Game.Tournament.StableClient
                 Accuracy = scoreState.accuracy,
                 Combo = bundle.ScoreFrame.CurrentCombo,
                 Passed = bundle.ScoreFrame.Pass,
-                Mods = createMods(rulesetInstance, bundle.ScoreFrame.ScoreV2)
+                Mods = CreateMods(rulesetInstance)
             };
 
             scoreInfo.SetCount300(bundle.ScoreFrame.Count300);
@@ -210,27 +270,91 @@ namespace osu.Game.Tournament.StableClient
                 Passed = bundle.ScoreFrame.Pass
             };
 
+            //Logger.Log(
+            //    $"StableSpectatorHandler: emitting bundle for ruleset={rulesetInfo.ShortName}, " +
+            //    $"headerScore={header.TotalScore}, headerAcc={header.Accuracy:P2}, headerCombo={header.Combo}, frameCount={convertedFrames.Count}");
+
+            convertedFrames[^1].Header = header;
+
             var lazerBundle = new FrameDataBundle(header, convertedFrames);
             OnFramesReceived?.Invoke(lazerBundle);
         }
 
-        private LegacyReplayFrame createSyntheticFrame(int time)
+        protected override void Update()
         {
-            if (lastReplayFrame != null)
-                return new LegacyReplayFrame(time, lastReplayFrame.MouseX, lastReplayFrame.MouseY, lastReplayFrame.ButtonState);
+            base.Update();
 
-            return new LegacyReplayFrame(time, null, null, ReplayButtonState.None);
+            if (Time.Current - lastSpectateAttemptTime < spectate_retry_interval)
+                return;
+
+            if (!isActiveGameplayStatus(currentStatus))
+                return;
+
+            if (string.IsNullOrEmpty(currentBeatmapHash))
+                return;
+
+            bool needsRetry = !receivedFramesForCurrentBeatmap
+                              ? Time.Current - lastStatusUpdateTime >= spectate_retry_interval
+                              : Time.Current - lastFrameReceivedTime >= frame_timeout;
+
+            if (!needsRetry)
+                return;
+
+            Logger.Log(
+                $"StableSpectatorHandler: no replay frames for user {UserId} while status={currentStatus}, " +
+                $"re-requesting spectate (beatmapHash={currentBeatmapHash ?? "<null>"}).");
+
+            requestSpectate();
         }
 
-        private Mod[] createMods(Ruleset rulesetInstance, bool scoreV2)
+        private void requestSpectate()
+        {
+            lastSpectateAttemptTime = Time.Current;
+            banchoClient.StartSpectating(UserId);
+        }
+
+        private void handleSpectatorJoined(int userId)
+        {
+            if (userId == banchoClient.LocalUserId)
+                Logger.Log($"StableSpectatorHandler: server confirmed spectator join for target {UserId}.");
+        }
+
+        private void handleSpectatorLeft(int userId)
+        {
+            if (userId == banchoClient.LocalUserId)
+            {
+                Logger.Log($"StableSpectatorHandler: server reported local spectator left for target {UserId}, requesting spectate again.");
+                Schedule(requestSpectate);
+            }
+        }
+
+        private void handleFellowSpectatorJoined(int userId)
+        {
+            Logger.Log($"StableSpectatorHandler: fellow spectator {userId} joined target {UserId}.");
+        }
+
+        private void handleFellowSpectatorLeft(int userId)
+        {
+            Logger.Log($"StableSpectatorHandler: fellow spectator {userId} left target {UserId}.");
+        }
+
+        private void handleSpectatorCantSpectate(int userId)
+        {
+            Logger.Log($"StableSpectatorHandler: spectator {userId} cannot spectate target {UserId}.");
+        }
+
+        private static bool isActiveGameplayStatus(byte status) =>
+            status is 2 or 6 or 8 or 10 or 12;
+
+        public Mod[] CreateMods(Ruleset rulesetInstance)
         {
             var mods = rulesetInstance.ConvertFromLegacyMods(currentLegacyMods)
                                       .Where(m => m is not ModClassic && m is not ModScoreV2)
                                       .ToList();
 
-            if (scoreV2)
+            if (currentScoreV2)
             {
-                mods.Add(new ModScoreV2());
+                mods.Add(rulesetInstance.ConvertFromLegacyMods(LegacyMods.ScoreV2).First());
             }
             else if (rulesetInstance.CreateMod<ModClassic>() is ModClassic classicMod)
             {
@@ -310,6 +434,11 @@ namespace osu.Game.Tournament.StableClient
         {
             banchoClient.OnUserStatusChanged -= handleUserStatus;
             banchoClient.OnReplayFramesReceived -= handleReplayFrames;
+            banchoClient.OnSpectatorJoined -= handleSpectatorJoined;
+            banchoClient.OnSpectatorLeft -= handleSpectatorLeft;
+            banchoClient.OnFellowSpectatorJoined -= handleFellowSpectatorJoined;
+            banchoClient.OnFellowSpectatorLeft -= handleFellowSpectatorLeft;
+            banchoClient.OnSpectatorCantSpectate -= handleSpectatorCantSpectate;
             base.Dispose(isDisposing);
         }
     }

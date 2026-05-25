@@ -5,10 +5,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Extensions;
 using osu.Framework.Logging;
+using osu.Framework.Audio;
+using osu.Framework.Graphics.Textures;
 using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.Legacy;
 using osu.Game.Database;
@@ -52,6 +55,12 @@ namespace osu.Game.Tournament.StableClient.IPC
         private Bindable<WorkingBeatmap> workingBeatmap { get; set; } = null!;
 
         [Resolved]
+        private AudioManager audio { get; set; } = null!;
+
+        [Resolved]
+        private TextureStore textures { get; set; } = null!;
+
+        [Resolved]
         private Bindable<RulesetInfo> ruleset { get; set; } = null!;
 
         public readonly Bindable<MultiplayerMatch?> CurrentMatch = new Bindable<MultiplayerMatch?>();
@@ -66,8 +75,14 @@ namespace osu.Game.Tournament.StableClient.IPC
 
         private readonly StableSpectatorHandler?[] spectatorHandlers = new StableSpectatorHandler?[16];
         private readonly Dictionary<int, long> userScores = new Dictionary<int, long>();
+        private readonly List<StableBanchoMessage> receivedMessages = new List<StableBanchoMessage>();
+        private static readonly Regex match_history_regex = new Regex(@"https?://\S*/(?<id>\d+)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         private int lastBeatmapId;
+        private long? lastMatchHistoryFetchId;
+
+        public IReadOnlyList<StableBanchoMessage> ReceivedMessages => receivedMessages;
+        public long? LastMatchHistoryFetchId => lastMatchHistoryFetchId;
 
         public IEnumerable<StableSpectatorHandler> GetActiveSpectatorHandlers() => spectatorHandlers.Where(h => h != null).Cast<StableSpectatorHandler>();
 
@@ -117,13 +132,23 @@ namespace osu.Game.Tournament.StableClient.IPC
             client.OnMatchCreated += onMatchUpdated;
             client.OnMatchUpdated += onMatchUpdated;
             client.OnMatchDisbanded += onMatchDisbanded;
+            client.OnMessageReceived += onMessageReceived;
+            ladder.PlayersPerTeam.BindValueChanged(_ => Schedule(refreshTrackedPlayers), true);
 
             CurrentMatch.BindValueChanged(e =>
             {
                 if (e.NewValue != null)
                 {
+                    if (e.OldValue?.Id != e.NewValue.Id)
+                        resetRoomState();
+
                     updateMatchState(e.NewValue, true);
                     updateSpectatorHandlers(e.NewValue);
+                    updatePlaybackState(e.NewValue, e.OldValue);
+                }
+                else
+                {
+                    resetRoomState();
                 }
             });
 
@@ -132,45 +157,47 @@ namespace osu.Game.Tournament.StableClient.IPC
                 if (avail.NewValue.State == DownloadState.LocallyAvailable && lastBeatmapId > 0)
                 {
                     var local = beatmaps.QueryBeatmap(b => b.OnlineID == lastBeatmapId);
+
                     if (local != null)
+                    {
+                        Logger.Log($"StableMatchIPCInfo: beatmap {lastBeatmapId} became locally available, refreshing spectator handlers.");
                         Schedule(() => workingBeatmap.Value = beatmaps.GetWorkingBeatmap(local));
+
+                        foreach (var handler in GetActiveSpectatorHandlers())
+                            handler.RefreshBeatmapAvailability();
+
+                        if (CurrentMatch.Value?.InProgress == true && CurrentMatch.Value.BeatmapId == lastBeatmapId)
+                        {
+                            Logger.Log($"StableMatchIPCInfo: beatmap {lastBeatmapId} is now playable locally, entering Playing.");
+                            Schedule(() => State.Value = TourneyState.Playing);
+                        }
+                    }
                 }
             });
         }
 
-        private void onMatchUpdated(MultiplayerMatch match)
+        private void onMatchUpdated(MultiplayerMatch match) => Schedule(() =>
         {
-            if (CurrentMatch.Value?.Id == match.Id)
-            {
-                var previousMatch = CurrentMatch.Value;
-                CurrentMatch.Value = match;
+            if (CurrentMatch.Value?.Id != match.Id)
+                return;
 
-                if (previousMatch != null && !previousMatch.InProgress && match.InProgress)
-                {
-                    State.Value = TourneyState.Playing;
-                    userScores.Clear();
-                }
-                else if (previousMatch != null && previousMatch.InProgress && !match.InProgress)
-                {
-                    State.Value = TourneyState.Ranking;
-                    waitingForIdle = 0;
-                }
+            var previousMatch = CurrentMatch.Value;
+            CurrentMatch.Value = match;
 
-                updateMatchState(match, false);
-                updateSpectatorHandlers(match);
-                fetchChannelId(match.Id);
-            }
-        }
+            updateMatchState(match, false);
+            updateSpectatorHandlers(match);
+            updatePlaybackState(match, previousMatch);
+        });
 
-        private void onMatchDisbanded(int matchId)
+        private void onMatchDisbanded(int matchId) => Schedule(() =>
         {
-            if (CurrentMatch.Value?.Id == matchId)
-            {
-                CurrentMatch.Value = null;
-                State.Value = TourneyState.Idle;
-                clearSpectatorHandlers();
-            }
-        }
+            if (CurrentMatch.Value?.Id != matchId)
+                return;
+
+            CurrentMatch.Value = null;
+            State.Value = TourneyState.Idle;
+            clearSpectatorHandlers();
+        });
 
         private void updateMatchState(MultiplayerMatch match, bool forceUpdate)
         {
@@ -191,6 +218,7 @@ namespace osu.Game.Tournament.StableClient.IPC
                     beatmapLookupCache.GetBeatmapAsync(match.BeatmapId).ContinueWith(t =>
                     {
                         var apiBeatmap = t.GetResultSafely();
+
                         if (apiBeatmap != null && lastBeatmapId == match.BeatmapId)
                         {
                             Schedule(() => Beatmap.Value = new TournamentBeatmap(apiBeatmap));
@@ -199,15 +227,19 @@ namespace osu.Game.Tournament.StableClient.IPC
                 }
 
                 var localBeatmap = beatmaps.QueryBeatmap(b => b.OnlineID == match.BeatmapId);
+
                 if (localBeatmap != null)
                 {
                     Schedule(() => workingBeatmap.Value = beatmaps.GetWorkingBeatmap(localBeatmap));
                 }
                 else
                 {
+                    Schedule(() => workingBeatmap.Value = new DummyWorkingBeatmap(audio, textures));
+
                     beatmapLookupCache.GetBeatmapAsync(match.BeatmapId).ContinueWith(t =>
                     {
                         var apiBeatmap = t.GetResultSafely();
+
                         if (apiBeatmap?.BeatmapSet != null)
                         {
                             if (!beatmaps.IsAvailableLocally(new BeatmapSetInfo { OnlineID = apiBeatmap.BeatmapSet.OnlineID }))
@@ -223,6 +255,69 @@ namespace osu.Game.Tournament.StableClient.IPC
 
             Mods.Value = (LegacyMods)match.Mods;
         }
+
+        private void updatePlaybackState(MultiplayerMatch match, MultiplayerMatch? previousMatch)
+        {
+            bool beatmapAvailableLocally = beatmaps.QueryBeatmap(b => b.OnlineID == match.BeatmapId) != null;
+
+            if (match.InProgress)
+            {
+                if (previousMatch == null || !previousMatch.InProgress)
+                    userScores.Clear();
+
+                State.Value = beatmapAvailableLocally ? TourneyState.Playing : TourneyState.Idle;
+
+                if (!beatmapAvailableLocally)
+                {
+                    Logger.Log($"StableMatchIPCInfo: match {match.Id} is in progress but beatmap {match.BeatmapId} is unavailable locally; staying idle until download completes.");
+                }
+            }
+            else if (previousMatch?.InProgress == true)
+            {
+                State.Value = TourneyState.Ranking;
+                waitingForIdle = 0;
+            }
+            else
+            {
+                State.Value = TourneyState.Idle;
+            }
+        }
+
+        private void resetRoomState()
+        {
+            userScores.Clear();
+            receivedMessages.Clear();
+            lastMatchHistoryFetchId = null;
+            waitingForIdle = 0;
+            State.Value = TourneyState.Idle;
+            ChatChannel.Value = 0;
+            Score1.Value = 0;
+            Score2.Value = 0;
+        }
+
+        private void onMessageReceived(bMessage message) => Schedule(() =>
+        {
+            var stableMessage = new StableBanchoMessage(
+                message.SendingClient,
+                message.Message,
+                message.Target,
+                message.SenderId,
+                Time.Current);
+
+            receivedMessages.Add(stableMessage);
+
+            if (!message.Message.StartsWith("Match history available", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            var match = match_history_regex.Match(message.Message);
+
+            if (match.Success && int.TryParse(match.Groups["id"].Value, out int fetchId))
+            {
+                lastMatchHistoryFetchId = fetchId;
+                Logger.Log($"StableMatchIPCInfo: captured match history fetch id {fetchId} from bancho message.");
+                fetchChannelId(fetchId);
+            }
+        });
 
         private void fetchChannelId(int matchId)
         {
@@ -251,17 +346,21 @@ namespace osu.Game.Tournament.StableClient.IPC
 
         private void updateSpectatorHandlers(MultiplayerMatch match)
         {
+            int trackedSlots = Math.Min(16, ladder.PlayersPerTeam.Value * 2);
+
             for (int i = 0; i < 16; i++)
             {
+                if (i >= trackedSlots)
+                {
+                    expireHandler(i);
+                    continue;
+                }
+
                 int userId = match.SlotUserIds[i];
 
                 if (spectatorHandlers[i]?.UserId != userId)
                 {
-                    if (spectatorHandlers[i] != null)
-                    {
-                        spectatorHandlers[i]!.Expire();
-                        spectatorHandlers[i] = null;
-                    }
+                    expireHandler(i);
 
                     if (userId > 0)
                     {
@@ -277,22 +376,33 @@ namespace osu.Game.Tournament.StableClient.IPC
             }
         }
 
+        private void refreshTrackedPlayers()
+        {
+            if (CurrentMatch.Value != null)
+                updateSpectatorHandlers(CurrentMatch.Value);
+            else
+                clearSpectatorHandlers();
+        }
+
+        private void expireHandler(int index)
+        {
+            if (spectatorHandlers[index] == null)
+                return;
+
+            spectatorHandlers[index]!.Expire();
+            spectatorHandlers[index] = null;
+        }
+
         private void clearSpectatorHandlers()
         {
             for (int i = 0; i < 16; i++)
-            {
-                if (spectatorHandlers[i] != null)
-                {
-                    spectatorHandlers[i]!.Expire();
-                    spectatorHandlers[i] = null;
-                }
-            }
+                expireHandler(i);
         }
 
-        private void onFramesReceived(int userId, FrameDataBundle bundle)
+        private void onFramesReceived(int userId, FrameDataBundle bundle) => Schedule(() =>
         {
             userScores[userId] = bundle.Header.TotalScore;
-        }
+        });
 
         protected override void Update()
         {
@@ -344,6 +454,7 @@ namespace osu.Game.Tournament.StableClient.IPC
                 client.OnMatchCreated -= onMatchUpdated;
                 client.OnMatchUpdated -= onMatchUpdated;
                 client.OnMatchDisbanded -= onMatchDisbanded;
+                client.OnMessageReceived -= onMessageReceived;
             }
 
             clearSpectatorHandlers();
@@ -355,4 +466,11 @@ namespace osu.Game.Tournament.StableClient.IPC
             public new Bindable<PlaylistItem?> PlaylistItem => base.PlaylistItem;
         }
     }
+
+    public readonly record struct StableBanchoMessage(
+        string Sender,
+        string Message,
+        string Target,
+        int SenderId,
+        double ReceivedAt);
 }
