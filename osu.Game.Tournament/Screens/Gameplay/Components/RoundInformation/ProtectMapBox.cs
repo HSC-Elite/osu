@@ -43,14 +43,21 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components.RoundInformation
                             DestinationAlpha = BlendingType.OneMinusSrcAlpha
                         },
                     },
-                    new Sprite
+                    new Container
                     {
-                        Texture = protectedIcon,
-                        Colour = GetColorFromTeamColor(color),
                         Anchor = Anchor.Centre,
                         Origin = Anchor.Centre,
-                        EdgeSmoothness = Vector2.Zero
-                    },
+                        Size = new Vector2(14f),
+                        Child = new Sprite
+                        {
+                            Anchor = Anchor.Centre,
+                            Origin = Anchor.Centre,
+                            RelativeSizeAxes = Axes.Both,
+                            Colour = GetColorFromTeamColor(color),
+                            FillMode = FillMode.Fit,
+                            Texture = protectedIcon,
+                        },
+                    }
                 }
             };
         }

@@ -153,6 +153,12 @@ namespace osu.Game.Tournament.Tests.Screens
         public void TestBanOrderMultipleBans()
         {
             AddStep("set ban count", () => Ladder.CurrentMatch.Value!.Round.Value!.BanCount.Value = 2);
+            AddStep("set ban/pick flow", () => setBanPickFlow(
+                (ChoiceType.Ban, TeamColour.Blue),
+                (ChoiceType.Ban, TeamColour.Red),
+                (ChoiceType.Ban, TeamColour.Red),
+                (ChoiceType.Ban, TeamColour.Blue),
+                (ChoiceType.Pick, TeamColour.Blue)));
 
             AddStep("load some maps", () =>
             {
@@ -191,6 +197,12 @@ namespace osu.Game.Tournament.Tests.Screens
         public void TestPickBanOrder()
         {
             AddStep("set ban count", () => Ladder.CurrentMatch.Value!.Round.Value!.BanCount.Value = 1);
+            AddStep("set ban/pick flow", () => setBanPickFlow(
+                (ChoiceType.Ban, TeamColour.Blue),
+                (ChoiceType.Ban, TeamColour.Red),
+                (ChoiceType.Pick, TeamColour.Red),
+                (ChoiceType.Pick, TeamColour.Blue),
+                (ChoiceType.Pick, TeamColour.Red)));
 
             AddStep("load some maps", () =>
             {
@@ -236,6 +248,16 @@ namespace osu.Game.Tournament.Tests.Screens
         public void TestMultipleTeamBans()
         {
             AddStep("set ban count", () => Ladder.CurrentMatch.Value!.Round.Value!.BanCount.Value = 3);
+            AddStep("set ban/pick flow", () => setBanPickFlow(
+                (ChoiceType.Ban, TeamColour.Red),
+                (ChoiceType.Ban, TeamColour.Blue),
+                (ChoiceType.Ban, TeamColour.Blue),
+                (ChoiceType.Ban, TeamColour.Red),
+                (ChoiceType.Ban, TeamColour.Red),
+                (ChoiceType.Ban, TeamColour.Blue),
+                (ChoiceType.Pick, TeamColour.Blue),
+                (ChoiceType.Pick, TeamColour.Red),
+                (ChoiceType.Pick, TeamColour.Blue)));
 
             AddStep("load some maps", () =>
             {
@@ -337,6 +359,32 @@ namespace osu.Game.Tournament.Tests.Screens
                 Beatmap = CreateSampleBeatmap(),
                 Mods = mods
             });
+        }
+
+        private void setBanPickFlow(params (ChoiceType type, TeamColour team)[] choices)
+        {
+            var banPickFlowGroups = Ladder.CurrentMatch.Value!.Round.Value!.BanPickFlowGroups;
+            banPickFlowGroups.Clear();
+
+            var flowGroup = new BanPickFlowGroup
+            {
+                Name = { Value = "test flow" }
+            };
+
+            TeamColour lastTeam = TeamColour.Red;
+
+            foreach (var (type, team) in choices)
+            {
+                flowGroup.Steps.Add(new BanPickFlowStep
+                {
+                    CurrentAction = { Value = type },
+                    SwapFromLastColor = { Value = team != lastTeam }
+                });
+
+                lastTeam = team;
+            }
+
+            banPickFlowGroups.Add(flowGroup);
         }
 
         private void clickBeatmapPanel(int index)
