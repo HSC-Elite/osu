@@ -239,8 +239,7 @@ namespace osu.Game.Tournament.IPC
             RulesetInfo ruleset = rulesets.GetRuleset(gameplayRulesetId)!;
             Ruleset rulesetInstance = ruleset.CreateInstance();
 
-            var localBeatmap = beatmapManager.QueryBeatmap($@"{nameof(BeatmapInfo.OnlineID)} == $0 AND {nameof(BeatmapInfo.MD5Hash)} == {nameof(BeatmapInfo.OnlineMD5Hash)}", gameplayBeatmapId);
-            workingBeatmap.Value = beatmapManager.GetWorkingBeatmap(localBeatmap);
+            switchWorkingBeatmap(gameplayBeatmapId);
 
             var existing = Ladder.CurrentMatch.Value?.Round.Value?.Beatmaps.FirstOrDefault(b => b.ID == gameplayBeatmapId);
 
@@ -274,6 +273,22 @@ namespace osu.Game.Tournament.IPC
                     Mods.Value = LegacyMods.None;
                 });
             });
+        }
+
+        private int? pendingBeatmapId;
+
+        private void switchWorkingBeatmap(int gameplayBeatmapId)
+        {
+            // 不要在可能旁观或加载中的时候切换谱面 转为pending
+            if (!(State.Value == TourneyState.WaitingForClients || State.Value == TourneyState.Playing || State.Value == TourneyState.Ranking))
+            {
+                var localBeatmap = beatmapManager.QueryBeatmap($@"{nameof(BeatmapInfo.OnlineID)} == $0 AND {nameof(BeatmapInfo.MD5Hash)} == {nameof(BeatmapInfo.OnlineMD5Hash)}", gameplayBeatmapId);
+                workingBeatmap.Value = beatmapManager.GetWorkingBeatmap(localBeatmap);
+            }
+            else
+            {
+                pendingBeatmapId = gameplayBeatmapId;
+            }
         }
 
         private CancellationTokenSource? downloadCheckCancellation;
@@ -411,6 +426,12 @@ namespace osu.Game.Tournament.IPC
             else
             {
                 waitingForIdle = 0;
+            }
+
+            if (pendingBeatmapId != null && State.Value == TourneyState.Idle)
+            {
+                switchWorkingBeatmap(pendingBeatmapId.Value);
+                pendingBeatmapId = null;
             }
         }
 

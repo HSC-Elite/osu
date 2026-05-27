@@ -131,7 +131,7 @@ namespace osu.Game.Screens
 
         private void createDependencies(IReadOnlyDependencyContainer dependencies)
         {
-            screenDependencies = new OsuScreenDependencies(false, dependencies);
+            screenDependencies = new OsuScreenDependencies(DisallowExternalBeatmapRulesetChanges, dependencies);
 
             Beatmap = screenDependencies.Beatmap;
             Ruleset = screenDependencies.Ruleset;
