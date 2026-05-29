@@ -27,7 +27,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         private readonly IBindableList<MultiplayerRoomUser> teamUser = new BindableList<MultiplayerRoomUser>();
 
         [Resolved]
-        private LazerRoomMatchInfo lazerRoomMatchInfo { get; set; } = null!;
+        private LazerRoomMatchInfo? lazerRoomMatchInfo { get; set; }
 
         private readonly Bindable<float> usernameFontSize = new Bindable<float>();
 
@@ -91,11 +91,13 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             switch (colour)
             {
                 case TeamColour.Red:
-                    teamUser.BindTo(lazerRoomMatchInfo.RedTeamUser);
+                    if (lazerRoomMatchInfo != null)
+                        teamUser.BindTo(lazerRoomMatchInfo.RedTeamUser);
                     break;
 
                 case TeamColour.Blue:
-                    teamUser.BindTo(lazerRoomMatchInfo.BlueTeamUser);
+                    if (lazerRoomMatchInfo != null)
+                        teamUser.BindTo(lazerRoomMatchInfo.BlueTeamUser);
                     break;
             }
         }

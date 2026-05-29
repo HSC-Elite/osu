@@ -4,6 +4,7 @@
 using System;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
+using osu.Game.Tournament.Models;
 
 namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 {
@@ -12,6 +13,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         private readonly int playerPerTeam;
         private readonly Container redTeamContainer;
         private readonly Container blueTeamContainer;
+
+        public int PlayerPerTeam => playerPerTeam;
 
         public TournamentPlayerGrid(int playerPerTeam)
         {
@@ -39,6 +42,23 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             setLayout(redTeamContainer);
             setLayout(blueTeamContainer);
         }
+
+        public Container GetSlot(TeamColour colour, int index)
+        {
+            var teamContainer = colour == TeamColour.Red ? redTeamContainer : blueTeamContainer;
+
+            if (index < 0 || index >= teamContainer.Count)
+                throw new ArgumentOutOfRangeException(nameof(index));
+
+            return (Container)teamContainer[index];
+        }
+
+        public void SetSlot(TeamColour colour, int index, Drawable drawable)
+        {
+            GetSlot(colour, index).Child = drawable.With(d => d.RelativeSizeAxes = Axes.Both);
+        }
+
+        public void ClearSlot(TeamColour colour, int index) => GetSlot(colour, index).Clear();
 
         private void setLayout(Container container)
         {

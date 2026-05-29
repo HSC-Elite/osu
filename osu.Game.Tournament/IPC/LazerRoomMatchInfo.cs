@@ -50,7 +50,7 @@ namespace osu.Game.Tournament.IPC
         [Resolved]
         private Bindable<WorkingBeatmap> workingBeatmap { get; set; } = null!;
 
-        public MultiSpectatorLeaderboardProvider LeaderboardProvider
+        public MultiSpectatorLeaderboardProvider? LeaderboardProvider
         {
             set => leaderboardProvider = value;
         }

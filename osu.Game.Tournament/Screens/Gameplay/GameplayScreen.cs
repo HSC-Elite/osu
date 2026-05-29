@@ -1,7 +1,7 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
-using System;
+using System.Collections.Generic;
 using System.Linq;
 using osu.Framework.Allocation;
 using osu.Framework.Audio;
@@ -10,14 +10,12 @@ using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Sprites;
 using osu.Framework.Graphics.Textures;
-using osu.Framework.Logging;
-using osu.Framework.Screens;
 using osu.Framework.Threading;
+using osu.Game.Beatmaps;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Online.Multiplayer;
 using osu.Game.Overlays.Settings;
-using osu.Game.Screens;
 using osu.Game.Screens.Play.PlayerSettings;
 using osu.Game.Tournament.Components;
 using osu.Game.Tournament.IPC;
@@ -57,9 +55,22 @@ namespace osu.Game.Tournament.Screens.Gameplay
         [Resolved]
         private AudioManager audio { get; set; } = null!;
 
-        public bool Playing => chroma.CurrentScreen is TournamentMultiSpectatorScreen;
+        [Resolved]
+        private Bindable<WorkingBeatmap> workingBeatmap { get; set; } = null!;
 
-        private ScreenStack chroma = null!;
+        [Resolved(CanBeNull = true)]
+        private LazerRoomMatchInfo? lazerRoomInfo { get; set; }
+
+        public bool Playing => spectatorManager?.HasActiveGameplay == true;
+
+        private Container playerAreaContainer = null!;
+        private Container playerGridContainer = null!;
+        private TournamentPlayerGrid? playerGrid;
+        private TournamentSpectatorManager spectatorManager = null!;
+        private readonly List<TournamentPlayerSlot> playerSlots = new List<TournamentPlayerSlot>();
+        private readonly Bindable<int> playerPerTeam = new Bindable<int>();
+        private readonly IBindableList<MultiplayerRoomUser> redTeamUsers = new BindableList<MultiplayerRoomUser>();
+        private readonly IBindableList<MultiplayerRoomUser> blueTeamUsers = new BindableList<MultiplayerRoomUser>();
 
         protected override SongBar CreateSongBar() => new GameplaySongBar
         {
@@ -93,23 +104,25 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     FillMode = FillMode.Fit,
                 },
                 header = new MatchHeader(),
-                new Container
+                playerAreaContainer = new Container
                 {
-                    RelativeSizeAxes = Axes.X,
-                    AutoSizeAxes = Axes.Y,
+                    RelativeSizeAxes = Axes.None,
+                    Width = LadderInfo.ChromaKeyWidth.Value,
+                    Height = 512,
                     Y = 110,
                     Anchor = Anchor.TopCentre,
                     Origin = Anchor.TopCentre,
-                    Children = new[]
+                    Children = new Drawable[]
                     {
-                        chroma = new OsuScreenStack
+                        playerGridContainer = new Container
                         {
-                            RelativeSizeAxes = Axes.None,
-                            Anchor = Anchor.TopCentre,
-                            Origin = Anchor.TopCentre,
-                            Height = 512,
-                            Width = 1366,
+                            RelativeSizeAxes = Axes.Both,
+                            Child = playerGrid = new TournamentPlayerGrid(LadderInfo.PlayersPerTeam.Value)
+                            {
+                                RelativeSizeAxes = Axes.Both,
+                            }
                         },
+                        spectatorManager = new TournamentSpectatorManager()
                     }
                 },
                 scoreDisplay = new TournamentMatchScoreDisplay
@@ -158,7 +171,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 },
                 new SettingsSlider<int>
                 {
-                    LabelText = $"{(OperatingSystem.IsWindows() ? "Player Area" : "Chroma")} width",
+                    LabelText = "Player Area width",
                     Current = LadderInfo.ChromaKeyWidth,
                     KeyboardStep = 1,
                 },
@@ -222,7 +235,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 },
                 chatBox = new LabelledTextBox
                 {
-                    Label = "enter to chat",
+                    Label = "enter to send message",
                 },
                 new TourneyButton
                 {
@@ -235,19 +248,14 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     Action = () =>
                     {
                         IPC.State.Value = TourneyState.Idle;
-                        ((LazerRoomMatchInfo)IPC).ForceReSpectate();
+                        spectatorManager.ForceSpectate();
+                        lazerRoomInfo?.ForceReSpectate();
                     }
                 },
                 new TourneyButton
                 {
                     Text = "panic",
-                    Action = () =>
-                    {
-                        if (chroma.CurrentScreen is IdleScreen)
-                            return;
-
-                        IPC.State.Value = TourneyState.Idle;
-                    }
+                    Action = () => spectatorManager.PanicToIdle()
                 },
                 new VisualSettings
                 {
@@ -255,7 +263,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 }
             });
 
-            LadderInfo.ChromaKeyWidth.BindValueChanged(width => chroma.Width = width.NewValue, true);
+            LadderInfo.ChromaKeyWidth.BindValueChanged(width => playerAreaContainer.Width = width.NewValue, true);
 
             warmup.BindValueChanged(w =>
             {
@@ -274,7 +282,17 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 switchFromMappool = false;
             });
 
-            chroma.Push(new IdleScreen());
+            playerPerTeam.BindTo(LadderInfo.PlayersPerTeam);
+            playerPerTeam.BindValueChanged(_ => rebuildPlayerSlots(), true);
+
+            if (lazerRoomInfo != null)
+            {
+                redTeamUsers.BindCollectionChanged((_, _) => refreshPlayerSlots());
+                redTeamUsers.BindTo(lazerRoomInfo.RedTeamUser);
+
+                blueTeamUsers.BindCollectionChanged((_, _) => refreshPlayerSlots());
+                blueTeamUsers.BindTo(lazerRoomInfo.BlueTeamUser);
+            }
 
             chatBox.OnCommit += (_, _) =>
             {
@@ -400,6 +418,53 @@ namespace osu.Game.Tournament.Screens.Gameplay
             }
         }
 
+        private void rebuildPlayerSlots()
+        {
+            if (playerGridContainer == null)
+                return;
+
+            int playersPerTeam = playerPerTeam.Value;
+            playerGridContainer.Child = playerGrid = new TournamentPlayerGrid(playersPerTeam)
+            {
+                RelativeSizeAxes = Axes.Both,
+            };
+
+            playerSlots.Clear();
+
+            for (int i = 0; i < playersPerTeam; i++)
+                addPlayerSlot(new TournamentPlayerSlot(TeamColour.Red, i), TeamColour.Red, i);
+
+            for (int i = 0; i < playersPerTeam; i++)
+                addPlayerSlot(new TournamentPlayerSlot(TeamColour.Blue, i), TeamColour.Blue, i);
+
+            refreshPlayerSlots();
+        }
+
+        private void addPlayerSlot(TournamentPlayerSlot slot, TeamColour colour, int index)
+        {
+            slot.SetSmallLogo(playerPerTeam.Value > 2);
+            playerSlots.Add(slot);
+            playerGrid!.SetSlot(colour, index, slot);
+        }
+
+        private void refreshPlayerSlots()
+        {
+            if (playerGrid == null)
+                return;
+
+            int playersPerTeam = playerPerTeam.Value;
+
+            foreach (var slot in playerSlots)
+            {
+                var teamUsers = slot.TeamColour == TeamColour.Red ? redTeamUsers : blueTeamUsers;
+                var user = teamUsers.Take(playersPerTeam).ElementAtOrDefault(slot.Index);
+
+                slot.ApplySlotInfo(new TournamentPlayerSlotInfo(slot.TeamColour, slot.Index, user));
+            }
+
+            spectatorManager.RefreshRoster(playerSlots);
+        }
+
         private void updateState()
         {
             try
@@ -407,6 +472,11 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 scheduledScreenChange?.Cancel();
 
                 if (State.Value == TourneyState.Ranking)
+                {
+                    applyTheResult();
+                }
+
+                void applyTheResult()
                 {
                     if (warmup.Value || CurrentMatch.Value == null) return;
 
@@ -430,10 +500,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 switch (State.Value)
                 {
                     case TourneyState.Idle:
-                        if (Playing)
-                        {
-                            chroma.Exit();
-                        }
+                        spectatorManager.ResetAllSlots();
 
                         contract();
 
@@ -458,21 +525,16 @@ namespace osu.Game.Tournament.Screens.Gameplay
                         break;
 
                     case TourneyState.Ranking:
+                        spectatorManager.OnRanking();
                         scheduledContract = Scheduler.AddDelayed(contract, 10000);
                         break;
 
                     case TourneyState.WaitingForClients:
-                        if (client.Room == null || chroma.CurrentScreen is TournamentMultiSpectatorScreen)
+                        if (client.Room == null)
                             break;
 
-                        int[] userIds = client.CurrentMatchPlayingUserIds.ToArray();
-                        MultiplayerRoomUser[] users = userIds.Select(id => client.Room.Users.First(u => u.UserID == id)).ToArray();
-                        Logger.Log($"start spec {users}");
-
-                        if (userIds.Length == 0)
-                            break;
-
-                        chroma.Push(new TournamentMultiSpectatorScreen(users));
+                        spectatorManager.BeginSpectating(workingBeatmap.Value, playerSlots);
+                        expand();
                         break;
 
                     default:
