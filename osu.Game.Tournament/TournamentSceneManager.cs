@@ -15,6 +15,7 @@ using osu.Game.Graphics;
 using osu.Game.Graphics.Containers;
 using osu.Game.Graphics.Sprites;
 using osu.Game.Tournament.Components;
+using osu.Game.Tournament.Models;
 using osu.Game.Tournament.Screens;
 using osu.Game.Tournament.Screens.Drawings;
 using osu.Game.Tournament.Screens.Editors;
@@ -53,6 +54,9 @@ namespace osu.Game.Tournament
 
         private Container chatContainer = null!;
         private FillFlowContainer buttons = null!;
+
+        [Resolved]
+        private LadderInfo ladderInfo { get; set; } = null!;
 
         public TournamentSceneManager()
         {
@@ -151,6 +155,7 @@ namespace osu.Game.Tournament
                                     {
                                         new ScreenButton(typeof(SetupScreen)) { Text = "Setup", RequestSelection = SetScreen },
                                         new ScreenButton(typeof(RoomSelectScreen)) { Text = "Select Room", RequestSelection = SetScreen },
+                                        new ToggleControlWindowButton(ladderInfo.UseExternalStageDisplay),
                                         new Separator(),
                                         new ScreenButton(typeof(TeamEditorScreen)) { Text = "Team Editor", RequestSelection = SetScreen },
                                         new ScreenButton(typeof(ModColorEditorScreen)) { Text = "Mod Color Editor", RequestSelection = SetScreen },
@@ -193,6 +198,8 @@ namespace osu.Game.Tournament
 
         public IBindable<Type> CurrentScreen => currentScreenBindable;
         private readonly Bindable<Type> currentScreenBindable = new Bindable<Type>();
+
+        public Drawable? ActiveScreen => currentScreen;
 
         private Drawable? temporaryScreen;
 
@@ -270,6 +277,25 @@ namespace osu.Game.Tournament
             }
         }
 
+        private partial class ToggleControlWindowButton : TourneyButton
+        {
+            private readonly Bindable<bool> enabled;
+
+            public ToggleControlWindowButton(Bindable<bool> enabled)
+            {
+                this.enabled = enabled;
+
+                RelativeSizeAxes = Axes.X;
+                Action = () => this.enabled.Value = !this.enabled.Value;
+            }
+
+            protected override void LoadComplete()
+            {
+                base.LoadComplete();
+                enabled.BindValueChanged(v => Text = v.NewValue ? "关闭扩展控制窗口" : "启用扩展控制窗口", true);
+            }
+        }
+
         private partial class ScreenButton : TourneyButton
         {
             public readonly Type Type;
@@ -338,12 +364,8 @@ namespace osu.Game.Tournament
                 get => isSelected;
                 set
                 {
-                    if (value == isSelected)
-                        return;
-
                     isSelected = value;
-                    BackgroundColour = isSelected ? Color4.SkyBlue : OsuColour.Gray(0.2f);
-                    SpriteText.Colour = isSelected ? Color4.Black : Color4.White;
+                    Background.FadeColour(value ? Color4.Gray : BackgroundColour, 50);
                 }
             }
         }

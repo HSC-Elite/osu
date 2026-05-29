@@ -16,24 +16,49 @@ namespace osu.Game.Tournament
     {
         internal static Bitmap CaptureWindowFromBitbit(IntPtr hWnd)
         {
-            GetWindowRect(hWnd, out RECT rect);
+            if (!GetWindowRect(hWnd, out RECT rect))
+                throw new InvalidOperationException("Failed to get window bounds.");
+
             int width = rect.Right - rect.Left;
             int height = rect.Bottom - rect.Top;
 
+            if (width <= 0 || height <= 0)
+                throw new InvalidOperationException("Window bounds are empty.");
+
             Bitmap bmp = new Bitmap(width, height, PixelFormat.Format32bppArgb);
 
-            using (System.Drawing.Graphics gfxBmp = System.Drawing.Graphics.FromImage(bmp))
+            try
             {
-                IntPtr hdcBitmap = gfxBmp.GetHdc();
-                IntPtr hdcWindow = GetWindowDC(hWnd);
+                using (System.Drawing.Graphics gfxBmp = System.Drawing.Graphics.FromImage(bmp))
+                {
+                    IntPtr hdcBitmap = IntPtr.Zero;
+                    IntPtr hdcWindow = IntPtr.Zero;
 
-                BitBlt(hdcBitmap, 0, 0, width, height, hdcWindow, 0, 0, 0x00CC0020); // SRCCOPY
+                    try
+                    {
+                        hdcBitmap = gfxBmp.GetHdc();
+                        hdcWindow = GetWindowDC(hWnd);
 
-                ReleaseDC(hWnd, hdcWindow);
-                gfxBmp.ReleaseHdc(hdcBitmap);
+                        if (hdcWindow == IntPtr.Zero || !BitBlt(hdcBitmap, 0, 0, width, height, hdcWindow, 0, 0, 0x00CC0020)) // SRCCOPY
+                            throw new InvalidOperationException("Failed to capture window contents.");
+                    }
+                    finally
+                    {
+                        if (hdcWindow != IntPtr.Zero)
+                            ReleaseDC(hWnd, hdcWindow);
+
+                        if (hdcBitmap != IntPtr.Zero)
+                            gfxBmp.ReleaseHdc(hdcBitmap);
+                    }
+                }
+
+                return bmp;
             }
-
-            return bmp;
+            catch
+            {
+                bmp.Dispose();
+                throw;
+            }
         }
 
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
@@ -67,7 +92,7 @@ namespace osu.Game.Tournament
         [DllImport("user32.dll")]
         internal static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
 
-        [DllImport("user32.dll")]
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         internal static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
 
         [DllImport("user32.dll")]
@@ -82,12 +107,14 @@ namespace osu.Game.Tournament
             if (result != IntPtr.Zero)
                 return result;
 
+            StringBuilder sb = new StringBuilder(256);
+
             EnumWindows((hWnd, lParam) =>
             {
-                StringBuilder sb = new StringBuilder(256);
+                sb.Clear();
                 GetWindowText(hWnd, sb, sb.Capacity);
 
-                if (sb.ToString().Contains(partialTitle))
+                if (contains(sb, partialTitle))
                 {
                     result = hWnd;
                     return false; // 停止遍历
@@ -99,6 +126,28 @@ namespace osu.Game.Tournament
             return result;
         }
 
+        private static bool contains(StringBuilder source, string value)
+        {
+            if (value.Length == 0)
+                return true;
+
+            for (int i = 0; i <= source.Length - value.Length; i++)
+            {
+                int j = 0;
+
+                for (; j < value.Length; j++)
+                {
+                    if (source[i + j] != value[j])
+                        break;
+                }
+
+                if (j == value.Length)
+                    return true;
+            }
+
+            return false;
+        }
+
         [Flags]
         internal enum ProcessAccessFlags : uint
         {
@@ -107,14 +156,31 @@ namespace osu.Game.Tournament
             QueryInformation = 0x0400,
         }
 
-        [DllImport("kernel32.dll")]
+        [DllImport("kernel32.dll", SetLastError = true)]
         internal static extern IntPtr OpenProcess(ProcessAccessFlags dwDesiredAccess, bool bInheritHandle, int dwProcessId);
 
-        [DllImport("kernel32.dll")]
-        internal static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, int dwSize, out int lpNumberOfBytesRead);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, int dwSize, out IntPtr lpNumberOfBytesRead);
 
         [DllImport("kernel32.dll", SetLastError = true)]
-        internal static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, IntPtr lpBuffer, int dwSize, out int lpNumberOfBytesRead);
+        internal static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, IntPtr lpBuffer, int dwSize, out IntPtr lpNumberOfBytesRead);
+
+        internal static unsafe bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, Span<byte> lpBuffer, int dwSize, out IntPtr lpNumberOfBytesRead)
+        {
+            if (lpBuffer.Length == 0)
+            {
+                lpNumberOfBytesRead = IntPtr.Zero;
+                return true;
+            }
+
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(dwSize, lpBuffer.Length);
+
+            fixed (byte* bufferPtr = lpBuffer)
+                return ReadProcessMemory(hProcess, lpBaseAddress, bufferPtr, dwSize, out lpNumberOfBytesRead);
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern unsafe bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte* lpBuffer, int dwSize, out IntPtr lpNumberOfBytesRead);
 
         [DllImport("kernel32.dll")]
         internal static extern bool CloseHandle(IntPtr hObject);

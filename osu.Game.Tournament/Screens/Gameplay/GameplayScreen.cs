@@ -270,7 +270,12 @@ namespace osu.Game.Tournament.Screens.Gameplay
             sceneManager?.CurrentScreen.BindValueChanged(s =>
             {
                 if (s.OldValue == typeof(MapPoolScreen) && s.NewValue == typeof(GameplayScreen))
+                {
                     switchFromMappool = true;
+                    return;
+                }
+
+                switchFromMappool = false;
             });
 
             chroma.Push(new IdleScreen());

@@ -156,7 +156,7 @@ namespace osu.Game.Tournament.Screens.MapPool
                             Action = reset
                         },
                         new ControlPanel.Spacer(),
-                        new OsuCheckbox
+                        new SettingsCheckbox
                         {
                             LabelText = "Split display by mods",
                             Current = LadderInfo.SplitMapPoolByMods,

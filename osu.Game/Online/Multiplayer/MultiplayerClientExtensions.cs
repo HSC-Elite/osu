@@ -21,8 +21,11 @@ namespace osu.Game.Online.Multiplayer
                     Exception exception = t.Exception.AsSingular();
 
                     if (exception.GetHubExceptionMessage() is string message)
-                        // Hub exceptions generally contain something we can show the user directly.
-                        Logger.Log(message, level: LogLevel.Important);
+                    {
+                        if (message != "Realtime online functionality is not supported on this version of the game. Please upgrade to the latest version.")
+                            // Hub exceptions generally contain something we can show the user directly.
+                            Logger.Log(message, level: LogLevel.Important);
+                    }
                     else
                         Logger.Error(exception, $"Unobserved exception occurred via {nameof(FireAndForget)} call: {exception.Message}");
 
