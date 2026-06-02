@@ -265,7 +265,17 @@ namespace osu.Game
         [BackgroundDependencyLoader]
         private void load(ReadableKeyCombinationProvider keyCombinationProvider, FrameworkConfigManager frameworkConfig)
         {
-            VersionHash = "2d5e9db45786279c6156397b11e8a2b2";
+            try
+            {
+                using (var str = File.OpenRead(typeof(OsuGameBase).Assembly.Location))
+                    VersionHash = str.ComputeMD5Hash();
+            }
+            catch
+            {
+                // special case for android builds, which can't read DLLs from a packed apk.
+                // should eventually be handled in a better way.
+                VersionHash = $"{Version}-{RuntimeInfo.OS}".ComputeMD5Hash();
+            }
 
             Resources.AddStore(new DllResourceStore(OsuResources.ResourceAssembly));
             Resources.AddStore(new DllResourceStore(osu.Game.Resources.Custom.CustomResources.ResourceAssembly));

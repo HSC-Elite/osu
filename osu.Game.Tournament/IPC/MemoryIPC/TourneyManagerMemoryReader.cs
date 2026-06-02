@@ -18,7 +18,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
         private const int diagnostic_log_interval_ms = 30000;
 
         // found with PercyDan54
-        private static readonly PatternInfo channel_id_pattern = new PatternInfo("8B CE BA 07 00 00 00 E8 ?? ?? ?? ?? A3 ?? ?? ?? ?? 89 15 ?? ?? ?? ?? E8", 0xd);
+        private static readonly PatternInfo channel_id_pattern = new PatternInfo("A3 ?? ?? ?? ?? 89 15 ?? ?? ?? ?? E8 ?? ?? ?? ?? 8B F0 B9 ?? ?? ?? ?? E8 ?? ?? ?? ?? 8B D0 8B CE E8 ?? ?? ?? ?? 8B F0 8B 0D ?? ?? ?? ?? 8B 15", 0x1);
 
         private static readonly PatternInfo chat_area_pattern = new PatternInfo("A1 ?? ?? ?? ?? 89 45 F0 8B D1 85 C9 75");
 
@@ -37,16 +37,16 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
         {
             base.InitializeAddressInternal(regions);
 
-            _ = resolveAdditionalAddressesAsync(regions, CancellationToken);
+            _ = resolveAdditionalAddressesAsync(CancellationToken);
         }
 
-        private async Task resolveAdditionalAddressesAsync(List<MemoryRegion> regions, CancellationToken cancellationToken)
+        private async Task resolveAdditionalAddressesAsync(CancellationToken cancellationToken)
         {
             try
             {
                 while ((channelAddress == null || chatAreaAddress == null) && !cancellationToken.IsCancellationRequested)
                 {
-                    IntPtr?[] addresses = ResolveFromPatternInfos(additional_address_patterns, regions);
+                    IntPtr?[] addresses = ResolveFromPatternInfos(additional_address_patterns);
 
                     if (addresses[0] != null)
                         channelAddress = addresses[0];
@@ -56,6 +56,8 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
                     if (channelAddress != null && chatAreaAddress != null)
                         return;
+
+                    Logger.Log($"channelAddress is {channelAddress?.ToString() ?? "null"}, chatAreaAddress is {chatAreaAddress?.ToString() ?? "null"}");
 
                     await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
                 }

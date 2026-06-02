@@ -175,6 +175,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                 InitializeAddressInternal(regions);
 
                 Status = AttachStatus.Attached;
+                Logger.Log($"[StableMemoryReader] Attached! PID: {Process?.Id}, ReaderType: {GetType()}");
                 return true;
             }
             catch (OperationCanceledException)
