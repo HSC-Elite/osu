@@ -9,6 +9,7 @@ using Windows.Graphics;
 using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX;
 using Windows.Graphics.DirectX.Direct3D11;
+using osu.Framework.Bindables;
 using WinRT;
 using osu.Framework.Extensions.ObjectExtensions;
 using SharpGen.Runtime;
@@ -17,7 +18,7 @@ using Vortice.DXGI;
 
 namespace osu.Game.Tournament.Components
 {
-    [SupportedOSPlatform("windows10.0.19041.0")]
+    [SupportedOSPlatform("windows10.0.26100.0")]
     public sealed class WgcCapture : IDisposable
     {
         private const int frame_buffer_count = 2;
@@ -35,12 +36,30 @@ namespace osu.Game.Tournament.Components
         private int latestWidth;
         private int latestHeight;
 
+        public BindableInt FrameRate { get; } = new BindableInt(60)
+        {
+            MinValue = 30,
+            MaxValue = 360,
+            Default = 60,
+        };
+
         public bool IsRunning { get; private set; }
 
         public WgcCapture(ID3D11Device device)
         {
             d3dDevice = device ?? throw new ArgumentNullException(nameof(device));
             winrtDevice = createDirect3DDevice(d3dDevice);
+
+            if (ApiInformation.IsPropertyPresent(
+                    "Windows.Graphics.Capture.GraphicsCaptureSession",
+                    nameof(GraphicsCaptureSession.MinUpdateInterval)))
+            {
+                FrameRate.BindValueChanged(f =>
+                {
+                    if (IsRunning && session != null)
+                        session.MinUpdateInterval = TimeSpan.FromMilliseconds(1000f / FrameRate.Value);
+                });
+            }
         }
 
         public void StartForWindow(IntPtr hwnd)
@@ -128,6 +147,13 @@ namespace osu.Game.Tournament.Components
                     nameof(GraphicsCaptureSession.IsBorderRequired)))
             {
                 session.IsBorderRequired = false;
+            }
+
+            if (ApiInformation.IsPropertyPresent(
+                    "Windows.Graphics.Capture.GraphicsCaptureSession",
+                    nameof(GraphicsCaptureSession.MinUpdateInterval)))
+            {
+                session.MinUpdateInterval = TimeSpan.FromMilliseconds(1000f / FrameRate.Value);
             }
 
             session.StartCapture();
