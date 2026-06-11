@@ -36,30 +36,12 @@ namespace osu.Game.Tournament.Components
         private int latestWidth;
         private int latestHeight;
 
-        public BindableInt FrameRate { get; } = new BindableInt(60)
-        {
-            MinValue = 30,
-            MaxValue = 360,
-            Default = 60,
-        };
-
         public bool IsRunning { get; private set; }
 
         public WgcCapture(ID3D11Device device)
         {
             d3dDevice = device ?? throw new ArgumentNullException(nameof(device));
             winrtDevice = createDirect3DDevice(d3dDevice);
-
-            if (ApiInformation.IsPropertyPresent(
-                    "Windows.Graphics.Capture.GraphicsCaptureSession",
-                    nameof(GraphicsCaptureSession.MinUpdateInterval)))
-            {
-                FrameRate.BindValueChanged(f =>
-                {
-                    if (IsRunning && session != null)
-                        session.MinUpdateInterval = TimeSpan.FromMilliseconds(1000f / FrameRate.Value);
-                });
-            }
         }
 
         public void StartForWindow(IntPtr hwnd)
@@ -153,7 +135,7 @@ namespace osu.Game.Tournament.Components
                     "Windows.Graphics.Capture.GraphicsCaptureSession",
                     nameof(GraphicsCaptureSession.MinUpdateInterval)))
             {
-                session.MinUpdateInterval = TimeSpan.FromMilliseconds(1000f / FrameRate.Value);
+                session.MinUpdateInterval = TimeSpan.FromMilliseconds(0);
             }
 
             session.StartCapture();

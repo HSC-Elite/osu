@@ -78,12 +78,7 @@ namespace osu.Game.Tournament.Components
             d3d11Available = D3D11Interop.TryGetD3D11Device(renderer, out var device, out _, out _);
 
             if (d3d11Available)
-            {
                 capture = new WgcCaptureSource(new WgcCapture(device!)
-                {
-                    FrameRate = { BindTarget = FrameRate }
-                });
-            }
             else
                 capture = new BitBltCaptureSource();
 
