@@ -425,6 +425,11 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
                 if (State.Value == TourneyState.Ranking)
                 {
+                    rankingScore();
+                }
+
+                void rankingScore()
+                {
                     if (warmup.Value || CurrentMatch.Value == null) return;
 
                     var lastPick = CurrentMatch.Value.PicksBans.LastOrDefault(p => p.Type == ChoiceType.Pick && p.BeatmapID == IPC.Beatmap.Value?.OnlineID);
