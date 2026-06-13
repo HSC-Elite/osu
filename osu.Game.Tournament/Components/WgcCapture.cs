@@ -9,7 +9,6 @@ using Windows.Graphics;
 using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX;
 using Windows.Graphics.DirectX.Direct3D11;
-using osu.Framework.Bindables;
 using WinRT;
 using osu.Framework.Extensions.ObjectExtensions;
 using SharpGen.Runtime;
