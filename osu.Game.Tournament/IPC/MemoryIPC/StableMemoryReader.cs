@@ -215,7 +215,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             if (rulesetAddr == IntPtr.Zero)
                 return null;
 
-            IntPtr gameplayBaseAddr = ReadInt32(rulesetAddr + 0x68);
+            IntPtr gameplayBaseAddr = ReadInt32(rulesetAddr + 0x64);
             if (gameplayBaseAddr == IntPtr.Zero)
                 return null;
 
@@ -227,7 +227,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             if (hpBarAddr == IntPtr.Zero)
                 return null;
 
-            // [[[Ruleset + 0x68] + 0x38] + 0x28]
+            // [[[Ruleset + 0x64] + 0x38] + 0x28]
             string? playerName = ReadSharpString(ReadInt32(scoreAddr + 0x28));
 
             IntPtr modsAddr = ReadInt32(scoreAddr + 0x1c);
@@ -238,7 +238,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
             int modeId = ReadInt32(scoreAddr + 0x64);
 
-            int score = ReadInt32(rulesetAddr + 0xfc);
+            int score = ReadInt32(scoreAddr + 0x78);
             double hpSmooth = ReadDouble(hpBarAddr + 0x14);
             double hp = ReadDouble(hpBarAddr + 0x1c);
             double acc = ReadDouble(ReadInt32(gameplayBaseAddr + 0x48) + 0xc);
