@@ -238,7 +238,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
             int modeId = ReadInt32(scoreAddr + 0x64);
 
-            int score = ReadInt32(scoreAddr + 0x78);
+            int score = ReadInt32(rulesetAddr + 0xf8);
             double hpSmooth = ReadDouble(hpBarAddr + 0x14);
             double hp = ReadDouble(hpBarAddr + 0x1c);
             double acc = ReadDouble(ReadInt32(gameplayBaseAddr + 0x48) + 0xc);
