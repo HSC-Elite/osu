@@ -307,6 +307,7 @@ namespace osu.Game.Tournament.Tests.IPC.MemoryIPC
                     lines.Add($"  Combo: {gameplay.Combo:N0} / {gameplay.MaxCombo:N0}");
                     lines.Add($"  Hits: 300={gameplay.Hit300:N0}, 100={gameplay.Hit100:N0}, 50={gameplay.Hit50:N0}, miss={gameplay.HitMiss:N0}");
                     lines.Add($"  Geki/Katu: {gameplay.HitGeki:N0}/{gameplay.HitKatu:N0}");
+                    lines.Add($"  PlayTime: {reader.PlayTime}");
                 }
 
                 lastReadResult = reader.Status == AttachStatus.Attached ? "OK" : "Reader is not attached.";
