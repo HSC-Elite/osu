@@ -705,6 +705,11 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
                 if (State.Value == TourneyState.Ranking && lastState == TourneyState.Playing)
                 {
+                    rankingScore();
+                }
+
+                void rankingScore()
+                {
                     if (warmup.Value || CurrentMatch.Value == null) return;
 
                     attemptGetResult();
@@ -936,14 +941,14 @@ namespace osu.Game.Tournament.Screens.Gameplay
                                 {
                                     RelativeSizeAxes = Axes.Both,
                                     Height = 0.5f,
-                                    RelativeAnchorPosition = new Vector2(0.25f, 0.5f),
+                                    RelativeAnchorPosition = new Vector2(0.5f, 0.25f),
                                     Origin = Anchor.Centre,
                                 },
                                 new PlayerWindow(clientIndex)
                                 {
                                     RelativeSizeAxes = Axes.Both,
                                     Height = 0.5f,
-                                    RelativeAnchorPosition = new Vector2(0.75f, 0.5f),
+                                    RelativeAnchorPosition = new Vector2(0.5f, 0.75f),
                                     Origin = Anchor.Centre,
                                 }
                             };

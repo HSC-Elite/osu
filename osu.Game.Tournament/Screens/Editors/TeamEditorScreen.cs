@@ -10,10 +10,8 @@ using osu.Framework.Extensions;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
-using osu.Framework.Localisation;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Sprites;
-using osu.Game.Graphics.UserInterface;
 using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Overlays;
 using osu.Game.Overlays.Settings;
@@ -135,7 +133,7 @@ namespace osu.Game.Tournament.Screens.Editors
                                 Width = 0.2f,
                                 Current = Model.Seed
                             },
-                            new SettingsSlider<int, LastYearPlacementSlider>
+                            new SettingsTextBox
                             {
                                 LabelText = "Last Year Placement",
                                 Width = 0.2f,
@@ -226,7 +224,7 @@ namespace osu.Game.Tournament.Screens.Editors
                             new SettingsButton
                             {
                                 Text = "Add player",
-                                Action = () => playerEditor.CreateNew()
+                                Action = playerEditor.CreateNew
                             },
                             new Container
                             {
@@ -272,11 +270,6 @@ namespace osu.Game.Tournament.Screens.Editors
                     else
                         acronymTextBox.ClearNoticeText();
                 }, true);
-            }
-
-            private partial class LastYearPlacementSlider : RoundedSliderBar<int>
-            {
-                public override LocalisableString TooltipText => Current.Value == 0 ? "N/A" : base.TooltipText;
             }
 
             public partial class PlayerEditor : CompositeDrawable

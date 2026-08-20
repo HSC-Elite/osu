@@ -10,12 +10,14 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using JetBrains.Annotations;
 using osu.Framework.Allocation;
 using osu.Framework.Audio;
 using osu.Framework.Audio.Track;
 using osu.Framework.Bindables;
 using osu.Framework.Configuration;
 using osu.Framework.Development;
+using osu.Framework.Extensions;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Textures;
@@ -24,6 +26,7 @@ using osu.Framework.Input.Handlers;
 using osu.Framework.Input.Handlers.Joystick;
 using osu.Framework.Input.Handlers.Midi;
 using osu.Framework.Input.Handlers.Mouse;
+using osu.Framework.Input.Handlers.Pen;
 using osu.Framework.Input.Handlers.Tablet;
 using osu.Framework.Input.Handlers.Touch;
 using osu.Framework.IO.Stores;
@@ -208,6 +211,7 @@ namespace osu.Game
 
         private BeatmapDifficultyCache difficultyCache;
         private IBeatmapUpdater beatmapUpdater;
+        private OnlineAssetCachingStore onlineAssetStore;
 
         private UserLookupCache userCache;
         private BeatmapLookupCache beatmapCache;
@@ -265,7 +269,17 @@ namespace osu.Game
         [BackgroundDependencyLoader]
         private void load(ReadableKeyCombinationProvider keyCombinationProvider, FrameworkConfigManager frameworkConfig)
         {
-            VersionHash = "2d5e9db45786279c6156397b11e8a2b2";
+            try
+            {
+                using (var str = File.OpenRead(typeof(OsuGameBase).Assembly.Location))
+                    VersionHash = str.ComputeMD5Hash();
+            }
+            catch
+            {
+                // special case for android builds, which can't read DLLs from a packed apk.
+                // should eventually be handled in a better way.
+                VersionHash = $"{Version}-{RuntimeInfo.OS}".ComputeMD5Hash();
+            }
 
             Resources.AddStore(new DllResourceStore(OsuResources.ResourceAssembly));
             Resources.AddStore(new DllResourceStore(osu.Game.Resources.Custom.CustomResources.ResourceAssembly));
@@ -282,6 +296,8 @@ namespace osu.Game
             var largeStore = new LargeTextureStore(Host.Renderer, Host.CreateTextureLoaderStore(new NamespacedResourceStore<byte[]>(Resources, @"Textures")));
             largeStore.AddTextureSource(Host.CreateTextureLoaderStore(CreateOnlineStore()));
             dependencies.Cache(largeStore);
+
+            dependencies.Cache(onlineAssetStore = new OnlineAssetCachingStore(Host, realm));
 
             dependencies.CacheAs(LocalConfig);
             dependencies.CacheAs<IGameplaySettings>(LocalConfig);
@@ -300,6 +316,7 @@ namespace osu.Game
 
             MessageFormatter.WebsiteRootUrl = endpoints.WebsiteUrl;
 
+            // Initialise localisation
             frameworkLocale = frameworkConfig.GetBindable<string>(FrameworkSetting.Locale);
             frameworkLocale.BindValueChanged(_ => updateLanguage());
 
@@ -370,7 +387,7 @@ namespace osu.Game
             base.Content.Add(LeaderboardManager);
 
             // add api components to hierarchy.
-            if (API is Component apiComponent)
+            if (API is Drawable apiComponent)
                 base.Content.Add(apiComponent);
 
             base.Content.Add(SpectatorClient);
@@ -499,6 +516,33 @@ namespace osu.Game
             Fonts.AddStore(new OsuIcon.OsuIconStore(Textures));
         }
 
+        protected override void LoadComplete()
+        {
+            base.LoadComplete();
+
+            var localeMappings = Enum.GetValues<Language>().Select(language =>
+            {
+#if DEBUG
+                if (language == Language.debug)
+                    return new LocaleMapping("debug", new DebugLocalisationStore());
+#endif
+
+                string cultureCode = language.ToCultureCode();
+
+                try
+                {
+                    return new LocaleMapping(new ResourceManagerLocalisationStore(cultureCode));
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, $"Could not load localisations for language \"{cultureCode}\"");
+                    return null;
+                }
+            }).Where(m => m != null);
+
+            Localisation.AddLocaleMappings(localeMappings);
+        }
+
         protected override IReadOnlyDependencyContainer CreateChildDependencies(IReadOnlyDependencyContainer parent) =>
             dependencies = new DependencyContainer(base.CreateChildDependencies(parent));
 
@@ -518,6 +562,8 @@ namespace osu.Game
             CustomConfig ??= new CustomConfigManager(Storage);
         }
 
+        #region Exit handling
+
         /// <summary>
         /// Use to programatically exit the game as if the user was triggering via alt-f4.
         /// By default, will keep persisting until an exit occurs (exit may be blocked multiple times).
@@ -532,10 +578,26 @@ namespace osu.Game
         }
 
         /// <summary>
+        /// An action that restarts the application after it has exited.
+        /// </summary>
+        [CanBeNull]
+        public Action RestartOnExitAction { private get; set; }
+
+        /// <summary>
+        /// Signals that the application should not be restarted after it is exited.
+        /// </summary>
+        public void CancelRestartOnExit()
+        {
+            RestartOnExitAction = null;
+        }
+
+        /// <summary>
         /// If supported by the platform, the game will automatically restart after the next exit.
         /// </summary>
         /// <returns>Whether a restart operation was queued.</returns>
         public virtual bool RestartAppWhenExited() => false;
+
+        #endregion
 
         /// <summary>
         /// Perform migration of user data to a specified path.
@@ -543,7 +605,7 @@ namespace osu.Game
         /// <param name="path">The path to migrate to.</param>
         /// <returns>Whether migration succeeded to completion. If <c>false</c>, some files were left behind.</returns>
         /// <exception cref="TimeoutException"></exception>
-        public bool Migrate(string path)
+        public bool MigrateUserData(string path)
         {
             Logger.Log($@"Migrating osu! data from ""{Storage.GetFullPath(string.Empty)}"" to ""{path}""...");
 
@@ -625,8 +687,11 @@ namespace osu.Game
                 case TouchHandler th:
                     return new TouchSettings(th);
 
+                case PenHandler ph:
+                    return new PenSettings(ph);
+
                 case MidiHandler:
-                    return new InputSection.HandlerSection(handler);
+                    return new InputSubsection(handler);
 
                 // return null for handlers that shouldn't have settings.
                 default:
@@ -649,16 +714,16 @@ namespace osu.Game
 
             Ruleset instance = null;
 
-            try
+            if (r.NewValue?.Available == true)
             {
-                if (r.NewValue?.Available == true)
+                try
                 {
                     instance = r.NewValue.CreateInstance();
                 }
-            }
-            catch (Exception e)
-            {
-                Logger.Error(e, "Ruleset load failed and has been rolled back");
+                catch (Exception e)
+                {
+                    Rulesets.RulesetStore.LogRulesetFailure(r.NewValue, e);
+                }
             }
 
             if (instance == null)
@@ -683,7 +748,7 @@ namespace osu.Game
             }
             catch (Exception e)
             {
-                Logger.Error(e, $"Could not load mods for \"{instance.RulesetInfo.Name}\" ruleset. Current ruleset has been rolled back.");
+                Rulesets.RulesetStore.LogRulesetFailure(r.NewValue, e);
                 revertRulesetChange();
                 return;
             }
@@ -739,10 +804,14 @@ namespace osu.Game
 
             beatmapUpdater?.Dispose();
 
+            onlineAssetStore?.Dispose();
+
             realm?.Dispose();
 
             if (Host != null)
                 Host.ExceptionThrown -= onExceptionThrown;
+
+            RestartOnExitAction?.Invoke();
         }
 
         ControlPointInfo IBeatSyncProvider.ControlPoints => Beatmap.Value.BeatmapLoaded ? Beatmap.Value.Beatmap.ControlPointInfo : null;

@@ -4,7 +4,6 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using System.Threading;
 using Windows.Foundation.Metadata;
 using Windows.Graphics;
 using Windows.Graphics.Capture;
@@ -18,7 +17,7 @@ using Vortice.DXGI;
 
 namespace osu.Game.Tournament.Components
 {
-    [SupportedOSPlatform("windows10.0.19041.0")]
+    [SupportedOSPlatform("windows10.0.26100.0")]
     public sealed class WgcCapture : IDisposable
     {
         private const int frame_buffer_count = 2;
@@ -31,6 +30,7 @@ namespace osu.Game.Tournament.Components
         private GraphicsCaptureSession? session;
         private SizeInt32 lastSize;
 
+        private readonly object latestTextureLock = new object();
         private ID3D11Texture2D? latestTexture;
         private int latestWidth;
         private int latestHeight;
@@ -63,7 +63,18 @@ namespace osu.Game.Tournament.Components
 
         public void Stop()
         {
-            IsRunning = false;
+            ID3D11Texture2D? old;
+
+            lock (latestTextureLock)
+            {
+                IsRunning = false;
+                old = latestTexture;
+                latestTexture = null;
+                latestWidth = 0;
+                latestHeight = 0;
+            }
+
+            old?.Release();
 
             if (framePool != null)
                 framePool.FrameArrived -= onFrameArrived;
@@ -76,9 +87,6 @@ namespace osu.Game.Tournament.Components
 
             releaseWinrtObject(item);
             item = null;
-
-            var old = Interlocked.Exchange(ref latestTexture, null);
-            old?.Release();
         }
 
         public bool TryAcquireLatestTexture(out ID3D11Texture2D texture, out int width, out int height)
@@ -87,14 +95,18 @@ namespace osu.Game.Tournament.Components
             width = 0;
             height = 0;
 
-            var current = Volatile.Read(ref latestTexture);
-            if (current == null)
-                return false;
+            lock (latestTextureLock)
+            {
+                var current = latestTexture;
+                if (current == null)
+                    return false;
 
-            current.AddRef();
-            width = Volatile.Read(ref latestWidth);
-            height = Volatile.Read(ref latestHeight);
-            texture = current;
+                current.AddRef();
+                width = latestWidth;
+                height = latestHeight;
+                texture = current;
+            }
+
             return true;
         }
 
@@ -118,8 +130,17 @@ namespace osu.Game.Tournament.Components
                 session.IsBorderRequired = false;
             }
 
+            if (ApiInformation.IsPropertyPresent(
+                    "Windows.Graphics.Capture.GraphicsCaptureSession",
+                    nameof(GraphicsCaptureSession.MinUpdateInterval)))
+            {
+                session.MinUpdateInterval = TimeSpan.FromMilliseconds(0);
+            }
+
             session.StartCapture();
-            IsRunning = true;
+
+            lock (latestTextureLock)
+                IsRunning = true;
         }
 
         private void onFrameArrived(Direct3D11CaptureFramePool sender, object args)
@@ -144,11 +165,23 @@ namespace osu.Game.Tournament.Components
                 }
 
                 var texture = getTextureFromSurface(frame.Surface);
-                var old = Interlocked.Exchange(ref latestTexture, texture);
-                old?.Release();
+                ID3D11Texture2D? old;
 
-                Volatile.Write(ref latestWidth, size.Width);
-                Volatile.Write(ref latestHeight, size.Height);
+                lock (latestTextureLock)
+                {
+                    if (!IsRunning || sender != framePool)
+                    {
+                        texture.Release();
+                        return;
+                    }
+
+                    old = latestTexture;
+                    latestTexture = texture;
+                    latestWidth = size.Width;
+                    latestHeight = size.Height;
+                }
+
+                old?.Release();
             }
         }
 

@@ -282,7 +282,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                     case AttachStatus.Attached:
                     {
                         if (!FetchDataFromMemory)
-                            return;
+                            continue;
 
                         try
                         {
@@ -292,7 +292,9 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
                             player.OnlineID.Value = user.OnlineID;
 
-                            var gameplayData = reader.GetGameplayData().GetValueOrDefault();
+                            var gameplayData = reader.GetGameplayData();
+                            if (gameplayData == null)
+                                continue;
 
                             player.Accuracy.Value = gameplayData.Accuracy / 100;
                             player.Combo.Value = gameplayData.Combo;

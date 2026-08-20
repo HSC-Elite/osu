@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using osu.Framework.Logging;
 using osu.Game.Online.API.Requests.Responses;
@@ -17,9 +18,15 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
         private const int diagnostic_log_interval_ms = 30000;
 
         // found with PercyDan54
-        private static readonly PatternInfo channel_id_pattern = new PatternInfo("8B CE BA 07 00 00 00 E8 ?? ?? ?? ?? A3 ?? ?? ?? ?? 89 15 ?? ?? ?? ?? E8", 0xd);
+        private static readonly PatternInfo channel_id_pattern = new PatternInfo("A3 ?? ?? ?? ?? 89 15 ?? ?? ?? ?? E8 ?? ?? ?? ?? 8B F0 B9 ?? ?? ?? ?? E8 ?? ?? ?? ?? 8B D0 8B CE E8 ?? ?? ?? ?? 8B F0 8B 0D ?? ?? ?? ?? 8B 15", 0x1);
 
         private static readonly PatternInfo chat_area_pattern = new PatternInfo("A1 ?? ?? ?? ?? 89 45 F0 8B D1 85 C9 75");
+
+        private static readonly PatternInfo[] additional_address_patterns =
+        {
+            channel_id_pattern,
+            chat_area_pattern
+        };
 
         private IntPtr? channelAddress;
 
@@ -30,23 +37,38 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
         {
             base.InitializeAddressInternal(regions);
 
-            Task.Factory.StartNew(async () =>
-            {
-                while (channelAddress == null)
-                {
-                    channelAddress = ResolveFromPatternInfo(channel_id_pattern, regions);
-                    await Task.Delay(1000).ConfigureAwait(false);
-                }
-            }, TaskCreationOptions.LongRunning);
+            _ = resolveAdditionalAddressesAsync(CancellationToken);
+        }
 
-            Task.Factory.StartNew(async () =>
+        private async Task resolveAdditionalAddressesAsync(CancellationToken cancellationToken)
+        {
+            try
             {
-                while (chatAreaAddress == null)
+                while ((channelAddress == null || chatAreaAddress == null) && !cancellationToken.IsCancellationRequested)
                 {
-                    chatAreaAddress = ResolveFromPatternInfo(chat_area_pattern, regions);
-                    await Task.Delay(1000).ConfigureAwait(false);
+                    IntPtr?[] addresses = ResolveFromPatternInfos(additional_address_patterns);
+
+                    if (addresses[0] != null)
+                        channelAddress = addresses[0];
+
+                    if (addresses[1] != null)
+                        chatAreaAddress = addresses[1];
+
+                    if (channelAddress != null && chatAreaAddress != null)
+                        return;
+
+                    Logger.Log($"channelAddress is {channelAddress?.ToString() ?? "null"}, chatAreaAddress is {chatAreaAddress?.ToString() ?? "null"}");
+
+                    await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
                 }
-            }, TaskCreationOptions.LongRunning);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, $"[TourneyManagerMemoryReader] Resolve additional addresses failed: {ex.Message}");
+            }
         }
 
         public TourneyState GetTourneyState()

@@ -4,6 +4,9 @@
 using System.Linq;
 using System.Threading;
 using osu.Framework.Allocation;
+using osu.Framework.Bindables;
+using osu.Framework.Graphics;
+using osu.Framework.Graphics.Containers;
 using osu.Framework.Platform;
 using osu.Framework.Testing;
 using osu.Framework.Utils;
@@ -11,6 +14,7 @@ using osu.Game.Beatmaps;
 using osu.Game.Overlays;
 using osu.Game.Rulesets;
 using osu.Game.Tests.Visual;
+using osu.Game.Online.Chat;
 using osu.Game.Tournament.IO;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.IPC.MemoryIPC;
@@ -66,7 +70,7 @@ namespace osu.Game.Tournament.Tests
                     Acronym = { Value = "JPN" },
                     FlagName = { Value = "JP" },
                     FullName = { Value = "Japan" },
-                    LastYearPlacing = { Value = 10 },
+                    LastYearPlacing = { Value = "#10" },
                     Seed = { Value = "#12" },
                     Note = { Value = "super veryyyyy loooooooooooooooong note" },
                     SeedingResults =
@@ -201,7 +205,11 @@ namespace osu.Game.Tournament.Tests
                     // this has to be run here rather than LoadComplete because
                     // TestScene.cs is checking the IsLoaded state (on another thread) and expects
                     // the runner to be loaded at that point.
-                    Add(runner = new TestSceneTestRunner.TestRunner());
+                    Add(new RefCountedBackbufferProvider
+                    {
+                        RelativeSizeAxes = Axes.Both,
+                        Child = runner = new TestSceneTestRunner.TestRunner()
+                    });
                 }));
             }
 
@@ -212,6 +220,17 @@ namespace osu.Game.Tournament.Tests
 
                 runner?.RunTestBlocking(test);
             }
+        }
+
+        protected partial class TestMatchIPCInfo : MatchIPCInfo, IProvideAdditionalData
+        {
+            public SlotPlayerStatus[] SlotPlayers { get; } = Enumerable.Range(0, 8).Select(_ => new SlotPlayerStatus()).ToArray();
+
+            public Bindable<Channel> TourneyChatChannel { get; } = new Bindable<Channel>();
+
+            public BindableInt Team1Combo { get; } = new BindableInt();
+
+            public BindableInt Team2Combo { get; } = new BindableInt();
         }
     }
 }

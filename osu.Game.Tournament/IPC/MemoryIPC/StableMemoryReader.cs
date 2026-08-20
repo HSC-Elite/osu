@@ -33,7 +33,13 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
         #endregion
 
+        private const int attach_retry_interval_ms = 2000;
+
         public int PlayTime { get; private set; }
+
+        private readonly object attachLock = new object();
+        private Task<bool>? attachTask;
+        private long nextAttachAttemptAt;
 
         public AttachStatus Status { get; private set; }
 
@@ -51,9 +57,58 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             return true;
         }
 
-        public Task<bool> AttachToProcessAsync(Process process) => Task.Run(() => AttachToProcess(process));
+        public Task<bool> AttachToProcessAsync(Process process) => beginAttach(() => AttachToProcess(process));
 
-        public Task<bool> AttachToProcessByTitleNameAsync(string titleName) => Task.Run(() => AttachToProcessByTitleName(titleName));
+        public Task<bool> AttachToProcessByTitleNameAsync(string titleName) => beginAttach(() => AttachToProcessByTitleName(titleName));
+
+        private Task<bool> beginAttach(Func<bool> attach)
+        {
+            lock (attachLock)
+            {
+                if (Status == AttachStatus.Attached)
+                    return Task.FromResult(true);
+
+                if (attachTask != null && !attachTask.IsCompleted)
+                    return attachTask;
+
+                long now = Environment.TickCount64;
+
+                if (now < nextAttachAttemptAt)
+                    return Task.FromResult(false);
+
+                Status = AttachStatus.Initializing;
+
+                return attachTask = Task.Run(() =>
+                {
+                    try
+                    {
+                        bool attached = attach();
+
+                        if (!attached)
+                            Status = AttachStatus.UnAttached;
+
+                        return attached;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        Status = AttachStatus.UnAttached;
+                        return false;
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error(ex, $"[StableMemoryReader] AttachToProcessAsync Failed: {ex.Message}");
+
+                        Status = AttachStatus.UnAttached;
+                        return false;
+                    }
+                    finally
+                    {
+                        if (Status != AttachStatus.Attached)
+                            nextAttachAttemptAt = Environment.TickCount64 + attach_retry_interval_ms;
+                    }
+                }, cts.Token);
+            }
+        }
 
         public override bool AttachToProcess(Process process)
         {
@@ -66,7 +121,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             if (osuModule == null || osuModule.ModuleName != "osu!.exe")
                 throw new InvalidOperationException("osu! module not found");
 
-            return InitializeAddressAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+            return initializeAddress();
         }
 
         #region Pattern
@@ -81,8 +136,19 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
         protected static readonly PatternInfo MODS_POINTER_PATTERN = new PatternInfo("C8 FF ?? ?? ?? ?? ?? 81 0D ?? ?? ?? ?? ?? 08 00 00", 0x9);
 
+        private static readonly PatternInfo[] stable_address_patterns =
+        {
+            GAME_BASE_PATTERN,
+            RULESETS_PATTERN,
+            PLAY_TIME_PATTERN,
+            SPECTATING_USER_PATTERN,
+            MODS_POINTER_PATTERN
+        };
+
         private readonly CancellationTokenSource cts = new CancellationTokenSource();
         private Task<bool>? initializeAddressTask;
+
+        protected CancellationToken CancellationToken => cts.Token;
 
         public Task<bool> InitializeAddressAsync()
         {
@@ -95,36 +161,46 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             if (initializeAddressTask != null && !initializeAddressTask.IsCompleted)
                 return initializeAddressTask;
 
-            return initializeAddressTask = Task.Run(() =>
+            return initializeAddressTask = Task.Run(initializeAddress, cts.Token);
+        }
+
+        private bool initializeAddress()
+        {
+            try
             {
-                try
-                {
-                    Status = AttachStatus.Initializing;
+                Status = AttachStatus.Initializing;
 
-                    var regions = QueryMemoryRegions(ProcessHandle);
+                var regions = QueryMemoryRegions(ProcessHandle);
 
-                    InitializeAddressInternal(regions);
+                InitializeAddressInternal(regions);
 
-                    Status = AttachStatus.Attached;
-                    return true;
-                }
-                catch (Exception ex)
-                {
-                    Logger.Error(ex, $"[StableMemoryReader] InitializeAddressAsync Failed: {ex.Message}");
+                Status = AttachStatus.Attached;
+                Logger.Log($"[StableMemoryReader] Attached! PID: {Process?.Id}, ReaderType: {GetType()}");
+                return true;
+            }
+            catch (OperationCanceledException)
+            {
+                Status = AttachStatus.UnAttached;
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, $"[StableMemoryReader] InitializeAddressAsync Failed: {ex.Message}");
 
-                    Status = AttachStatus.UnAttached;
-                    return false;
-                }
-            }, cts.Token);
+                Status = AttachStatus.UnAttached;
+                return false;
+            }
         }
 
         protected virtual void InitializeAddressInternal(List<MemoryRegion> regions)
         {
-            GameBaseAddress = ResolveFromPatternInfo(GAME_BASE_PATTERN, regions) ?? throw new InvalidOperationException("GameBase address not found");
-            RulesetsAddress = ResolveFromPatternInfo(RULESETS_PATTERN, regions) ?? throw new InvalidOperationException("Ruleset address not found");
-            PlayTimeAddress = ResolveFromPatternInfo(PLAY_TIME_PATTERN, regions) ?? throw new InvalidOperationException("PlayTime address not found");
-            SpectatingUser = ResolveFromPatternInfo(SPECTATING_USER_PATTERN, regions) ?? throw new InvalidOperationException("Spectating user address not found");
-            ModsPointerAddress = ResolveFromPatternInfo(MODS_POINTER_PATTERN, regions) ?? throw new InvalidOperationException("Mods pointer address not found");
+            IntPtr?[] addresses = ResolveFromPatternInfos(stable_address_patterns, regions);
+
+            GameBaseAddress = addresses[0] ?? throw new InvalidOperationException("GameBase address not found");
+            RulesetsAddress = addresses[1] ?? throw new InvalidOperationException("Ruleset address not found");
+            PlayTimeAddress = addresses[2] ?? throw new InvalidOperationException("PlayTime address not found");
+            SpectatingUser = addresses[3] ?? throw new InvalidOperationException("Spectating user address not found");
+            ModsPointerAddress = addresses[4] ?? throw new InvalidOperationException("Mods pointer address not found");
         }
 
         #endregion
@@ -139,7 +215,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             if (rulesetAddr == IntPtr.Zero)
                 return null;
 
-            IntPtr gameplayBaseAddr = ReadInt32(rulesetAddr + 0x68);
+            IntPtr gameplayBaseAddr = ReadInt32(rulesetAddr + 0x64);
             if (gameplayBaseAddr == IntPtr.Zero)
                 return null;
 
@@ -151,16 +227,18 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             if (hpBarAddr == IntPtr.Zero)
                 return null;
 
-            // [[[Ruleset + 0x68] + 0x38] + 0x28]
+            // [[[Ruleset + 0x64] + 0x38] + 0x28]
             string? playerName = ReadSharpString(ReadInt32(scoreAddr + 0x28));
 
+            IntPtr modsAddr = ReadInt32(scoreAddr + 0x1c);
+
             LegacyMods mods = (LegacyMods)
-                (ReadInt32(ReadInt32(scoreAddr + 0x1c) + 0xc) ^
-                 ReadInt32(ReadInt32(scoreAddr + 0x1c) + 0x8));
+                (ReadInt32(modsAddr + 0xc) ^
+                 ReadInt32(modsAddr + 0x8));
 
             int modeId = ReadInt32(scoreAddr + 0x64);
 
-            int score = ReadInt32(rulesetAddr + 0xfc);
+            int score = ReadInt32(rulesetAddr + 0xf8);
             double hpSmooth = ReadDouble(hpBarAddr + 0x14);
             double hp = ReadDouble(hpBarAddr + 0x1c);
             double acc = ReadDouble(ReadInt32(gameplayBaseAddr + 0x48) + 0xc);
@@ -178,13 +256,16 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
             if (PlayTime > 1000)
             {
-                hit100 = ReadShort(scoreAddr + 0x88);
-                hit300 = ReadShort(scoreAddr + 0x8A);
-                hit50 = ReadShort(scoreAddr + 0x8C);
-                hitGeki = ReadShort(scoreAddr + 0x8E);
-                hitKatu = ReadShort(scoreAddr + 0x90);
-                hitMiss = ReadShort(scoreAddr + 0x92);
-                combo = ReadShort(scoreAddr + 0x94);
+                Span<byte> hitData = stackalloc byte[14];
+                ReadBytes(scoreAddr + 0x88, hitData);
+
+                hit100 = BitConverter.ToInt16(hitData[..2]);
+                hit300 = BitConverter.ToInt16(hitData[2..4]);
+                hit50 = BitConverter.ToInt16(hitData[4..6]);
+                hitGeki = BitConverter.ToInt16(hitData[6..8]);
+                hitKatu = BitConverter.ToInt16(hitData[8..10]);
+                hitMiss = BitConverter.ToInt16(hitData[10..12]);
+                combo = BitConverter.ToInt16(hitData[12..14]);
                 maxCombo = ReadShort(scoreAddr + 0x68);
             }
 

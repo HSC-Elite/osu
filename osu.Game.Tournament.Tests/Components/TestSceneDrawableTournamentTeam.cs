@@ -17,6 +17,9 @@ namespace osu.Game.Tournament.Tests.Components
         [Cached]
         protected LadderInfo Ladder { get; private set; } = new LadderInfo();
 
+        [Cached]
+        private readonly MatchHeader matchHeader = new MatchHeader();
+
         public TestSceneDrawableTournamentTeam()
             : base(4, 3)
         {
