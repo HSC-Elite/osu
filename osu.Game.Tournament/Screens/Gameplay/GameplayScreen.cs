@@ -362,18 +362,25 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 new MatchListenerDetail(),
                 team1Score = new SettingsNumberBox
                 {
-                    LabelText = "队伍1分数",
+                    LabelText = "红队结算分数",
                 },
                 team2Score = new SettingsNumberBox
                 {
-                    LabelText = "队伍2分数",
+                    LabelText = "蓝队结算分数",
                 },
-                new TourneyButton
+                manualScoreButton = new TourneyButton
                 {
-                    Text = "应用分数",
+                    Text = "确认结算分数",
                     Action = () =>
                     {
-                        ipc.AddFakeEvent(team1Score.Current.Value ?? 0, team2Score.Current.Value ?? 0);
+                        if (team1Score.Current.Value == null || team2Score.Current.Value == null)
+                            return;
+
+                        if (ipc.SubmitManualResult(team1Score.Current.Value.Value, team2Score.Current.Value.Value))
+                        {
+                            team1Score.Current.Value = null;
+                            team2Score.Current.Value = null;
+                        }
                     }
                 },
                 new TourneyButton
@@ -445,8 +452,18 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
             ipc.CurrentlyPlaying.BindValueChanged(p =>
             {
+                if (p.NewValue)
+                    resultApplied = false;
+
                 updateState();
             });
+
+            ipc.CanSubmitManualResult.BindValueChanged(resultAvailable =>
+            {
+                team1Score.Current.Disabled = !resultAvailable.NewValue;
+                team2Score.Current.Disabled = !resultAvailable.NewValue;
+                manualScoreButton.Enabled.Value = resultAvailable.NewValue;
+            }, true);
 
             ipc.MatchFinished += getResult;
 
@@ -629,7 +646,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
             }
         }
 
-        private void showDraw(TeamColour colour)
+        private void showWithdrawal(TeamColour colour)
         {
             withdrawTextContainer.Clear();
             withdrawTextContainer.Width = 352;
@@ -649,8 +666,12 @@ namespace osu.Game.Tournament.Screens.Gameplay
         }
 
         private readonly BindableBool waitForResult = new BindableBool();
-        private SettingsNumberBox team1Score;
-        private SettingsNumberBox team2Score;
+        private SettingsNumberBox team1Score = null!;
+        private SettingsNumberBox team2Score = null!;
+        private TourneyButton manualScoreButton = null!;
+        private bool resultApplied;
+        private double appliedTeam1CoinDelta;
+        private double appliedTeam2CoinDelta;
 
         private void getResult(bool fromApi)
         {
@@ -664,23 +685,34 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
             scoreWarningContainer.FadeOut(100);
 
+            if (resultApplied)
+            {
+                CurrentMatch.Value.Team1Coin.Value -= appliedTeam1CoinDelta;
+                CurrentMatch.Value.Team2Coin.Value -= appliedTeam2CoinDelta;
+            }
+
+            appliedTeam1CoinDelta = 0;
+            appliedTeam2CoinDelta = 0;
+
             if (ipc.Score1.Value > ipc.Score2.Value)
             {
                 // 黄金加成
-                CurrentMatch.Value.Team1Coin.Value += TournamentGame.WINNER_BONUS + (isTB ? TournamentGame.EXTRA_WINNER_BONUS_TB : 0);
-                CurrentMatch.Value.Team2Coin.Value +=
-                    Math.Min(Math.Round((double)ipc.Score2.Value / Math.Max(ipc.Score1.Value, 1) * 100, 2, MidpointRounding.AwayFromZero),
-                        TournamentGame.LOSS_MAX_OBTAINABLE);
-                showDraw(TeamColour.Red);
+                appliedTeam1CoinDelta = TournamentGame.WINNER_BONUS + (isTB ? TournamentGame.EXTRA_WINNER_BONUS_TB : 0);
+                appliedTeam2CoinDelta = Math.Min(Math.Round((double)ipc.Score2.Value / Math.Max(ipc.Score1.Value, 1) * 100, 2, MidpointRounding.AwayFromZero),
+                    TournamentGame.LOSS_MAX_OBTAINABLE);
+                showWithdrawal(TeamColour.Red);
             }
             else
             {
-                CurrentMatch.Value.Team2Coin.Value += TournamentGame.WINNER_BONUS + (isTB ? TournamentGame.EXTRA_WINNER_BONUS_TB : 0);
-                CurrentMatch.Value.Team1Coin.Value +=
-                    Math.Min(Math.Round((double)ipc.Score1.Value / Math.Max(ipc.Score2.Value, 1) * 100, 2, MidpointRounding.AwayFromZero),
-                        TournamentGame.LOSS_MAX_OBTAINABLE);
-                showDraw(TeamColour.Blue);
+                appliedTeam2CoinDelta = TournamentGame.WINNER_BONUS + (isTB ? TournamentGame.EXTRA_WINNER_BONUS_TB : 0);
+                appliedTeam1CoinDelta = Math.Min(Math.Round((double)ipc.Score1.Value / Math.Max(ipc.Score2.Value, 1) * 100, 2, MidpointRounding.AwayFromZero),
+                    TournamentGame.LOSS_MAX_OBTAINABLE);
+                showWithdrawal(TeamColour.Blue);
             }
+
+            CurrentMatch.Value.Team1Coin.Value += appliedTeam1CoinDelta;
+            CurrentMatch.Value.Team2Coin.Value += appliedTeam2CoinDelta;
+            resultApplied = true;
 
             if (!fromApi)
             {

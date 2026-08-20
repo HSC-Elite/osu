@@ -15,6 +15,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC.Drawables
         private readonly OsuSpriteText currentlyPlayingText;
         private readonly OsuSpriteText latestMatchEventIDText;
         private readonly OsuSpriteText abortedText;
+        private readonly OsuSpriteText lastFetchSuccess;
 
         [Resolved]
         private MatchIPCInfo matchInfo { get; set; } = null!;
@@ -36,6 +37,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC.Drawables
                     currentlyPlayingText = createText(),
                     latestMatchEventIDText = createText(),
                     abortedText = createText(),
+                    lastFetchSuccess = createText(),
                 }
             };
         }
@@ -56,6 +58,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC.Drawables
             currentlyPlayingText.Text = $"游玩状态: {(ipc.CurrentlyPlaying.Value ? "游玩中" : "未游玩")}";
             latestMatchEventIDText.Text = $"最后一个EventID: {ipc.LatestMatchEventID}";
             abortedText.Text = $"Aborted: {ipc.Aborted}";
+            lastFetchSuccess.Text = $"上次抓取{(ipc.LastFetchSuccess ? "成功" : "失败")}";
         }
     }
 }
