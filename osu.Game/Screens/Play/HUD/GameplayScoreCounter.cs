@@ -44,7 +44,7 @@ namespace osu.Game.Screens.Play.HUD
                     multiplier = scoreProcessor.Mods.Value.Aggregate(1.0, (acc, mod) => acc * (modMultiplierProvider.GetModMultiplierFromMod(mod) / mod.ScoreMultiplier ?? 1.0));
                 }
 
-                Current.Value = (long)(scoreProcessor.GetDisplayScore(scoreDisplayMode.Value) * multiplier ?? 1);
+                Current.Value = (long)(scoreProcessor.GetDisplayScore(scoreDisplayMode.Value) * (multiplier ?? 1));
             }
         }
     }
