@@ -49,7 +49,7 @@ namespace osu.Game.Tournament.Screens.Editors
                         AutoSizeAxes = Axes.Y,
                         Children = new Drawable[]
                         {
-                            new LabelledEnumDropdown<LegacyMods>
+                            new LabelledEnumDropdown<LegacyMods>(true)
                             {
                                 Width = 0.3f,
                                 Label = "Mod",

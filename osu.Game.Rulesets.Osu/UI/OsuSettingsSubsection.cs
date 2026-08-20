@@ -3,8 +3,10 @@
 
 using osu.Framework.Allocation;
 using osu.Framework.Graphics;
+using osu.Framework.Graphics.UserInterface;
 using osu.Framework.Localisation;
 using osu.Game.Configuration;
+using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Localisation;
 using osu.Game.Overlays.Settings;
 using osu.Game.Rulesets.Osu.Configuration;
@@ -28,37 +30,45 @@ namespace osu.Game.Rulesets.Osu.UI
 
             Children = new Drawable[]
             {
-                new SettingsCheckbox
+                new SettingsItemV2(new FormCheckBox
                 {
-                    LabelText = RulesetSettingsStrings.SnakingInSliders,
+                    Caption = RulesetSettingsStrings.SnakingInSliders,
                     Current = config.GetBindable<bool>(OsuRulesetSetting.SnakingInSliders)
-                },
-                new SettingsCheckbox
+                }),
+                new SettingsItemV2(new FormCheckBox
                 {
-                    ClassicDefault = false,
-                    LabelText = RulesetSettingsStrings.SnakingOutSliders,
+                    Caption = RulesetSettingsStrings.SnakingOutSliders,
                     Current = config.GetBindable<bool>(OsuRulesetSetting.SnakingOutSliders)
-                },
-                new SettingsCheckbox
+                })
                 {
-                    LabelText = "Hide 300s",
+                    ApplyClassicDefault = c => ((IHasCurrentValue<bool>)c).Current.Value = false,
+                },
+                new SettingsItemV2(new FormCheckBox
+                {
+                    Caption = "Hide 300s",
                     Current = config.GetBindable<bool>(OsuRulesetSetting.NoDraw300)
-                },
-                new SettingsCheckbox
+                }),
+                new SettingsItemV2(new FormCheckBox
                 {
-                    LabelText = RulesetSettingsStrings.CursorTrail,
+                    Caption = RulesetSettingsStrings.HitAnimations,
+                    HintText = RulesetSettingsStrings.HitAnimationsOsuTooltip,
+                    Current = config.GetBindable<bool>(OsuRulesetSetting.HitAnimations)
+                }),
+                new SettingsItemV2(new FormCheckBox
+                {
+                    Caption = RulesetSettingsStrings.CursorTrail,
                     Current = config.GetBindable<bool>(OsuRulesetSetting.ShowCursorTrail)
-                },
-                new SettingsCheckbox
+                }),
+                new SettingsItemV2(new FormCheckBox
                 {
-                    LabelText = RulesetSettingsStrings.CursorRipples,
+                    Caption = RulesetSettingsStrings.CursorRipples,
                     Current = config.GetBindable<bool>(OsuRulesetSetting.ShowCursorRipples)
-                },
-                new SettingsEnumDropdown<PlayfieldBorderStyle>
+                }),
+                new SettingsItemV2(new FormEnumDropdown<PlayfieldBorderStyle>
                 {
-                    LabelText = RulesetSettingsStrings.PlayfieldBorderStyle,
+                    Caption = RulesetSettingsStrings.PlayfieldBorderStyle,
                     Current = config.GetBindable<PlayfieldBorderStyle>(OsuRulesetSetting.PlayfieldBorderStyle),
-                },
+                }),
             };
         }
     }
