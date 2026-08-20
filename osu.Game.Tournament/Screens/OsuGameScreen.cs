@@ -132,5 +132,9 @@ namespace osu.Game.Tournament.Screens
 
         public ILocalUserState LocalUserState => api.LocalUserState;
         public SessionVerificationMethod? SessionVerificationMethod => api.SessionVerificationMethod;
+
+        public string ScoreProcessingNoticeUrl => api.ScoreProcessingNoticeUrl;
+
+        public IBindable<string?> UserFacingOutageMessage => api.UserFacingOutageMessage;
     }
 }
