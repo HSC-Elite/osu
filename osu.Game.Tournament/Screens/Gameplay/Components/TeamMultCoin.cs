@@ -182,13 +182,15 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
             ipc.MatchAborted += () => triggerAnimationWhenMatchFinished(coin.Value ?? 0, coin.Value ?? 0);
             //ipc.MatchFinished += _ => triggerAnimationWhenMatchFinished(coin.Value ?? 0, coin.Value ?? 0);
 
-            Scheduler.AddDelayed(() =>
+            /*Scheduler.AddDelayed(() =>
             {
                 var leftColor = getRandomColour();
                 var rightColor = getRandomColour();
 
                 diffBar.Box.FadeColour(ColourInfo.GradientHorizontal(leftColor, rightColor), 1000);
-            }, 1000, true);
+            }, 1000, true);*/
+
+            diffBar.Box.Colour = Color4.Yellow;
         }
 
         private Color4 getRandomColour()
