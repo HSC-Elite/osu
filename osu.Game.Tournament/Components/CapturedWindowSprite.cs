@@ -18,6 +18,7 @@ using osu.Framework.Graphics.Textures;
 using osu.Framework.Graphics.Veldrid;
 using osu.Framework.Graphics.Veldrid.Textures;
 using osu.Framework.Logging;
+using osu.Game.Tournament.Configuration;
 using osu.Game.Tournament.Models;
 using SixLabors.ImageSharp.PixelFormats;
 using Vortice.Direct3D11;
@@ -47,9 +48,6 @@ namespace osu.Game.Tournament.Components
 
         private bool isWindowsLive = false;
 
-        [Resolved]
-        private LadderInfo? ladder { get; set; }
-
         public CapturedWindowSprite(string windowTitle)
         {
             Masking = true;
@@ -60,7 +58,7 @@ namespace osu.Game.Tournament.Components
         }
 
         [BackgroundDependencyLoader]
-        private void load()
+        private void load(TournamentConfigManager config)
         {
             sprite = new Sprite
             {
@@ -72,10 +70,7 @@ namespace osu.Game.Tournament.Components
 
             AddInternal(sprite);
 
-            if (ladder != null)
-            {
-                FrameRate.BindTo(ladder.FrameRate);
-            }
+            config.BindWith(TournamentConfig.CaptureFrameRate, FrameRate);
 
             d3d11Available = D3D11Interop.TryGetD3D11Device(renderer, out var device, out _, out _);
 

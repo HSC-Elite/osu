@@ -30,7 +30,7 @@ namespace osu.Game.Tournament.IO
 
             TournamentConfigManager = new TournamentConfigManager(storage);
 
-            CurrentTournament = TournamentConfigManager.GetBindable<string>(StorageConfig.CurrentTournament);
+            CurrentTournament = TournamentConfigManager.GetBindable<string>(TournamentConfig.CurrentTournament);
 
             ChangeTargetStorage(AllTournaments.GetStorageForDirectory(CurrentTournament.Value));
 

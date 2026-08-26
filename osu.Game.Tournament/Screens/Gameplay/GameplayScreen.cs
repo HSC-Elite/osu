@@ -19,6 +19,7 @@ using osu.Game.Graphics;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Overlays.Settings;
 using osu.Game.Tournament.Components;
+using osu.Game.Tournament.Configuration;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.Models;
 using osu.Game.Tournament.Screens.Gameplay.Components;
@@ -63,6 +64,9 @@ namespace osu.Game.Tournament.Screens.Gameplay
         [Resolved]
         private OsuColour colours { get; set; } = null!;
 
+        [Resolved]
+        private TournamentConfigManager config { get; set; } = null!;
+
         private Drawable chroma = null!;
 
         protected override SongBar CreateSongBar() => new GameplaySongBar
@@ -78,9 +82,13 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
         private bool switchFromMappool;
 
+        private BindableInt frameRate = new BindableInt(60);
+
         [BackgroundDependencyLoader]
         private void load(TextureStore store)
         {
+            config.BindWith(TournamentConfig.CaptureFrameRate, frameRate);
+
             AddRangeInternal(new Drawable[]
             {
                 new TourneyVideo("gameplay")
@@ -183,7 +191,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 new SettingsSlider<int>
                 {
                     LabelText = "Frame rate",
-                    Current = LadderInfo.FrameRate,
+                    Current = frameRate,
                     KeyboardStep = 1,
                 },
                 frameRateInputBox = new SettingsNumberBox
@@ -290,13 +298,13 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 switchFromMappool = false;
             });
 
-            LadderInfo.FrameRate.BindValueChanged(f => frameRateInputBox.Current.Value = f.NewValue, true);
+            frameRate.BindValueChanged(f => frameRateInputBox.Current.Value = f.NewValue, true);
             frameRateInputBox.Current.BindValueChanged(f =>
             {
                 if (f.NewValue == null)
                     return;
 
-                LadderInfo.FrameRate.Value = f.NewValue.Value;
+                frameRate.Value = f.NewValue.Value;
             });
         }
 
