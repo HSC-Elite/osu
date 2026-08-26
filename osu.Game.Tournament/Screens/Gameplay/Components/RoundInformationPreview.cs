@@ -262,7 +262,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
             }
 
             int mapCount = ladderInfo.CurrentMatch.Value.Round.Value.Beatmaps.Count;
-            int remainMapCount = mapCount - ladderInfo.CurrentMatch.Value.PicksBans.Count;
+            int remainMapCount = mapCount - ladderInfo.CurrentMatch.Value.PicksBans.Count(p => p.IsConsumed());
 
             mapCountText.Text = $"图池内谱面数量：{mapCount}  |  图池内剩余谱面：{remainMapCount}";
 
