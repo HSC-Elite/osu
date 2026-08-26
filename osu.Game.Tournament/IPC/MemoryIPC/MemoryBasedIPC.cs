@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Versioning;
+using System.Text.RegularExpressions;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Logging;
@@ -237,7 +238,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
         {
             base.Update();
 
-            if(!OperatingSystem.IsWindows()) return;
+            if (!OperatingSystem.IsWindows() && !OperatingSystem.IsLinux()) return;
 
             lastUpdateTime += Time.Elapsed;
 
@@ -249,7 +250,12 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             switch (tourneyManagerMemoryReader.Status)
             {
                 case AttachStatus.UnAttached:
-                    tourneyManagerMemoryReader.AttachToProcessByTitleNameAsync(" Tournament Manager");
+
+                    if (OperatingSystem.IsWindows())
+                        tourneyManagerMemoryReader.AttachToProcessByTitleNameAsync(" Tournament Manager");
+                    else
+                        tourneyManagerMemoryReader.AttachToProcessByProcessCommandLineAsync(s => !s.Contains($"-spectateclient"));
+
                     available.Value = false;
                     break;
 
@@ -271,7 +277,16 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                 switch (reader.Status)
                 {
                     case AttachStatus.UnAttached:
-                        reader.AttachToProcessByTitleNameAsync($"{TournamentGame.TOURNAMENT_CLIENT_NAME}{i}");
+                        if (OperatingSystem.IsWindows())
+                        {
+                            reader.AttachToProcessByTitleNameAsync($"{TournamentGame.TOURNAMENT_CLIENT_NAME}{i}");
+                        }
+                        else
+                        {
+                            int index = i;
+                            reader.AttachToProcessByProcessCommandLineAsync(s => s.Contains($"-spectateclient {index}"));
+                        }
+
                         continue;
 
                     case AttachStatus.Initializing:

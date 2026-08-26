@@ -61,6 +61,8 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
         public Task<bool> AttachToProcessByTitleNameAsync(string titleName) => beginAttach(() => AttachToProcessByTitleName(titleName));
 
+        public Task<bool> AttachToProcessByProcessCommandLineAsync(Func<string, bool> matches) => beginAttach(() => AttachToProcessByProcessCommandLine("osu!.exe", matches));
+
         private Task<bool> beginAttach(Func<bool> attach)
         {
             lock (attachLock)
@@ -118,7 +120,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                 return false;
 
             ProcessModule? osuModule = Process?.MainModule;
-            if (osuModule == null || osuModule.ModuleName != "osu!.exe")
+            if (OperatingSystem.IsWindows() && (osuModule == null || osuModule.ModuleName != "osu!.exe"))
                 throw new InvalidOperationException("osu! module not found");
 
             return initializeAddress();

@@ -5,12 +5,14 @@ using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
+using System.IO;
+using System.Management;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
 namespace osu.Game.Tournament.IPC.MemoryIPC
 {
-    [SupportedOSPlatform("windows")]
     public class MemoryReader : IDisposable
     {
         public IntPtr ProcessHandle { get; private set; }
@@ -21,15 +23,117 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
         public bool AttachToProcessByTitleName(string titleName)
         {
+            if (!OperatingSystem.IsWindows())
+                return false;
+
             Process? p = WindowsAPI.GetProcessByWindowTitle(titleName, false);
             return p != null && AttachToProcess(p);
+        }
+
+        public bool AttachToProcessByProcessCommandLine(string processName, Func<string, bool> matches)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(processName);
+            ArgumentNullException.ThrowIfNull(matches);
+
+            if (OperatingSystem.IsWindows())
+                return attachToWindowsProcessByCommandLine(processName, matches);
+
+            if (OperatingSystem.IsLinux())
+                return attachToLinuxProcessByCommandLine(processName, matches);
+
+            return false;
+        }
+
+        private bool attachToLinuxProcessByCommandLine(string processName, Func<string, bool> matches)
+        {
+            foreach (Process process in Process.GetProcesses())
+            {
+                try
+                {
+                    if (!processNamesMatch(process.ProcessName, processName))
+                        continue;
+
+                    string commandLine = File.ReadAllText($"/proc/{process.Id}/cmdline").Replace('\0', ' ').TrimEnd();
+                    if (!matches(commandLine))
+                        continue;
+
+                    if (AttachToProcess(process))
+                        return true;
+                }
+                catch (IOException)
+                {
+                }
+                catch (UnauthorizedAccessException)
+                {
+                }
+                finally
+                {
+                    if (!ReferenceEquals(process, this.Process))
+                        process.Dispose();
+                }
+            }
+
+            return false;
+        }
+
+        [SupportedOSPlatform("windows")]
+        private bool attachToWindowsProcessByCommandLine(string processName, Func<string, bool> matches)
+        {
+            using var searcher = new ManagementObjectSearcher("SELECT ProcessId, Name, CommandLine FROM Win32_Process");
+
+            foreach (ManagementObject processInfo in searcher.Get())
+            {
+                if (processInfo["ProcessId"] is not uint processId
+                    || processInfo["Name"] is not string name
+                    || !processNamesMatch(name, processName)
+                    || processInfo["CommandLine"] is not string commandLine
+                    || !matches(commandLine))
+                    continue;
+
+                Process? process = null;
+
+                try
+                {
+                    process = Process.GetProcessById((int)processId);
+
+                    if (AttachToProcess(process))
+                        return true;
+                }
+                catch (ArgumentException)
+                {
+                }
+                finally
+                {
+                    if (process != null && !ReferenceEquals(process, this.Process))
+                        process.Dispose();
+                }
+            }
+
+            return false;
+        }
+
+        private static bool processNamesMatch(string processName, string expectedProcessName)
+        {
+            return Path.GetFileNameWithoutExtension(processName).Equals(Path.GetFileNameWithoutExtension(expectedProcessName), StringComparison.OrdinalIgnoreCase);
         }
 
         public virtual bool AttachToProcess(Process process)
         {
             this.Process = process;
-            ProcessHandle = WindowsAPI.OpenProcess(WindowsAPI.ProcessAccessFlags.VMRead | WindowsAPI.ProcessAccessFlags.QueryInformation, false, process.Id);
-            return ProcessHandle != IntPtr.Zero;
+
+            if (OperatingSystem.IsWindows())
+            {
+                ProcessHandle = WindowsAPI.OpenProcess(WindowsAPI.ProcessAccessFlags.VMRead | WindowsAPI.ProcessAccessFlags.QueryInformation, false, process.Id);
+                return ProcessHandle != IntPtr.Zero;
+            }
+
+            if (OperatingSystem.IsLinux())
+            {
+                ProcessHandle = new IntPtr(process.Id);
+                return !process.HasExited;
+            }
+
+            throw new PlatformNotSupportedException("Memory reading is supported only on Windows and Linux.");
         }
 
         #region Basic Method
@@ -39,7 +143,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             ThrowIfNotAttached();
 
             Span<byte> buffer = stackalloc byte[4];
-            WindowsAPI.ReadProcessMemory(ProcessHandle, address, buffer, buffer.Length, out _);
+            readProcessMemory(ProcessHandle, address, buffer, out _);
             return BitConverter.ToInt32(buffer);
         }
 
@@ -48,7 +152,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             ThrowIfNotAttached();
 
             Span<byte> buffer = stackalloc byte[8];
-            WindowsAPI.ReadProcessMemory(ProcessHandle, address, buffer, buffer.Length, out _);
+            readProcessMemory(ProcessHandle, address, buffer, out _);
             return BitConverter.ToInt64(buffer);
         }
 
@@ -57,7 +161,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             ThrowIfNotAttached();
 
             Span<byte> buffer = stackalloc byte[2];
-            WindowsAPI.ReadProcessMemory(ProcessHandle, address, buffer, buffer.Length, out _);
+            readProcessMemory(ProcessHandle, address, buffer, out _);
             return BitConverter.ToInt16(buffer);
         }
 
@@ -66,7 +170,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             ThrowIfNotAttached();
 
             Span<byte> buffer = stackalloc byte[4];
-            WindowsAPI.ReadProcessMemory(ProcessHandle, address, buffer, buffer.Length, out _);
+            readProcessMemory(ProcessHandle, address, buffer, out _);
             return BitConverter.ToSingle(buffer);
         }
 
@@ -75,7 +179,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             ThrowIfNotAttached();
 
             Span<byte> buffer = stackalloc byte[8];
-            WindowsAPI.ReadProcessMemory(ProcessHandle, address, buffer, buffer.Length, out _);
+            readProcessMemory(ProcessHandle, address, buffer, out _);
             return BitConverter.ToDouble(buffer);
         }
 
@@ -84,7 +188,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             ThrowIfNotAttached();
 
             byte[] buffer = new byte[length];
-            WindowsAPI.ReadProcessMemory(ProcessHandle, address, buffer, length, out _);
+            readProcessMemory(ProcessHandle, address, buffer, out _);
             return buffer;
         }
 
@@ -92,7 +196,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
         {
             ThrowIfNotAttached();
 
-            WindowsAPI.ReadProcessMemory(ProcessHandle, address, buffer, buffer.Length, out _);
+            readProcessMemory(ProcessHandle, address, buffer, out _);
         }
 
         public string ReadString(IntPtr address, int length)
@@ -115,7 +219,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
             byte[] buffer = new byte[byteSize];
 
-            WindowsAPI.ReadProcessMemory(ProcessHandle, address, buffer, buffer.Length, out _);
+            readProcessMemory(ProcessHandle, address, buffer, out _);
 
             return byteArrayToStructure<T>(buffer);
         }
@@ -123,6 +227,22 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
         public IntPtr GetModuleBase(string moduleName)
         {
             ThrowIfNotAttached();
+
+            if (OperatingSystem.IsLinux())
+            {
+                foreach (string line in File.ReadLines($"/proc/{Process!.Id}/maps"))
+                {
+                    string[] fields = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (fields.Length < 6 || !Path.GetFileName(fields[5]).Equals(moduleName, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    string[] addressRange = fields[0].Split('-');
+                    if (addressRange.Length == 2 && long.TryParse(addressRange[0], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out long baseAddress))
+                        return new IntPtr(baseAddress);
+                }
+
+                return IntPtr.Zero;
+            }
 
             foreach (ProcessModule mod in Process!.Modules)
             {
@@ -143,7 +263,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
         protected virtual void Dispose(bool disposing)
         {
-            if (ProcessHandle != IntPtr.Zero)
+            if (OperatingSystem.IsWindows() && ProcessHandle != IntPtr.Zero)
                 WindowsAPI.CloseHandle(ProcessHandle);
         }
 
@@ -262,8 +382,6 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
             byte[] sharedBuffer = ArrayPool<byte>.Shared.Rent(buffer_size + headSize);
 
-            var handle = GCHandle.Alloc(sharedBuffer, GCHandleType.Pinned);
-
             try
             {
                 foreach (var region in regions)
@@ -283,9 +401,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
                         IntPtr bytesRead;
 
-                        IntPtr targetPtr = Marshal.UnsafeAddrOfPinnedArrayElement(sharedBuffer, copiedTail);
-
-                        if (!WindowsAPI.ReadProcessMemory(processHandle, regionStart + offset, targetPtr, readSize, out bytesRead)
+                        if (!readProcessMemory(processHandle, regionStart + offset, sharedBuffer.AsSpan(copiedTail, readSize), out bytesRead)
                             || bytesRead <= 0)
                         {
                             copiedTail = 0;
@@ -334,7 +450,6 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             }
             finally
             {
-                handle.Free();
                 ArrayPool<byte>.Shared.Return(sharedBuffer);
             }
         }
@@ -356,6 +471,34 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
         public static List<MemoryRegion> QueryMemoryRegions(IntPtr processHandle)
         {
             List<MemoryRegion> regions = new List<MemoryRegion>();
+
+            if (OperatingSystem.IsLinux())
+            {
+                foreach (string line in File.ReadLines($"/proc/{processHandle.ToInt32()}/maps"))
+                {
+                    string[] fields = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (fields.Length < 2 || fields[1].Length < 2 || fields[1][0] != 'r' || fields[1][1] != 'w')
+                        continue;
+
+                    string[] addressRange = fields[0].Split('-');
+                    if (addressRange.Length != 2
+                        || !long.TryParse(addressRange[0], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out long startAddress)
+                        || !long.TryParse(addressRange[1], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out long endAddress))
+                        continue;
+
+                    regions.Add(new MemoryRegion
+                    {
+                        BaseAddress = new IntPtr(startAddress),
+                        RegionSize = new IntPtr(endAddress - startAddress),
+                    });
+                }
+
+                return regions;
+            }
+
+            if (!OperatingSystem.IsWindows())
+                throw new PlatformNotSupportedException("Memory reading is supported only on Windows and Linux.");
+
             IntPtr address = IntPtr.Zero;
 
             while (true)
@@ -384,6 +527,42 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
             return regions;
         }
+
+        private static unsafe bool readProcessMemory(IntPtr processHandle, IntPtr address, Span<byte> buffer, out IntPtr bytesRead)
+        {
+            if (OperatingSystem.IsWindows())
+                return WindowsAPI.ReadProcessMemory(processHandle, address, buffer, buffer.Length, out bytesRead);
+
+            if (OperatingSystem.IsLinux())
+            {
+                if (buffer.Length == 0)
+                {
+                    bytesRead = IntPtr.Zero;
+                    return true;
+                }
+
+                fixed (byte* bufferPointer = buffer)
+                {
+                    IOVector localVector = new IOVector { Base = bufferPointer, Length = (nuint)buffer.Length };
+                    IOVector remoteVector = new IOVector { Base = address.ToPointer(), Length = (nuint)buffer.Length };
+                    nint result = process_vm_readv(processHandle.ToInt32(), &localVector, 1, &remoteVector, 1, 0);
+                    bytesRead = new IntPtr(result);
+                    return result == buffer.Length;
+                }
+            }
+
+            throw new PlatformNotSupportedException("Memory reading is supported only on Windows and Linux.");
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private unsafe struct IOVector
+        {
+            public void* Base;
+            public nuint Length;
+        }
+
+        [DllImport("libc", SetLastError = true)]
+        private static extern unsafe nint process_vm_readv(int processId, IOVector* localVectors, nuint localVectorCount, IOVector* remoteVectors, nuint remoteVectorCount, nuint flags);
 
         #endregion
 
