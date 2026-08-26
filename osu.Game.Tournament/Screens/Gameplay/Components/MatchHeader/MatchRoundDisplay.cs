@@ -43,6 +43,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components.MatchHeader
             }
         }
 
+        private const float minimum_Width = 180;
+
         [BackgroundDependencyLoader]
         private void load(LadderInfo ladder)
         {
@@ -51,6 +53,11 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components.MatchHeader
 
             InternalChildren = new Drawable[]
             {
+                new Container
+                {
+                    Width = minimum_Width,
+                },
+
                 coinContainer = new Container
                 {
                     Name = "multCoin",
@@ -142,7 +149,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components.MatchHeader
 
             public MatchHeaderBackground()
             {
-                Width = 180;
+                RelativeSizeAxes = Axes.X;
                 Height = 34;
 
                 InternalChildren = new Drawable[]
