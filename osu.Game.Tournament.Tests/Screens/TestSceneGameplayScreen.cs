@@ -5,6 +5,7 @@ using System.Linq;
 using NUnit.Framework;
 using osu.Framework.Allocation;
 using osu.Framework.Graphics;
+using osu.Framework.Graphics.Containers;
 using osu.Framework.Testing;
 using osu.Game.Online.API;
 using osu.Game.Online.API.Requests;
@@ -29,6 +30,18 @@ namespace osu.Game.Tournament.Tests.Screens
 
         [Cached]
         private TournamentMatchChatDisplay chat = new TournamentMatchChatDisplay { Width = 0.5f };
+
+        [Cached]
+        private readonly MatchHeader matchHeader = new MatchHeader();
+
+        private readonly Container matchHeaderContainer = new Container();
+
+        [BackgroundDependencyLoader]
+        private void load()
+        {
+            Content.Add(matchHeaderContainer);
+            matchHeader.SetupDefaultContainer(matchHeaderContainer);
+        }
 
         [Test]
         public void TestWarmup()
@@ -187,14 +200,10 @@ namespace osu.Game.Tournament.Tests.Screens
 
         private void checkScoreVisibility(bool visible)
             => AddUntilStep($"scores {(visible ? "shown" : "hidden")}",
-                () =>
-                {
-                    var scores = this.ChildrenOfType<TeamScore>().ToArray();
-                    return scores.Length > 0 && scores.All(score => score.ShowScore == visible);
-                });
+                () => matchHeader.ShowScores == visible);
 
         private void toggleWarmup()
-            => AddStep("toggle warmup", () => this.ChildrenOfType<TourneyButton>().First(btn => btn.Text == "Toggle warmup").TriggerClick());
+            => AddStep("toggle warmup", () => this.ChildrenOfType<TourneyButton>().First(btn => btn.Text == "切换热手").TriggerClick());
 
         private void setupMatchApi()
         {

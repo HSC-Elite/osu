@@ -2,6 +2,7 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System.Linq;
+using NUnit.Framework;
 using System.Threading;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
@@ -30,7 +31,7 @@ namespace osu.Game.Tournament.Tests
         [Cached]
         protected LadderInfo Ladder { get; private set; } = new LadderInfo();
 
-        [Cached]
+        [Cached(Type = typeof(MatchIPCInfo))]
         protected MatchIPCInfo IPCInfo { get; private set; } = new MemoryBasedIPCWithMatchListener();
 
         [Resolved]
@@ -59,6 +60,36 @@ namespace osu.Game.Tournament.Tests
         public virtual void SetUpSteps()
         {
             AddStep("set current match", () => Ladder.CurrentMatch.Value = match);
+        }
+
+        [Test]
+        public void TestVisibleTournamentComponentsLoad()
+        {
+            AddUntilStep("visible tournament components loaded", () => this.ChildrenOfType<Drawable>()
+                                                                           .Where(isVisibleTournamentComponent)
+                                                                           .All(drawable => drawable.IsLoaded));
+        }
+
+        private static bool isVisibleTournamentComponent(Drawable drawable)
+        {
+            if (!drawable.IsAlive || drawable is not CompositeDrawable || drawable.GetType().Assembly != typeof(TournamentMatch).Assembly)
+                return false;
+
+            for (Drawable? ancestor = drawable; ancestor != null; ancestor = ancestor.Parent)
+            {
+                if (!ancestor.IsPresent)
+                    return false;
+            }
+
+            return true;
+        }
+
+        protected partial class MatchIpcInfoDependencyProbe : CompositeDrawable
+        {
+            public MatchIPCInfo? ResolvedIpcInfo { get; private set; }
+
+            [BackgroundDependencyLoader]
+            private void load(MatchIPCInfo ipcInfo) => ResolvedIpcInfo = ipcInfo;
         }
 
         public static TournamentMatch CreateSampleMatch() => new TournamentMatch
@@ -161,7 +192,7 @@ namespace osu.Game.Tournament.Tests
             {
                 Value = new TournamentRound
                 {
-                    Name = { Value = "Quarterfinals" },
+                    Name = { Value = "太长长长长长长长长长长长长长长长了" },
                     Beatmaps =
                     {
                         new RoundBeatmap

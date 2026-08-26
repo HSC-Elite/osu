@@ -1,8 +1,12 @@
 ﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
+using System.Linq;
+using NUnit.Framework;
 using osu.Framework.Allocation;
 using osu.Framework.Graphics;
+using osu.Framework.Graphics.Containers;
+using osu.Framework.Testing;
 using osu.Game.Tests.Visual;
 using osu.Game.Tournament.Components;
 using osu.Game.Tournament.Models;
@@ -115,6 +119,28 @@ namespace osu.Game.Tournament.Tests.Components
                     Origin = Anchor.Centre,
                 }
             });
+        }
+
+        [Test]
+        public void TestVisibleTournamentComponentsLoad()
+        {
+            AddUntilStep("visible tournament components loaded", () => this.ChildrenOfType<Drawable>()
+                                                                          .Where(isVisibleTournamentComponent)
+                                                                          .All(drawable => drawable.IsLoaded));
+        }
+
+        private static bool isVisibleTournamentComponent(Drawable drawable)
+        {
+            if (!drawable.IsAlive || drawable is not CompositeDrawable || drawable.GetType().Assembly != typeof(TournamentMatch).Assembly)
+                return false;
+
+            for (Drawable? ancestor = drawable; ancestor != null; ancestor = ancestor.Parent)
+            {
+                if (!ancestor.IsPresent)
+                    return false;
+            }
+
+            return true;
         }
     }
 }
