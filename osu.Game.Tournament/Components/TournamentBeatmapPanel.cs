@@ -287,7 +287,7 @@ namespace osu.Game.Tournament.Components
                         OverflowSpacing = 20,
                         CreateContent = () => new TournamentSpriteText
                         {
-                            Text = Beatmap?.GetDisplayTitleRomanisable(false, false) ?? (LocalisableString)@"未知",
+                            Text = beatmapInfo?.GetDisplayTitleRomanisable(false, false) ?? (LocalisableString)@"未知",
                             Font = OsuFont.Torus.With(weight: FontWeight.Bold),
                         },
                     },
