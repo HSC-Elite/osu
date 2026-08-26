@@ -3,12 +3,18 @@
 
 using System;
 using System.Linq;
+using System.Runtime.InteropServices;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Extensions.Color4Extensions;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Colour;
 using osu.Framework.Graphics.Containers;
+using osu.Framework.Graphics.Primitives;
+using osu.Framework.Graphics.Rendering;
+using osu.Framework.Graphics.Rendering.Vertices;
+using osu.Framework.Graphics.Shaders;
+using osu.Framework.Graphics.Shaders.Types;
 using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Sprites;
 using osu.Framework.Localisation;
@@ -105,7 +111,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
                             AutoSizeAxes = Axes.X,
                             Anchor = anchor,
                             Origin = anchor,
-                            Spacing = new Vector2(-3, 0),
+                            Spacing = new Vector2(-4.2f, 0),
                             Children = new Drawable[]
                             {
                                 multCoinBar = new Box
@@ -353,8 +359,6 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
             {
                 InternalChild = new Container
                 {
-                    BorderColour = Colour4.Yellow,
-                    BorderThickness = 2f,
                     Masking = true,
                     RelativeSizeAxes = Axes.Both,
                     Children = new Drawable[]
@@ -365,14 +369,153 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
                             Origin = team == TeamColour.Red ? Anchor.CentreRight : Anchor.CentreLeft,
                             RelativeSizeAxes = Axes.Both,
                         },
-                        new Box
-                        {
-                            RelativeSizeAxes = Axes.Both,
-                            Alpha = 0,
-                            AlwaysPresent = true
-                        }
                     }
                 };
+
+                AddInternal(new AnalyticParallelogramBorder
+                {
+                    RelativeSizeAxes = Axes.Both,
+                    Colour = Color4.Yellow,
+                    BorderThickness = 0.75f,
+                });
+            }
+        }
+
+        private partial class AnalyticParallelogramBorder : Drawable
+        {
+            private const float anti_aliasing_margin = 2f;
+
+            private IShader shader = null!;
+            private float borderThickness = 1.5f;
+
+            public float BorderThickness
+            {
+                get => borderThickness;
+                set
+                {
+                    if (!float.IsFinite(value))
+                        throw new ArgumentException($"{nameof(BorderThickness)} must be finite, but is {value}.");
+
+                    value = Math.Max(0, value);
+
+                    if (borderThickness == value)
+                        return;
+
+                    borderThickness = value;
+                    Invalidate(Invalidation.DrawNode);
+                }
+            }
+
+            [BackgroundDependencyLoader]
+            private void load(ShaderManager shaders)
+            {
+                shader = shaders.Load(VertexShaderDescriptor.TEXTURE_2, "TournamentParallelogramBorder");
+            }
+
+            protected override DrawNode CreateDrawNode() => new AnalyticParallelogramBorderDrawNode(this);
+
+            private class AnalyticParallelogramBorderDrawNode : DrawNode
+            {
+                protected new AnalyticParallelogramBorder Source => (AnalyticParallelogramBorder)base.Source;
+
+                private Quad screenSpaceDrawQuad;
+                private Vector4 drawRectangle;
+                private IShader shader = null!;
+                private float borderThickness;
+                private IVertexBatch<TexturedVertex2D>? quadBatch;
+                private IUniformBuffer<AnalyticParallelogramBorderParameters>? parametersBuffer;
+
+                public AnalyticParallelogramBorderDrawNode(AnalyticParallelogramBorder source)
+                    : base(source)
+                {
+                }
+
+                public override void ApplyState()
+                {
+                    base.ApplyState();
+
+                    float left = Math.Min(0, Source.DrawWidth);
+                    float right = Math.Max(0, Source.DrawWidth);
+                    float width = right - left;
+
+                    screenSpaceDrawQuad = Source.ToScreenSpace(new RectangleF(
+                        left - anti_aliasing_margin,
+                        -anti_aliasing_margin,
+                        width + anti_aliasing_margin * 2,
+                        Source.DrawHeight + anti_aliasing_margin * 2));
+                    drawRectangle = new Vector4(left, 0, right, Source.DrawHeight);
+                    shader = Source.shader;
+                    borderThickness = Source.borderThickness;
+                }
+
+                protected override void Draw(IRenderer renderer)
+                {
+                    base.Draw(renderer);
+
+                    if (drawRectangle.Z <= drawRectangle.X || drawRectangle.W <= drawRectangle.Y)
+                        return;
+
+                    if (!renderer.BindTexture(renderer.WhitePixel))
+                        return;
+
+                    parametersBuffer ??= renderer.CreateUniformBuffer<AnalyticParallelogramBorderParameters>();
+                    parametersBuffer.Data = new AnalyticParallelogramBorderParameters
+                    {
+                        BorderThickness = borderThickness,
+                    };
+
+                    shader.Bind();
+                    shader.BindUniformBlock("m_TournamentParallelogramBorderParameters", parametersBuffer);
+
+                    quadBatch ??= renderer.CreateQuadBatch<TexturedVertex2D>(1, 2);
+
+                    var vertexAction = quadBatch.AddAction;
+
+                    vertexAction(new TexturedVertex2D(renderer)
+                    {
+                        Position = screenSpaceDrawQuad.BottomLeft,
+                        TexturePosition = new Vector2(drawRectangle.X - anti_aliasing_margin, drawRectangle.W + anti_aliasing_margin),
+                        TextureRect = drawRectangle,
+                        Colour = DrawColourInfo.Colour.BottomLeft.SRGB,
+                    });
+                    vertexAction(new TexturedVertex2D(renderer)
+                    {
+                        Position = screenSpaceDrawQuad.BottomRight,
+                        TexturePosition = new Vector2(drawRectangle.Z + anti_aliasing_margin, drawRectangle.W + anti_aliasing_margin),
+                        TextureRect = drawRectangle,
+                        Colour = DrawColourInfo.Colour.BottomRight.SRGB,
+                    });
+                    vertexAction(new TexturedVertex2D(renderer)
+                    {
+                        Position = screenSpaceDrawQuad.TopRight,
+                        TexturePosition = new Vector2(drawRectangle.Z + anti_aliasing_margin, -anti_aliasing_margin),
+                        TextureRect = drawRectangle,
+                        Colour = DrawColourInfo.Colour.TopRight.SRGB,
+                    });
+                    vertexAction(new TexturedVertex2D(renderer)
+                    {
+                        Position = screenSpaceDrawQuad.TopLeft,
+                        TexturePosition = new Vector2(drawRectangle.X - anti_aliasing_margin, -anti_aliasing_margin),
+                        TextureRect = drawRectangle,
+                        Colour = DrawColourInfo.Colour.TopLeft.SRGB,
+                    });
+
+                    shader.Unbind();
+                }
+
+                protected override void Dispose(bool isDisposing)
+                {
+                    base.Dispose(isDisposing);
+                    quadBatch?.Dispose();
+                    parametersBuffer?.Dispose();
+                }
+
+                [StructLayout(LayoutKind.Sequential, Pack = 1)]
+                private record struct AnalyticParallelogramBorderParameters
+                {
+                    public UniformFloat BorderThickness;
+                    private UniformPadding12 padding;
+                }
             }
         }
 
