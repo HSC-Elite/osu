@@ -344,7 +344,7 @@ namespace osu.Game.Tournament
         {
             var beatmapsRequiringPopulation = ladder.Rounds
                                                     .SelectMany(r => r.Beatmaps)
-                                                    .Where(b => b.Mods == "FM" && b.Beatmap != null && b.Beatmap.OnlineID != 0 && b.Beatmap.StarRatingWithMods.Count != Freemods.Length)
+                                                    .Where(b => b.Beatmap != null && b.Beatmap.OnlineID != 0 && b.Beatmap.StarRatingWithMods.Count != Freemods.Length)
                                                     .ToList();
 
             if (beatmapsRequiringPopulation.Count == 0)
@@ -485,7 +485,7 @@ namespace osu.Game.Tournament
             }
         }
 
-        public static string[] Freemods => new[] { "NM", "HR", "EZ" };
+        public static string[] Freemods => new[] { "NM", "HR", "HD", "EZ" };
 
         public static LegacyMods ConvertFromAcronym(string acronym)
         {
@@ -500,8 +500,14 @@ namespace osu.Game.Tournament
                 case "EZ":
                     return LegacyMods.Easy;
 
+                case "HD":
+                    return LegacyMods.Hidden;
+
+                case "FL":
+                    return LegacyMods.Flashlight;
+
                 default:
-                    throw new ArgumentException($"Unknown acronym: {acronym}");
+                    return LegacyMods.None;
             }
         }
     }

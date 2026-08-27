@@ -338,9 +338,6 @@ namespace osu.Game.Tournament.Components
 
             waitTime = 0;
 
-            var modsForFetch = mods;
-            modsForFetch &= ~LegacyMods.FreeMod;
-
             modString = Ladder.CurrentMatch.Value?.Round.Value?.Beatmaps.FirstOrDefault(b => b.ID == beatmap?.OnlineID)?.Mods;
 
             modContainer.Clear();
@@ -354,7 +351,12 @@ namespace osu.Game.Tournament.Components
                     RelativeSizeAxes = Axes.Y,
                     Width = 44f,
                 });
+
+                mods = TournamentGameBase.ConvertFromAcronym(modString);
             }
+
+            var modsForFetch = mods;
+            modsForFetch &= ~LegacyMods.FreeMod;
 
             noteContainer.Clear();
 
