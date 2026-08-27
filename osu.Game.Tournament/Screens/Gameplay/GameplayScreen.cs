@@ -20,6 +20,7 @@ using osu.Game.Graphics;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Overlays.Settings;
 using osu.Game.Tournament.Components;
+using osu.Game.Tournament.Configuration;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.IPC.MemoryIPC;
 using osu.Game.Tournament.IPC.MemoryIPC.Drawables;
@@ -71,6 +72,9 @@ namespace osu.Game.Tournament.Screens.Gameplay
         [Resolved]
         private OsuColour colours { get; set; } = null!;
 
+        [Resolved]
+        private TournamentConfigManager config { get; set; } = null!;
+
         private Drawable chroma = null!;
 
         private Bindable<double?> team1Coin = new Bindable<double?>();
@@ -89,9 +93,13 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
         private bool switchFromMappool;
 
+        private BindableInt frameRate = new BindableInt(60);
+
         [BackgroundDependencyLoader]
         private void load(MatchIPCInfo matchIpc, TextureStore store)
         {
+            config.BindWith(TournamentConfig.CaptureFrameRate, frameRate);
+
             ipc = (matchIpc as MemoryBasedIPCWithMatchListener)!;
 
             AddRangeInternal(new Drawable[]
@@ -245,7 +253,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 new SettingsSlider<int>
                 {
                     LabelText = "Frame rate",
-                    Current = LadderInfo.FrameRate,
+                    Current = frameRate,
                     KeyboardStep = 1,
                 },
                 frameRateInputBox = new SettingsNumberBox
@@ -434,6 +442,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 switchFromMappool = false;
             });
 
+            frameRate.BindValueChanged(f => frameRateInputBox.Current.Value = f.NewValue, true);
             ipc.CurrentlyListening.BindValueChanged(s =>
             {
                 if (s.NewValue)
@@ -467,13 +476,13 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
             ipc.MatchFinished += getResult;
 
-            LadderInfo.FrameRate.BindValueChanged(f => frameRateInputBox.Current.Value = f.NewValue, true);
+            frameRate.BindValueChanged(f => frameRateInputBox.Current.Value = f.NewValue, true);
             frameRateInputBox.Current.BindValueChanged(f =>
             {
                 if (f.NewValue == null)
                     return;
 
-                LadderInfo.FrameRate.Value = f.NewValue.Value;
+                frameRate.Value = f.NewValue.Value;
             });
         }
 

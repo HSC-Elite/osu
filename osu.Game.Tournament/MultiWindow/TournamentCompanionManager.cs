@@ -4,10 +4,12 @@ using System.IO;
 using System.Threading.Tasks;
 using osu.Framework;
 using osu.Framework.Allocation;
+using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Logging;
 using osu.Framework.Platform;
 using osu.Game.Online.Multiplayer;
+using osu.Game.Tournament.Configuration;
 using osu.Game.Tournament.Models;
 
 namespace osu.Game.Tournament.MultiWindow
@@ -37,6 +39,11 @@ namespace osu.Game.Tournament.MultiWindow
         [Resolved]
         private LadderInfo? ladderInfo { get; set; }
 
+        [Resolved]
+        private TournamentConfigManager config { get; set; } = null!;
+
+        private BindableBool useExternalStageDisplay = new BindableBool();
+
         public TournamentCompanionManager(TournamentWindowRole role, string localPipeName, string remotePipeName)
         {
             this.role = role;
@@ -56,7 +63,8 @@ namespace osu.Game.Tournament.MultiWindow
 
             if (role == TournamentWindowRole.Primary)
             {
-                ladderInfo?.UseExternalStageDisplay.BindValueChanged(enabled =>
+                config.BindWith(TournamentConfig.UseExternalStageDisplay, useExternalStageDisplay);
+                useExternalStageDisplay.BindValueChanged(enabled =>
                 {
                     if (enabled.NewValue)
                         OpenControlWindow();

@@ -15,6 +15,7 @@ using osu.Game.Graphics;
 using osu.Game.Graphics.Containers;
 using osu.Game.Graphics.Sprites;
 using osu.Game.Tournament.Components;
+using osu.Game.Tournament.Configuration;
 using osu.Game.Tournament.Models;
 using osu.Game.Tournament.Screens;
 using osu.Game.Tournament.Screens.Drawings;
@@ -61,6 +62,11 @@ namespace osu.Game.Tournament
         [Resolved]
         private LadderInfo ladderInfo { get; set; } = null!;
 
+        [Resolved]
+        private TournamentConfigManager config { get; set; } = null!;
+
+        private BindableBool useExternalStageDisplay = new BindableBool();
+
         public TournamentSceneManager()
         {
             RelativeSizeAxes = Axes.Both;
@@ -70,6 +76,8 @@ namespace osu.Game.Tournament
         private void load()
         {
             Container mainConatiner;
+            config.BindWith(TournamentConfig.UseExternalStageDisplay, useExternalStageDisplay);
+
             InternalChild = new RefCountedBackbufferProvider
             {
                 RelativeSizeAxes = Axes.Both,
@@ -157,7 +165,7 @@ namespace osu.Game.Tournament
                                     Children = new Drawable[]
                                     {
                                         new ScreenButton(typeof(SetupScreen)) { Text = "设置", RequestSelection = SetScreen },
-                                        new ToggleControlWindowButton(ladderInfo.UseExternalStageDisplay),
+                                        new ToggleControlWindowButton(useExternalStageDisplay),
                                         new Separator(),
                                         new ScreenButton(typeof(TeamEditorScreen)) { Text = "Team Editor", RequestSelection = SetScreen },
                                         new ScreenButton(typeof(ModColorEditorScreen)) { Text = "Mod Color Editor", RequestSelection = SetScreen },

@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using osu.Framework.Bindables;
@@ -11,7 +12,6 @@ using osu.Framework.Extensions.Color4Extensions;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
-using osu.Framework.Graphics.Sprites;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Sprites;
 using osu.Game.Graphics.UserInterface;
@@ -165,7 +165,8 @@ namespace osu.Game.Tournament.Tests.IPC.MemoryIPC
         {
             try
             {
-                return new ProcessItem(process.Id, process.ProcessName, process.MainWindowTitle);
+                string windowTitle = OperatingSystem.IsWindows() ? process.MainWindowTitle : string.Empty;
+                return new ProcessItem(process.Id, process.ProcessName, windowTitle);
             }
             catch
             {
@@ -264,9 +265,9 @@ namespace osu.Game.Tournament.Tests.IPC.MemoryIPC
                 $"Attached process: {describeAttachedProcess()}",
             };
 
-            if (!OperatingSystem.IsWindows())
+            if (!OperatingSystem.IsWindows() && !OperatingSystem.IsLinux())
             {
-                lastReadResult = "StableMemoryReader is only supported on Windows.";
+                lastReadResult = "StableMemoryReader is only supported on Windows and Linux.";
                 lines.Insert(0, $"Last read: {lastReadResult}");
                 dataText.Text = string.Join('\n', lines);
                 return;
@@ -355,7 +356,7 @@ namespace osu.Game.Tournament.Tests.IPC.MemoryIPC
 
             public bool HasWindowTitle => !string.IsNullOrWhiteSpace(WindowTitle);
 
-            public bool IsLikelyStable => ProcessName.Equals("osu!", StringComparison.OrdinalIgnoreCase)
+            public bool IsLikelyStable => Path.GetFileNameWithoutExtension(ProcessName).Equals("osu!", StringComparison.OrdinalIgnoreCase)
                                           || WindowTitle.Contains("osu!", StringComparison.OrdinalIgnoreCase);
 
             public ProcessItem(int? processId, string processName, string windowTitle)

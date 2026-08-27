@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using osu.Framework.Allocation;
+using osu.Framework.Bindables;
 using osu.Framework.Extensions;
 using osu.Framework.Extensions.ObjectExtensions;
 using osu.Framework.Graphics;
@@ -24,6 +25,7 @@ using osu.Game.Online;
 using osu.Game.Online.API;
 using osu.Game.Online.API.Requests;
 using osu.Game.Tournament.Components;
+using osu.Game.Tournament.Configuration;
 using osu.Game.Tournament.IO;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.IPC.MemoryIPC;
@@ -107,6 +109,9 @@ namespace osu.Game.Tournament
         private string versionSniffer => ReleaseStream.General.GetDescription();
 
         private TournamentSpriteText initialisationText = null!;
+        private TournamentConfigManager tournamentConfigManager = null!;
+
+        private BindableInt frameRate = new BindableInt();
 
         [BackgroundDependencyLoader]
         private void load(Storage baseStorage)
@@ -123,11 +128,16 @@ namespace osu.Game.Tournament
             dependencies.CacheAs<Storage>(storage = new TournamentStorage(baseStorage));
             dependencies.CacheAs(storage);
 
+            dependencies.Cache(tournamentConfigManager = new TournamentConfigManager(baseStorage));
+
             dependencies.Cache(new TournamentVideoResourceStore(storage));
 
             Textures.AddTextureSource(new TextureLoaderStore(new StorageBackedResourceStore(storage)));
 
             beatmapCache = dependencies.Get<BeatmapLookupCache>();
+
+            tournamentConfigManager.BindWith(TournamentConfig.CaptureFrameRate, frameRate);
+            frameRate.BindValueChanged(f => host.MaximumInactiveHz = Math.Max(f.NewValue, 60), true);
         }
 
         protected override void LoadComplete()
@@ -234,8 +244,6 @@ namespace osu.Game.Tournament
 
                     SaveChanges();
                 });
-
-                ladder.FrameRate.BindValueChanged(f => host.MaximumInactiveHz = Math.Max(f.NewValue, 60), true);
             }
             catch (Exception e)
             {

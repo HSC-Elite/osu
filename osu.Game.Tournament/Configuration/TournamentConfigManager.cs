@@ -6,7 +6,7 @@ using osu.Framework.Platform;
 
 namespace osu.Game.Tournament.Configuration
 {
-    public class TournamentConfigManager : IniConfigManager<StorageConfig>
+    public class TournamentConfigManager : IniConfigManager<TournamentConfig>
     {
         protected override string Filename => "tournament.ini";
 
@@ -21,12 +21,16 @@ namespace osu.Game.Tournament.Configuration
         {
             base.InitialiseDefaults();
 
-            SetDefault(StorageConfig.CurrentTournament, default_tournament);
+            SetDefault(TournamentConfig.CurrentTournament, default_tournament);
+            SetDefault(TournamentConfig.CaptureFrameRate, 60, 30, 360);
+            SetDefault(TournamentConfig.UseExternalStageDisplay, false);
         }
     }
 
-    public enum StorageConfig
+    public enum TournamentConfig
     {
         CurrentTournament,
+        CaptureFrameRate,
+        UseExternalStageDisplay,
     }
 }

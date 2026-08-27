@@ -12,6 +12,7 @@ using osu.Framework.Platform;
 using osu.Game.Online;
 using osu.Game.Online.API;
 using osu.Game.Skinning;
+using osu.Game.Tournament.Configuration;
 using osu.Game.Tournament.MultiWindow;
 using osuTK;
 using osuTK.Graphics;
@@ -43,9 +44,11 @@ namespace osu.Game.Tournament
         }
 
         [BackgroundDependencyLoader]
-        private void load(FrameworkConfigManager frameworkConfig)
+        private void load(FrameworkConfigManager frameworkConfig, Storage baseStorage)
         {
             var windowMode = frameworkConfig.GetBindable<WindowMode>(FrameworkSetting.WindowMode);
+
+            dependencies.Cache(new TournamentConfigManager(baseStorage));
 
             if (!string.IsNullOrEmpty(LocalSyncPipeName) && !string.IsNullOrEmpty(RemoteSyncPipeName))
             {
