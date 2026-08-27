@@ -322,6 +322,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                             player.HitMiss.Value = gameplayData.HitMiss;
                             player.Mods.Value = gameplayData.Mods;
                             player.Score.Value = gameplayData.Score;
+                            player.PlayTime.Value = reader.PlayTime;
                             continue;
                         }
                         catch (InvalidOperationException)

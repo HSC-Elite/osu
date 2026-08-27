@@ -243,9 +243,10 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
             base.Update();
 
             if (ipc.State.Value == TourneyState.Playing)
+            {
                 updateDiff(true);
-
-            diffBar.Progress = (float)Math.Clamp(ipc.PlayTime / ipc.Beatmap.Value?.Length ?? 1, 0, 1);
+                diffBar.Progress = (float)Math.Clamp(ipc.PlayTime / ipc.Beatmap.Value?.Length ?? 1, 0, 1);
+            }
         }
 
         private void updateScore(bool animate, double? score = null)
