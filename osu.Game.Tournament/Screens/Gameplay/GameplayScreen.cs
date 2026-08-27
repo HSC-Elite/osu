@@ -82,7 +82,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
         private bool switchFromMappool;
 
-        private BindableInt frameRate = new BindableInt(60);
+        private readonly BindableInt frameRate = new BindableInt(60);
 
         [BackgroundDependencyLoader]
         private void load(TextureStore store)
@@ -198,7 +198,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 {
                     LabelText = "Frame rate",
                 },
-                !D3D11Interop.TryGetD3D11Device(renderer, out _, out _, out _)
+                !D3D11Interop.TryGetD3D11Device(renderer, out _, out _, out _) && OperatingSystem.IsWindows()
                     ? new TournamentSpriteText
                     {
                         Colour = colours.Orange1,
