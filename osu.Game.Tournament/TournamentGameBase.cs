@@ -106,7 +106,7 @@ namespace osu.Game.Tournament
 
         private string randomTitle => titles[RNG.Next(0, titles.Length)];
 
-        private string versionSniffer => ReleaseStream.General.GetDescription();
+        private string versionSniffer => ReleaseStream.MulCoin.GetDescription();
 
         private TournamentSpriteText initialisationText = null!;
         private TournamentConfigManager tournamentConfigManager = null!;
