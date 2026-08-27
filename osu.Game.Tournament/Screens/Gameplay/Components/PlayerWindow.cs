@@ -30,10 +30,10 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
         private TournamentStorage storage { get; set; } = null!;
 
         [Resolved]
-        private MatchIPCInfo matchIpc { get; set; } = null!;
+        private MemoryBasedIPCWithMatchListener ipc { get; set; } = null!;
 
         public PlayerWindow(int clientIndex)
-            : base($"{TournamentGame.TOURNAMENT_CLIENT_NAME}{clientIndex}")
+            : base($"{TournamentGame.TOURNAMENT_CLIENT_NAME}{clientIndex}", clientIndex)
         {
             this.clientIndex = clientIndex;
         }
@@ -41,7 +41,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
         [BackgroundDependencyLoader]
         private void load()
         {
-            player = ((MemoryBasedIPCWithMatchListener)matchIpc).SlotPlayers[clientIndex];
+            player = ipc.SlotPlayers[clientIndex];
 
             playerCombo.BindValueChanged(comboChanged);
             playerCombo.BindTo(player.Combo);
@@ -109,7 +109,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
 
         private void comboChanged(ValueChangedEvent<int> combo)
         {
-            if (matchIpc.State.Value != TourneyState.Playing)
+            if (ipc.State.Value != TourneyState.Playing && ipc.PlayTime > 1000)
                 return;
 
             if (combo.NewValue > combo.OldValue)

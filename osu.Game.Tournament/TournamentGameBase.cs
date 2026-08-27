@@ -256,7 +256,8 @@ namespace osu.Game.Tournament
                 Ruleset.BindTo(ladder.Ruleset);
 
                 dependencies.Cache(ladder);
-                dependencies.CacheAs(ipc = new MemoryBasedIPCWithMatchListener());
+                dependencies.Cache(ipc = new MemoryBasedIPCWithMatchListener());
+                dependencies.CacheAs(ipc);
                 Add(ipc);
 
                 dependencies.Cache(listener = new MatchListener());
