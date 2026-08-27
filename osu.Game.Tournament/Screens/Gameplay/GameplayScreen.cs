@@ -599,7 +599,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
             private void performLayout(ValueChangedEvent<int> playerCount)
             {
-                if (!OperatingSystem.IsWindows())
+                if (!OperatingSystem.IsWindows() && !OperatingSystem.IsLinux())
                 {
                     switch (playerCount.NewValue)
                     {
