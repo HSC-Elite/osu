@@ -946,7 +946,7 @@ namespace osu.Game
 
         private void updateWindowTitle()
         {
-            if (Host.Window == null)
+            /*if (Host.Window == null)
                 return;
 
             string newTitle;
@@ -969,7 +969,7 @@ namespace osu.Game
             }
 
             if (newTitle != Host.Window.Title)
-                Host.Window.Title = newTitle;
+                Host.Window.Title = newTitle;*/
         }
 
         private void modsChanged(ValueChangedEvent<IReadOnlyList<Mod>> mods)
