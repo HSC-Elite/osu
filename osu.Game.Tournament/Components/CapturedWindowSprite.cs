@@ -17,9 +17,11 @@ using osu.Framework.Graphics.Sprites;
 using osu.Framework.Graphics.Textures;
 using osu.Framework.Graphics.Veldrid;
 using osu.Framework.Graphics.Veldrid.Textures;
+using osu.Framework.Graphics.OpenGL.Textures;
 using osu.Framework.Logging;
 using osu.Game.Tournament.Configuration;
 using osu.Game.Tournament.Models;
+using osuTK;
 using SixLabors.ImageSharp.PixelFormats;
 using Vortice.Direct3D11;
 using FillMode = osu.Framework.Graphics.FillMode;
@@ -27,7 +29,6 @@ using static osu.Game.Tournament.WindowsAPI;
 
 namespace osu.Game.Tournament.Components
 {
-    [SupportedOSPlatform("windows10.0.26100.0")]
     public partial class CapturedWindowSprite : CompositeDrawable
     {
         private Sprite sprite = null!;
@@ -35,6 +36,8 @@ namespace osu.Game.Tournament.Components
         private ICaptureSource? capture;
         private D3D11ExternalTexture? externalTexture;
         private Texture? cpuTexture;
+        private Texture? dmaBufTexture;
+        private readonly int? linuxClientIndex;
         private IntPtr targetHwnd;
         private bool d3d11Available;
         private Thread? windowWatcherThread;
@@ -48,11 +51,12 @@ namespace osu.Game.Tournament.Components
 
         private bool isWindowsLive = false;
 
-        public CapturedWindowSprite(string windowTitle)
+        public CapturedWindowSprite(string windowTitle, int? linuxClientIndex = null)
         {
             Masking = true;
             AlwaysPresent = true;
             targetWindowTitle = windowTitle;
+            this.linuxClientIndex = linuxClientIndex;
             RelativeSizeAxes = Axes.Both;
             Alpha = 0;
         }
@@ -63,7 +67,9 @@ namespace osu.Game.Tournament.Components
             sprite = new Sprite
             {
                 RelativeSizeAxes = Axes.Both,
-                FillMode = FillMode.Fit
+                FillMode = FillMode.Fit,
+                Anchor = Anchor.Centre,
+                Origin = Anchor.Centre,
             };
 
             Name = $"WindowCapture<{targetWindowTitle}>";
@@ -72,20 +78,28 @@ namespace osu.Game.Tournament.Components
 
             config.BindWith(TournamentConfig.CaptureFrameRate, FrameRate);
 
-            d3d11Available = D3D11Interop.TryGetD3D11Device(renderer, out var device, out _, out _);
-
-            if (d3d11Available)
-                capture = new WgcCaptureSource(new WgcCapture(device!));
-            else
-                capture = new BitBltCaptureSource();
-
-            watcherRunning = true;
-            windowWatcherThread = new Thread(watchWindowLoop)
+            if (OperatingSystem.IsWindows())
             {
-                IsBackground = true,
-                Name = $"WindowWatcher<{targetWindowTitle}>"
-            };
-            windowWatcherThread.Start();
+                d3d11Available = D3D11Interop.TryGetD3D11Device(renderer, out var device, out _, out _);
+
+                if (d3d11Available)
+                    capture = new WgcCaptureSource(new WgcCapture(device!));
+                else
+                    capture = new BitBltCaptureSource();
+
+                watcherRunning = true;
+                windowWatcherThread = new Thread(watchWindowLoop)
+                {
+                    IsBackground = true,
+                    Name = $"WindowWatcher<{targetWindowTitle}>"
+                };
+                windowWatcherThread.Start();
+            }
+            else if (OperatingSystem.IsLinux() && linuxClientIndex != null)
+            {
+                capture = new ObsVkCaptureSource(linuxClientIndex.Value);
+                capture.StartForWindow(IntPtr.Zero);
+            }
         }
 
         [Resolved]
@@ -106,6 +120,16 @@ namespace osu.Game.Tournament.Components
 
             if (capture == null)
                 return;
+
+            if (OperatingSystem.IsLinux())
+            {
+                if (capture.IsRunning)
+                    this.FadeIn(100);
+                else
+                    this.FadeOut(100);
+
+                return;
+            }
 
             if (targetHwnd == IntPtr.Zero || !IsWindow(targetHwnd) || !isWindowsLive)
             {
@@ -158,7 +182,9 @@ namespace osu.Game.Tournament.Components
 
             try
             {
-                resourceOwnershipTransferred = capture?.ApplyFrame(frame, renderer, ref externalTexture, ref cpuTexture, out textureToApply) == true;
+                resourceOwnershipTransferred = capture?.ApplyFrame(frame, renderer, ref externalTexture, ref cpuTexture, ref dmaBufTexture, out textureToApply) == true;
+
+                sprite.Scale = new Vector2(1, frame.DmaBuf?.Flipped == true ? -1 : 1);
 
                 if (textureToApply != null)
                     queueSpriteTexture(textureToApply);
@@ -288,6 +314,7 @@ namespace osu.Game.Tournament.Components
             captureToDispose?.Dispose();
             externalTexture?.Dispose();
             cpuTexture?.Dispose();
+            dmaBufTexture?.Dispose();
 
             watcherRunning = false;
 
@@ -309,35 +336,40 @@ namespace osu.Game.Tournament.Components
             void StartForWindow(IntPtr hwnd);
             void Stop();
             bool TryAcquireLatestFrame(out CaptureFrame frame);
-            bool ApplyFrame(CaptureFrame frame, IRenderer renderer, ref D3D11ExternalTexture? externalTexture, ref Texture? cpuTexture, out Texture? textureToApply);
+            bool ApplyFrame(CaptureFrame frame, IRenderer renderer, ref D3D11ExternalTexture? externalTexture, ref Texture? cpuTexture, ref Texture? dmaBufTexture, out Texture? textureToApply);
         }
 
         private readonly struct CaptureFrame
         {
-            public static readonly CaptureFrame EMPTY = new CaptureFrame(CaptureFrameKind.None, null, null, 0, 0);
+            public static readonly CaptureFrame EMPTY = new CaptureFrame(CaptureFrameKind.None, null, null, null, 0, 0);
 
             public CaptureFrameKind Kind { get; }
             public ID3D11Texture2D? D3D11Texture { get; }
             public ITextureUpload? Upload { get; }
+            public DmaBufCaptureFrame? DmaBuf { get; }
             public int Width { get; }
             public int Height { get; }
 
             public bool IsValid => Kind != CaptureFrameKind.None;
 
-            private CaptureFrame(CaptureFrameKind kind, ID3D11Texture2D? texture, ITextureUpload? upload, int width, int height)
+            private CaptureFrame(CaptureFrameKind kind, ID3D11Texture2D? texture, ITextureUpload? upload, DmaBufCaptureFrame? dmaBuf, int width, int height)
             {
                 Kind = kind;
                 D3D11Texture = texture;
                 Upload = upload;
+                DmaBuf = dmaBuf;
                 Width = width;
                 Height = height;
             }
 
             public static CaptureFrame FromD3D11(ID3D11Texture2D texture, int width, int height)
-                => new CaptureFrame(CaptureFrameKind.D3D11Texture, texture, null, width, height);
+                => new CaptureFrame(CaptureFrameKind.D3D11Texture, texture, null, null, width, height);
 
             public static CaptureFrame FromUpload(ITextureUpload upload, int width, int height)
-                => new CaptureFrame(CaptureFrameKind.CpuUpload, null, upload, width, height);
+                => new CaptureFrame(CaptureFrameKind.CpuUpload, null, upload, null, width, height);
+
+            public static CaptureFrame FromDmaBuf(DmaBufCaptureFrame dmaBuf)
+                => new CaptureFrame(CaptureFrameKind.DmaBuf, null, null, dmaBuf, dmaBuf.Width, dmaBuf.Height);
 
             public void ReleaseResources(bool discardUpload)
             {
@@ -345,6 +377,8 @@ namespace osu.Game.Tournament.Components
 
                 if (discardUpload)
                     Upload?.Dispose();
+
+                DmaBuf?.Dispose();
             }
         }
 
@@ -352,7 +386,8 @@ namespace osu.Game.Tournament.Components
         {
             None,
             D3D11Texture,
-            CpuUpload
+            CpuUpload,
+            DmaBuf
         }
 
         private sealed class WgcCaptureSource : ICaptureSource
@@ -382,7 +417,7 @@ namespace osu.Game.Tournament.Components
                 return false;
             }
 
-            public bool ApplyFrame(CaptureFrame frame, IRenderer renderer, ref D3D11ExternalTexture? externalTexture, ref Texture? cpuTexture, out Texture? textureToApply)
+            public bool ApplyFrame(CaptureFrame frame, IRenderer renderer, ref D3D11ExternalTexture? externalTexture, ref Texture? cpuTexture, ref Texture? dmaBufTexture, out Texture? textureToApply)
             {
                 textureToApply = null;
 
@@ -400,6 +435,76 @@ namespace osu.Game.Tournament.Components
             }
 
             public void Dispose() => capture.Dispose();
+        }
+
+        private sealed class ObsVkCaptureSource : ICaptureSource
+        {
+            private static readonly Lazy<ObsVkCaptureServer> server = new Lazy<ObsVkCaptureServer>(() => new ObsVkCaptureServer());
+
+            private readonly int clientIndex;
+
+            public ObsVkCaptureSource(int clientIndex)
+            {
+                this.clientIndex = clientIndex;
+                _ = server.Value;
+            }
+
+            public bool IsRunning => server.Value.IsCapturing(clientIndex);
+
+            public void StartForWindow(IntPtr hwnd)
+            {
+            }
+
+            public void Stop()
+            {
+            }
+
+            public bool TryAcquireLatestFrame(out CaptureFrame frame)
+            {
+                if (server.Value.TryAcquirePendingTexture(clientIndex, out var dmaBuf))
+                {
+                    frame = CaptureFrame.FromDmaBuf(dmaBuf);
+                    return true;
+                }
+
+                frame = CaptureFrame.EMPTY;
+                return false;
+            }
+
+            public bool ApplyFrame(CaptureFrame frame, IRenderer renderer, ref D3D11ExternalTexture? externalTexture, ref Texture? cpuTexture, ref Texture? dmaBufTexture, out Texture? textureToApply)
+            {
+                textureToApply = null;
+
+                if (frame.Kind != CaptureFrameKind.DmaBuf || frame.DmaBuf == null || frame.DmaBuf.Planes.Count == 0)
+                    return false;
+
+                var planes = new DmaBufExternalTexturePlane[frame.DmaBuf.Planes.Count];
+
+                for (int i = 0; i < planes.Length; i++)
+                {
+                    var plane = frame.DmaBuf.Planes[i];
+
+                    if (plane.FileDescriptor.IsInvalid)
+                        return false;
+
+                    planes[i] = new DmaBufExternalTexturePlane(plane.Stride, plane.Offset, checked((int)plane.FileDescriptor.DangerousGetHandle()));
+                }
+
+                if (!DmaBufExternalTexture.TryCreate(renderer, frame.Width, frame.Height, frame.DmaBuf.Fourcc, frame.DmaBuf.Modifier, planes, out var texture, out var failure))
+                {
+                    Logger.Log($"obs-vkcapture DMA-BUF import failed: {failure}", level: LogLevel.Error);
+                    return false;
+                }
+
+                dmaBufTexture?.Dispose();
+                dmaBufTexture = texture;
+                textureToApply = texture;
+                return false;
+            }
+
+            public void Dispose()
+            {
+            }
         }
 
         private sealed class BitBltCaptureSource : ICaptureSource
@@ -550,7 +655,7 @@ namespace osu.Game.Tournament.Components
                 }
             }
 
-            public bool ApplyFrame(CaptureFrame frame, IRenderer renderer, ref D3D11ExternalTexture? externalTexture, ref Texture? cpuTexture, out Texture? textureToApply)
+            public bool ApplyFrame(CaptureFrame frame, IRenderer renderer, ref D3D11ExternalTexture? externalTexture, ref Texture? cpuTexture, ref Texture? dmaBufTexture, out Texture? textureToApply)
             {
                 textureToApply = null;
 

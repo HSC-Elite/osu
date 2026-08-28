@@ -350,7 +350,7 @@ namespace osu.Game.Tournament
         {
             var beatmapsRequiringPopulation = ladder.Rounds
                                                     .SelectMany(r => r.Beatmaps)
-                                                    .Where(b => b.Mods == "FM" && b.Beatmap != null && b.Beatmap.OnlineID != 0 && b.Beatmap.StarRatingWithMods.Count != Freemods.Length)
+                                                    .Where(b => b.Beatmap != null && b.Beatmap.OnlineID != 0 && b.Beatmap.StarRatingWithAdditionalMods.Count != FreeModAcronyms.Length)
                                                     .ToList();
 
             if (beatmapsRequiringPopulation.Count == 0)
@@ -406,17 +406,17 @@ namespace osu.Game.Tournament
             }
         }
 
-        public void PopulateFmBeatmapStarRating(TournamentBeatmap beatmap)
+        public void PopulateFmBeatmapStarRating(TournamentBeatmap beatmap, string? baseMod = null)
         {
-            foreach (string mod in Freemods)
+            foreach (string mod in FreeModAcronyms)
             {
                 var getBeatmapStarRatingRequest = new GetBeatmapAttributesRequest(beatmap.OnlineID,
-                    ((int)ConvertFromAcronym(mod)).ToString(),
+                    ((int)ConvertFromAcronym(mod) | (int)ConvertFromAcronym(baseMod)).ToString(),
                     ladder.Ruleset.Value?.OnlineID);
 
                 getBeatmapStarRatingRequest.Success += data =>
                 {
-                    beatmap.StarRatingWithMods[mod] = data.Attributes.StarRating;
+                    beatmap.StarRatingWithAdditionalMods[mod] = data.Attributes.StarRating;
                 };
 
                 API.Perform(getBeatmapStarRatingRequest);
@@ -491,9 +491,11 @@ namespace osu.Game.Tournament
             }
         }
 
-        public static string[] Freemods => new[] { "NM", "HR", "EZ" };
+        public static string[] FreeModAcronyms => new[] { "NM", "HR", "HD", "EZ" };
 
-        public static LegacyMods ConvertFromAcronym(string acronym)
+        public static LegacyMods AllowFreeMods => LegacyMods.Easy | LegacyMods.HardRock | LegacyMods.Hidden | LegacyMods.NoMod;
+
+        public static LegacyMods ConvertFromAcronym(string? acronym)
         {
             switch (acronym)
             {
@@ -503,12 +505,37 @@ namespace osu.Game.Tournament
                 case "HR":
                     return LegacyMods.HardRock;
 
+                case "DT":
+                    return LegacyMods.DoubleTime;
+
                 case "EZ":
                     return LegacyMods.Easy;
 
+                case "HD":
+                    return LegacyMods.Hidden;
+
+                case "FL":
+                    return LegacyMods.Flashlight;
+
                 default:
-                    throw new ArgumentException($"Unknown acronym: {acronym}");
+                    return LegacyMods.None;
             }
+        }
+
+        public static string ConvertToAcronym(LegacyMods mods)
+        {
+            return mods switch
+            {
+                LegacyMods.None => "NM",
+                LegacyMods.NoMod => "NM",
+                LegacyMods.HardRock => "HR",
+                LegacyMods.DoubleTime => "DT",
+                LegacyMods.Easy => "EZ",
+                LegacyMods.Hidden => "HD",
+                LegacyMods.Flashlight => "FL",
+
+                _ => throw new ArgumentOutOfRangeException(nameof(mods), mods, "Unsupported legacy mod.")
+            };
         }
     }
 }

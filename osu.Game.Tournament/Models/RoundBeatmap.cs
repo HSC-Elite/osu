@@ -2,6 +2,7 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using Newtonsoft.Json;
+using osu.Game.Beatmaps.Legacy;
 
 namespace osu.Game.Tournament.Models
 {
@@ -12,6 +13,8 @@ namespace osu.Game.Tournament.Models
         public bool IsRandom;
 
         public string Note = string.Empty;
+
+        public LegacyMods AllowFreeMods = LegacyMods.None;
 
         [JsonProperty("BeatmapInfo")]
         public TournamentBeatmap? Beatmap;

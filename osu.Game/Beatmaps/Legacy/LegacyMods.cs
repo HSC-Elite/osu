@@ -41,5 +41,7 @@ namespace osu.Game.Beatmaps.Legacy
         ScoreV2 = 1 << 29,
         Mirror = 1 << 30,
         FreeMod = 1L << 31,
+
+        NoMod = 1UL << 63,
     }
 }
