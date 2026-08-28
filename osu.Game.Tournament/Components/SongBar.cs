@@ -518,25 +518,29 @@ namespace osu.Game.Tournament.Components
         {
             List<DiffPiece[]> diffPieces = new List<DiffPiece[]>();
 
-            foreach (string mod in TournamentGameBase.Freemods)
+            LegacyMods allowFreeMod = Ladder.Rounds.SelectMany(r => r.Beatmaps).FirstOrDefault(b => b.ID == beatmap!.OnlineID)?.AllowFreeMods ?? TournamentGameBase.AllowFreeMods;
+
+            foreach (LegacyMods mod in Enum.GetValues<LegacyMods>())
             {
-                GetBeatmapInformation(TournamentGameBase.ConvertFromAcronym(mod), out _, out _, out _, out var stats);
-
-                double sr = Ladder.Rounds.SelectMany(r => r.Beatmaps).FirstOrDefault(b => b.ID == beatmap!.OnlineID)?.Beatmap?.StarRatingWithMods.GetValueOrDefault(mod) ?? beatmap!.StarRating;
-
-                diffPieces.Add(new[]
+                if (mod != LegacyMods.None && mods.HasFlag(allowFreeMod))
                 {
-                    new DiffPiece(stats)
+                    GetBeatmapInformation(mod, out _, out _, out _, out var stats);
+                    double sr = Ladder.Rounds.SelectMany(r => r.Beatmaps).FirstOrDefault(b => b.ID == beatmap!.OnlineID)?.Beatmap?.StarRatingWithAdditionalMods.GetValueOrDefault(TournamentGameBase.ConvertToAcronym(mod)) ?? beatmap!.StarRating;
+
+                    diffPieces.Add(new[]
                     {
-                        Origin = Anchor.CentreLeft,
-                        Anchor = Anchor.CentreLeft,
-                    },
-                    new DiffPiece(createSrAndPosition(sr, mod))
-                    {
-                        Origin = Anchor.CentreLeft,
-                        Anchor = Anchor.CentreLeft,
-                    }
-                });
+                        new DiffPiece(stats)
+                        {
+                            Origin = Anchor.CentreLeft,
+                            Anchor = Anchor.CentreLeft,
+                        },
+                        new DiffPiece(createSrAndPosition(sr, TournamentGameBase.ConvertToAcronym(mod)))
+                        {
+                            Origin = Anchor.CentreLeft,
+                            Anchor = Anchor.CentreLeft,
+                        }
+                    });
+                }
             }
 
             return diffPieces.ToArray();

@@ -2,12 +2,15 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System.Linq;
+using System.Threading.Tasks;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
+using osu.Game.Beatmaps.Legacy;
 using osu.Game.Graphics;
+using osu.Game.Graphics.UserInterface;
 using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Online.API;
 using osu.Game.Online.API.Requests;
@@ -180,6 +183,9 @@ namespace osu.Game.Tournament.Screens.Editors
                     private readonly Bindable<string> mods = new Bindable<string>(string.Empty);
 
                     private readonly Bindable<string> note = new Bindable<string>();
+
+                    private readonly Bindable<LegacyMods> freeMods = new Bindable<LegacyMods>();
+
                     private readonly Container drawableContainer;
 
                     public RoundBeatmapRow(TournamentRound team, RoundBeatmap beatmap)
@@ -236,6 +242,13 @@ namespace osu.Game.Tournament.Screens.Editors
                                         Margin = new MarginPadding { Horizontal = 5 },
                                         Current = note,
                                     },
+                                    new OsuFlagsDropdown<LegacyMods>
+                                    {
+                                        HeaderText = "Allow FreeMods",
+                                        Width = 200,
+                                        Items = new[] { LegacyMods.Easy, LegacyMods.HardRock, LegacyMods.Hidden, LegacyMods.NoMod },
+                                        Current = freeMods,
+                                    }
                                 }
                             },
                             new DangerousSettingsButton
@@ -277,10 +290,7 @@ namespace osu.Game.Tournament.Screens.Editors
                             {
                                 Model.Beatmap = new TournamentBeatmap(res);
 
-                                if (Model.Mods == "FM")
-                                {
-                                    gameBase.PopulateFmBeatmapStarRating(Model.Beatmap);
-                                }
+                                Task.Run(() => gameBase.PopulateFmBeatmapStarRating(Model.Beatmap, Model.Mods));
 
                                 updatePanel();
                             };
@@ -301,7 +311,8 @@ namespace osu.Game.Tournament.Screens.Editors
 
                             if (Model.Beatmap != null && modString.NewValue == "FM")
                             {
-                                gameBase.PopulateFmBeatmapStarRating(Model.Beatmap);
+                                Task.Run(() => gameBase.PopulateFmBeatmapStarRating(Model.Beatmap, Model.Mods));
+                                freeMods.Value = LegacyMods.NoMod | LegacyMods.Easy | LegacyMods.HardRock | LegacyMods.Hidden;
                             }
                         });
 
@@ -309,6 +320,12 @@ namespace osu.Game.Tournament.Screens.Editors
                         note.BindValueChanged(n =>
                         {
                             Model.Note = n.NewValue;
+                        });
+
+                        freeMods.Value = Model.AllowFreeMods;
+                        freeMods.BindValueChanged(m =>
+                        {
+                            Model.AllowFreeMods = m.NewValue;
                         });
                     }
 

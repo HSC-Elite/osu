@@ -32,7 +32,7 @@ namespace osu.Game.Tournament.Models
 
         public BeatmapSetOnlineCovers Covers { get; set; }
 
-        public Dictionary<string, double> StarRatingWithMods { get; set; } = new Dictionary<string, double>();
+        public Dictionary<string, double> StarRatingWithAdditionalMods { get; set; } = new Dictionary<string, double>();
 
         public TournamentBeatmap()
         {
