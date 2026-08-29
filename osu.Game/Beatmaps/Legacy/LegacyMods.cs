@@ -42,6 +42,6 @@ namespace osu.Game.Beatmaps.Legacy
         Mirror = 1 << 30,
         FreeMod = 1L << 31,
 
-        NoMod = 1UL << 63,
+        NoMod = 1L << 40,
     }
 }
