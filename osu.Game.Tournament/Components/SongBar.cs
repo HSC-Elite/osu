@@ -419,11 +419,7 @@ namespace osu.Game.Tournament.Components
             if (roundBeatmap == null)
                 return null;
 
-            // hardcode
-            if (roundBeatmap.Mods == "FM")
-            {
-                mods = LegacyMods.FreeMod;
-            }
+            checkFm(roundBeatmap);
 
             var modArray = Ladder.CurrentMatch.Value!.Round.Value!.Beatmaps.Where(b => b.Mods == roundBeatmap.Mods).ToArray();
 
@@ -437,9 +433,25 @@ namespace osu.Game.Tournament.Components
             return $"{roundBeatmap.Mods}{id}";
         }
 
+        private bool checkFm(RoundBeatmap roundBeatmap)
+        {
+            if (roundBeatmap.Mods == "FM")
+            {
+                mods |= LegacyMods.FreeMod;
+                return true;
+            }
+
+            if (roundBeatmap.AllowFreeMods > LegacyMods.None)
+            {
+                mods |= LegacyMods.FreeMod;
+                return true;
+            }
+
+            return false;
+        }
+
         protected virtual void PostUpdate()
         {
-            // 这步会顺便判断是否为FM谱面
             string? modPosition = GetBeatmapModPosition();
 
             LeftData.Clear();
@@ -522,7 +534,7 @@ namespace osu.Game.Tournament.Components
 
             foreach (LegacyMods mod in Enum.GetValues<LegacyMods>())
             {
-                if (mod != LegacyMods.None && mods.HasFlag(allowFreeMod))
+                if (mod != LegacyMods.None && allowFreeMod.HasFlag(mod))
                 {
                     GetBeatmapInformation(mod, out _, out _, out _, out var stats);
                     double sr = Ladder.Rounds.SelectMany(r => r.Beatmaps).FirstOrDefault(b => b.ID == beatmap!.OnlineID)?.Beatmap?.StarRatingWithAdditionalMods.GetValueOrDefault(TournamentGameBase.ConvertToAcronym(mod)) ?? beatmap!.StarRating;
