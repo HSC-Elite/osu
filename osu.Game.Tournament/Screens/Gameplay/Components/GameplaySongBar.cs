@@ -8,8 +8,6 @@ using osu.Framework.Bindables;
 using osu.Framework.Extensions.Color4Extensions;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Colour;
-using osu.Framework.Graphics.Shapes;
-using osu.Game.Graphics.UserInterface;
 using osu.Game.Tournament.Components;
 using osu.Game.Tournament.Models;
 using osuTK;
@@ -23,8 +21,6 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
 
         private TeamColour? pickTeamColour;
         private bool expanded;
-        private Box background = null!;
-        private LoadingSpinner loading = null!;
 
         public readonly BindableBool WaitForResult = new BindableBool();
 
@@ -49,33 +45,15 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
 
             Expanded = true;
 
-            AddRangeInternal(new Drawable[]
-            {
-                background = new Box
-                {
-                    RelativeSizeAxes = Axes.Both,
-                    Alpha = 0f,
-                    Colour = Color4.Black
-                },
-                loading = new LoadingSpinner
-                {
-                    Anchor = Anchor.Centre,
-                    Origin = Anchor.Centre,
-                    Scale = new Vector2(0.5f),
-                },
-            });
-
             WaitForResult.BindValueChanged(s =>
             {
                 if (s.NewValue)
                 {
-                    background.FadeTo(0.4f, 300);
-                    loading.Show();
+                    IsLoadingInternal.Value = true;
                 }
                 else
                 {
-                    background.FadeOut(300);
-                    loading.Hide();
+                    IsLoadingInternal.Value = false;
                 }
             });
         }
