@@ -236,11 +236,7 @@ namespace osu.Game.Tournament.Tests
                     // this has to be run here rather than LoadComplete because
                     // TestScene.cs is checking the IsLoaded state (on another thread) and expects
                     // the runner to be loaded at that point.
-                    Add(new RefCountedBackbufferProvider
-                    {
-                        RelativeSizeAxes = Axes.Both,
-                        Child = runner = new TestSceneTestRunner.TestRunner()
-                    });
+                    Add(runner = new TestSceneTestRunner.TestRunner());
                 }));
             }
 
