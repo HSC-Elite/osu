@@ -2,7 +2,6 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System.Linq;
-using System.Threading.Tasks;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
@@ -290,8 +289,6 @@ namespace osu.Game.Tournament.Screens.Editors
                             {
                                 Model.Beatmap = new TournamentBeatmap(res);
 
-                                Task.Run(() => gameBase.PopulateFmBeatmapStarRating(Model.Beatmap, Model.Mods));
-
                                 updatePanel();
                             };
 
@@ -311,7 +308,6 @@ namespace osu.Game.Tournament.Screens.Editors
 
                             if (Model.Beatmap != null && modString.NewValue == "FM")
                             {
-                                Task.Run(() => gameBase.PopulateFmBeatmapStarRating(Model.Beatmap, Model.Mods));
                                 freeMods.Value = LegacyMods.NoMod | LegacyMods.Easy | LegacyMods.HardRock | LegacyMods.Hidden;
                             }
                         });

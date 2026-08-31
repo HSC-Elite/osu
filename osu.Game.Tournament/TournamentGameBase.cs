@@ -224,7 +224,6 @@ namespace osu.Game.Tournament
                 addedInfo |= addPlayers();
                 addedInfo |= await addRoundBeatmaps().ConfigureAwait(false);
                 addedInfo |= await addSeedingBeatmaps().ConfigureAwait(false);
-                addedInfo |= addFmBeatmapStar();
 
                 if (addedInfo)
                     saveChanges();
@@ -340,24 +339,6 @@ namespace osu.Game.Tournament
             return true;
         }
 
-        private bool addFmBeatmapStar()
-        {
-            var beatmapsRequiringPopulation = ladder.Rounds
-                                                    .SelectMany(r => r.Beatmaps)
-                                                    .Where(b => b.Beatmap != null && b.Beatmap.OnlineID != 0 && b.Beatmap.StarRatingWithAdditionalMods.Count != FreeModAcronyms.Length)
-                                                    .ToList();
-
-            if (beatmapsRequiringPopulation.Count == 0)
-                return false;
-
-            foreach (var t in beatmapsRequiringPopulation)
-            {
-                PopulateFmBeatmapStarRating(t.Beatmap!);
-            }
-
-            return true;
-        }
-
         private void updateLoadProgressMessage(string s) => Schedule(() => initialisationText.Text = s);
 
         public void PopulatePlayer(TournamentUser user, Action? success = null, Action? failure = null, bool immediate = false)
@@ -404,16 +385,16 @@ namespace osu.Game.Tournament
         {
             foreach (string mod in FreeModAcronyms)
             {
-                var getBeatmapStarRatingRequest = new GetBeatmapAttributesRequest(beatmap.OnlineID,
+                var req = new GetBeatmapAttributesRequest(beatmap.OnlineID,
                     ((int)ConvertFromAcronym(mod) | (int)ConvertFromAcronym(baseMod)).ToString(),
                     ladder.Ruleset.Value?.OnlineID);
 
-                getBeatmapStarRatingRequest.Success += data =>
-                {
-                    beatmap.StarRatingWithAdditionalMods[mod] = data.Attributes.StarRating;
-                };
+                API.Perform(req);
 
-                API.Perform(getBeatmapStarRatingRequest);
+                if (req.Response == null)
+                    return;
+
+                beatmap.StarRatingWithAdditionalMods[mod] = req.Response.Attributes.StarRating;
             }
         }
 
