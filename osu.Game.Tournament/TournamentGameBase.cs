@@ -11,6 +11,7 @@ using osu.Framework.Bindables;
 using osu.Framework.Extensions;
 using osu.Framework.Extensions.ObjectExtensions;
 using osu.Framework.Graphics;
+using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Textures;
 using osu.Framework.Input;
 using osu.Framework.IO.Stores;
@@ -44,6 +45,13 @@ namespace osu.Game.Tournament
         private DependencyContainer dependencies = null!;
         private MatchIPCInfo ipc = null!;
         private BeatmapLookupCache beatmapCache = null!;
+
+        protected override Container<Drawable> Content => content;
+
+        private readonly RefCountedBackbufferProvider content = new RefCountedBackbufferProvider
+        {
+            RelativeSizeAxes = Axes.Both
+        };
 
         [Cached]
         protected readonly TournamentStageState StageState = new TournamentStageState();
@@ -109,11 +117,14 @@ namespace osu.Game.Tournament
         private TournamentSpriteText initialisationText = null!;
         private TournamentConfigManager tournamentConfigManager = null!;
 
-        private BindableInt frameRate = new BindableInt();
+        private readonly BindableInt frameRate = new BindableInt();
 
         [BackgroundDependencyLoader]
         private void load(Storage baseStorage)
         {
+            base.Content.Add(content);
+            dependencies.CacheAs<IBackbufferProvider>(content);
+
             Add(initialisationText = new TournamentSpriteText
             {
                 Anchor = Anchor.Centre,
