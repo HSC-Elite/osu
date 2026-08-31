@@ -17,7 +17,7 @@ namespace osu.Game.Tournament.Tests.Screens
             {
                 var match = Ladder.CurrentMatch.Value!;
 
-                match.Round.Value = Ladder.Rounds.First(g => g.Name.Value == "Quarterfinals");
+                match.Round.Value = Ladder.Rounds.First();
                 match.Completed.Value = true;
             });
 
