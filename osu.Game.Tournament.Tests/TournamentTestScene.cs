@@ -197,7 +197,12 @@ namespace osu.Game.Tournament.Tests
                     {
                         new RoundBeatmap
                         {
-                            Mods = "DT"
+                            Mods = "NM",
+                            ID = 1,
+                        },
+                        new RoundBeatmap
+                        {
+                            Mods = "DT",
                         }
                     },
                 },

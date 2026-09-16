@@ -3,13 +3,10 @@
 
 using System;
 using System.Collections.Generic;
-using System.Collections.Specialized;
 using System.Linq;
 using osu.Framework.Allocation;
-using osu.Framework.Bindables;
 using osu.Framework.Extensions.Color4Extensions;
 using osu.Framework.Graphics;
-using osu.Framework.Graphics.Colour;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
 using osu.Game.Graphics;
@@ -20,224 +17,23 @@ using osuTK.Graphics;
 
 namespace osu.Game.Tournament.Screens.Gameplay.Components
 {
-    public partial class MultCoinRoundInformationPreview : CompositeDrawable
+    public partial class MultCoinRoundInformationPreview : RoundInformationPreview
     {
-        [Resolved]
-        private LadderInfo ladderInfo { get; set; } = null!;
 
-        private readonly FillFlowContainer mapContentContainer;
-        private readonly TournamentSpriteText mapCountText;
-        private static readonly Color4 boarder_color = new Color4(56, 56, 56, 255);
-
-        private const float cover_width = 50f;
-
-        public MultCoinRoundInformationPreview()
+        protected override void UpdateContent()
         {
-            AutoSizeAxes = Axes.X;
-            Height = 110;
-            Masking = true;
-
-            BorderColour = boarder_color;
-            BorderThickness = 2f;
-
-            InternalChildren = new Drawable[]
-            {
-                new Box
-                {
-                    Name = "backgroud",
-                    RelativeSizeAxes = Axes.Both,
-                    Colour = new Color4(229, 229, 229, 255)
-                },
-                new Container
-                {
-                    Name = "左侧小框",
-                    Width = 30f,
-                    RelativeSizeAxes = Axes.Y,
-                    Children = new Drawable[]
-                    {
-                        new Box
-                        {
-                            RelativeSizeAxes = Axes.Both,
-                            Colour = boarder_color
-                        },
-                        new FillFlowContainer
-                        {
-                            AutoSizeAxes = Axes.Y,
-                            Anchor = Anchor.Centre,
-                            Origin = Anchor.Centre,
-                            Spacing = new Vector2(5),
-                            Direction = FillDirection.Vertical,
-                            Children = new Drawable[]
-                            {
-                                new TournamentSpriteText
-                                {
-                                    Text = "回",
-                                    Anchor = Anchor.Centre,
-                                    Origin = Anchor.Centre,
-                                    Font = OsuFont.Torus.With(size: 20)
-                                },
-                                new TournamentSpriteText
-                                {
-                                    Text = "合",
-                                    Anchor = Anchor.Centre,
-                                    Origin = Anchor.Centre,
-                                    Font = OsuFont.Torus.With(size: 20)
-                                }
-                            }
-                        }
-                    }
-                },
-                new Container
-                {
-                    Name = "右侧主要内容",
-                    Width = 1000f,
-                    Anchor = Anchor.CentreRight,
-                    Origin = Anchor.CentreRight,
-                    RelativeSizeAxes = Axes.Y,
-                    Padding = new MarginPadding
-                    {
-                        Left = 30f,
-                    },
-                    Children = new Drawable[]
-                    {
-                        new BufferedContainer
-                        {
-                            RelativeSizeAxes = Axes.Both,
-                            Children = new Drawable[]
-                            {
-                                mapContentContainer = new FillFlowContainer
-                                {
-                                    Anchor = Anchor.TopCentre,
-                                    Origin = Anchor.TopCentre,
-                                    AutoSizeAxes = Axes.Both,
-                                    Direction = FillDirection.Horizontal
-                                },
-                                new Container
-                                {
-                                    Name = "cover",
-                                    Anchor = Anchor.Centre,
-                                    Origin = Anchor.Centre,
-                                    RelativeSizeAxes = Axes.Both,
-                                    Blending = new BlendingParameters
-                                    {
-                                        // Don't change the destination colour.
-                                        RGBEquation = BlendingEquation.Add,
-                                        Source = BlendingType.Zero,
-                                        Destination = BlendingType.One,
-                                        // Subtract the cover's alpha from the destination (points with alpha 1 should make the destination completely transparent).
-                                        AlphaEquation = BlendingEquation.Add,
-                                        SourceAlpha = BlendingType.Zero,
-                                        DestinationAlpha = BlendingType.OneMinusSrcAlpha
-                                    },
-                                    Children = new Drawable[]
-                                    {
-                                        new Box
-                                        {
-                                            Anchor = Anchor.CentreLeft,
-                                            Origin = Anchor.CentreLeft,
-                                            RelativeSizeAxes = Axes.Y,
-                                            Width = cover_width,
-                                            Colour = ColourInfo.GradientHorizontal(
-                                                Color4.White.Opacity(1f),
-                                                Color4.White.Opacity(0f)
-                                            )
-                                        },
-                                        new Box
-                                        {
-                                            Anchor = Anchor.CentreRight,
-                                            Origin = Anchor.CentreRight,
-                                            RelativeSizeAxes = Axes.Y,
-                                            Width = cover_width,
-                                            Colour = ColourInfo.GradientHorizontal(
-                                                Color4.White.Opacity(0f),
-                                                Color4.White.Opacity(1f)
-                                            )
-                                        },
-                                    }
-                                }
-                            }
-                        },
-                        mapCountText = new TournamentSpriteText
-                        {
-                            Anchor = Anchor.BottomCentre,
-                            Origin = Anchor.BottomCentre,
-                            Font = OsuFont.Torus.With(size: 12),
-                            Colour = new Color4(79, 78, 78, 255),
-                            Margin = new MarginPadding(5)
-                        }
-                    }
-                }
-            };
-        }
-
-        protected override void LoadComplete()
-        {
-            base.LoadComplete();
-            ladderInfo.CurrentMatch.BindValueChanged(matchChanged, true);
-        }
-
-        private bool mapContentReturnPosition;
-        private bool mapContentNeedRoll;
-        private double pauseTime;
-
-        protected override void UpdateAfterChildren()
-        {
-            base.UpdateAfterChildren();
-
-            if (!mapContentNeedRoll)
-                return;
-
-            if (pauseTime > 0)
-            {
-                pauseTime -= Clock.ElapsedFrameTime;
-                return;
-            }
-
-            if (!mapContentReturnPosition && mapContentContainer.DrawWidth + mapContentContainer.X < 1000 - cover_width)
-            {
-                mapContentReturnPosition = true;
-                pauseTime = 3000;
-            }
-
-            if (mapContentReturnPosition && mapContentContainer.X >= cover_width)
-            {
-                mapContentReturnPosition = false;
-                pauseTime = 3000;
-            }
-
-            mapContentContainer.X = mapContentReturnPosition ? mapContentContainer.X + (float)(50 * Time.Elapsed / 1000) : mapContentContainer.X + (float)(-50 * Time.Elapsed / 1000);
-        }
-
-        private void matchChanged(ValueChangedEvent<TournamentMatch?> match)
-        {
-            if (match.OldValue != null)
-                match.OldValue.PicksBans.CollectionChanged -= picksBansOnCollectionChanged;
-            if (match.NewValue != null)
-                match.NewValue.PicksBans.CollectionChanged += picksBansOnCollectionChanged;
-
-            Scheduler.AddOnce(updateState);
-        }
-
-        private void picksBansOnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-            => Scheduler.AddOnce(updateState);
-
-        private void updateState()
-        {
-            mapContentContainer.Clear();
-            mapCountText.Text = string.Empty;
-
-            if (ladderInfo.CurrentMatch.Value?.Round.Value == null)
+            if (LadderInfo.CurrentMatch.Value?.Round.Value == null)
                 return;
 
             var banMapDetail = new MapDetailContent("禁图");
-            BeatmapChoice?[] banChoices = ladderInfo.CurrentMatch.Value.PicksBans.Where(b => b.Type == ChoiceType.Ban).ToArray();
-            var remainChoices = ladderInfo.CurrentMatch.Value.PicksBans.Except(banChoices);
-            banChoices = banChoices.Concat(Enumerable.Repeat((BeatmapChoice?)null, (ladderInfo.CurrentMatch.Value.Round.Value?.BanCount.Value ?? 2) * 2 - banChoices.Length)).ToArray();
+            BeatmapChoice?[] banChoices = LadderInfo.CurrentMatch.Value.PicksBans.Where(b => b.Type == ChoiceType.Ban).ToArray();
+            var remainChoices = LadderInfo.CurrentMatch.Value.PicksBans.Except(banChoices);
+            banChoices = banChoices.Concat(Enumerable.Repeat((BeatmapChoice?)null, (LadderInfo.CurrentMatch.Value.Round.Value?.BanCount.Value ?? 2) * 2 - banChoices.Length)).ToArray();
 
             var firstHalfPickDetail = new MapDetailContent("上半场");
             var secondHalfPickDetail = new MapDetailContent("下半场");
 
-            int? bestOf = ladderInfo.CurrentMatch.Value.Round.Value?.BestOf.Value - 1;
+            int? bestOf = LadderInfo.CurrentMatch.Value.Round.Value?.BestOf.Value - 1;
 
             int firstHalfMapCount = (bestOf / 2 % 2 == 0 ? bestOf / 2 : bestOf / 2 + 1) ?? 99;
             int secondHalfMapCount = bestOf - firstHalfMapCount ?? 0;
@@ -246,54 +42,32 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
             var secondHalfPickChoice = remainChoices.Skip(firstHalfMapCount).Take(secondHalfMapCount)
                                                     .Concat(Enumerable.Repeat((BeatmapChoice?)null, secondHalfMapCount - remainChoices.Skip(firstHalfMapCount).Take(secondHalfMapCount).Count()));
 
-            mapContentContainer.Add(banMapDetail);
-            mapContentContainer.Add(createDivideLine());
-            mapContentContainer.Add(firstHalfPickDetail);
-            mapContentContainer.Add(createDivideLine());
-            mapContentContainer.Add(secondHalfPickDetail);
-            mapContentContainer.Add(createDivideLine());
+            MapContentContainer.Add(banMapDetail);
+            MapContentContainer.Add(createDivideLine());
+            MapContentContainer.Add(firstHalfPickDetail);
+            MapContentContainer.Add(createDivideLine());
+            MapContentContainer.Add(secondHalfPickDetail);
+            MapContentContainer.Add(createDivideLine());
 
-            var TBMap = ladderInfo.CurrentMatch.Value?.Round.Value?.Beatmaps.FirstOrDefault(map => map.Mods == "TB");
+            var TBMap = LadderInfo.CurrentMatch.Value?.Round.Value?.Beatmaps.FirstOrDefault(map => map.Mods == "TB");
 
             if (TBMap != null)
             {
                 bool isTBSelected = remainChoices.Any(p => p?.BeatmapID == TBMap.ID);
-                mapContentContainer.Add(createTBMapBox(isTBSelected));
+                MapContentContainer.Add(createTBMapBox(isTBSelected));
             }
-
-            int mapCount = ladderInfo.CurrentMatch.Value.Round.Value.Beatmaps.Count;
-            int remainMapCount = mapCount - ladderInfo.CurrentMatch.Value.PicksBans.Count(p => p.IsConsumed());
-
-            mapCountText.Text = $"图池内谱面数量：{mapCount}  |  图池内剩余谱面：{remainMapCount}";
 
             Scheduler.Add(() =>
             {
                 banMapDetail.UpdateBeatmap(banChoices);
                 firstHalfPickDetail.UpdateBeatmap(firstHalfPickChoice);
                 secondHalfPickDetail.UpdateBeatmap(secondHalfPickChoice);
-
-                Scheduler.Add(() =>
-                {
-                    if (mapContentContainer.DrawWidth < 1000)
-                    {
-                        mapContentNeedRoll = false;
-                        mapContentContainer.Anchor = Anchor.TopCentre;
-                        mapContentContainer.Origin = Anchor.TopCentre;
-                        mapContentContainer.X = 0;
-                        return;
-                    }
-
-                    mapContentNeedRoll = true;
-
-                    mapContentContainer.Anchor = Anchor.TopLeft;
-                    mapContentContainer.Origin = Anchor.TopLeft;
-                });
             });
         }
 
         private Box createDivideLine() => new Box
         {
-            Colour = new Color4(79, 79, 79, 255),
+            Colour = Color4Extensions.FromHex("#E5E5E5"),
             Height = 38.5f,
             Width = 1f,
             Margin = new MarginPadding
@@ -317,10 +91,10 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
                 Anchor = Anchor.Centre,
                 Origin = Anchor.Centre,
                 Text = "决胜局",
-                Colour = new Color4(82, 79, 79, 255)
+                Colour = Color4Extensions.FromHex("#E5E5E5"),
             });
 
-            var TBMap = ladderInfo.CurrentMatch.Value?.Round.Value?.Beatmaps.FirstOrDefault(map => map.Mods == "TB");
+            var TBMap = LadderInfo.CurrentMatch.Value?.Round.Value?.Beatmaps.FirstOrDefault(map => map.Mods == "TB");
 
             if (TBMap == null)
                 return mapbox;
@@ -469,7 +243,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
                             {
                                 RelativeSizeAxes = Axes.X,
                                 Height = 1,
-                                Colour = new Color4(166, 166, 166, 255),
+                                Colour = Color4Extensions.FromHex("#E5E5E5"),
                             },
                             // 文字
                             new Container
@@ -483,7 +257,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
                                 {
                                     Text = text,
                                     Font = OsuFont.Torus.With(size: 20),
-                                    Colour = Color4.Gray,
+                                    Colour = Color4Extensions.FromHex("#E5E5E5"),
                                     Anchor = Anchor.Centre,
                                     Origin = Anchor.Centre,
                                 },
@@ -493,7 +267,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
                             {
                                 RelativeSizeAxes = Axes.X,
                                 Height = 1,
-                                Colour = new Color4(166, 166, 166, 255),
+                                Colour = Color4Extensions.FromHex("#E5E5E5"),
                             }
                         }
                     }
