@@ -20,12 +20,14 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components.MatchHeader
     {
         private readonly TournamentTeam? team;
         private readonly TeamColour teamColour;
+        private readonly BindableList<BeatmapChoice> picksBans = new BindableList<BeatmapChoice>();
 
         private TournamentSpriteText teamText = null!;
         private Container stateIconContainer = null!;
         private TournamentSpriteText teamIdText = null!;
         private Box teamIdBackground = null!;
         private Sprite pigIcon = null!;
+        private Triangle arrowIcon = null!;
 
         [Resolved]
         private TextureStore store { get; set; } = null!;
@@ -145,6 +147,22 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components.MatchHeader
                                     Size = new Vector2(13),
                                     Alpha = 0,
                                 },
+                                new Container
+                                {
+                                    AutoSizeAxes = Axes.Both,
+                                    Anchor = anchor,
+                                    Origin = anchor,
+                                    Child = arrowIcon = new Triangle
+                                    {
+                                        Size = new Vector2(20, 15),
+                                        Anchor = Anchor.Centre,
+                                        Origin = Anchor.Centre,
+                                        Colour = Color4.Black,
+                                        Rotation = teamColour == TeamColour.Blue ? -90 : 90,
+                                        Alpha = 0,
+                                        AlwaysPresent = true,
+                                    },
+                                },
                             }
                         },
                     }
@@ -177,6 +195,11 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components.MatchHeader
                     {
                         Horizontal = (header.TextWidthEachTeam.Max(w => w.Value) - teamText.Width) / 2
                     });
+
+                picksBans.BindCollectionChanged((_, _) => updatePick());
+
+                if (ladder.CurrentMatch.Value != null)
+                    picksBans.BindTo(ladder.CurrentMatch.Value.PicksBans);
             }
 
             var currentMatch = ladder.CurrentMatch.Value;
@@ -191,13 +214,12 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components.MatchHeader
             opponentTeamCoin.BindValueChanged(_ => updateDisplay(), true);
         }
 
-        private const double first_warning_coin = -22.5;
-        private const double second_warning_coin = -45;
-        private const double third_warning_coin = -90;
+        private const double pig_warning_coin = -35;
+        private const double disconnect_warning_coin = -60;
 
         private Drawable getIconByDiff(double diff)
         {
-            return diff < -60 ? getIcon("WEB") : Empty();
+            return diff < disconnect_warning_coin ? getIcon("WEB") : Empty();
         }
 
         private void updateDisplay() => Scheduler.AddOnce(() =>
@@ -206,7 +228,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components.MatchHeader
             stateIconContainer.Child = getIconByDiff(diff);
             stateIconContainer.FadeIn(500).Then().FadeOut(500).Loop();
 
-            if (diff < -35)
+            if (diff < pig_warning_coin)
             {
                 pigIcon.FadeIn();
             }
@@ -221,5 +243,19 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components.MatchHeader
             Size = new Vector2(10, 8),
             Texture = store.Get(icon)
         };
+
+        private void updatePick()
+        {
+            var lastChoice = picksBans.LastOrDefault();
+
+            if (lastChoice?.Team == teamColour && lastChoice?.Type == ChoiceType.Pick)
+            {
+                arrowIcon.FadeIn(100);
+            }
+            else
+            {
+                arrowIcon.FadeOut(100);
+            }
+        }
     }
 }

@@ -199,10 +199,13 @@ namespace osu.Game.Tournament.Tests
                         {
                             Mods = "NM",
                             ID = 1,
+                            Beatmap = CreateSampleBeatmap()
                         },
                         new RoundBeatmap
                         {
                             Mods = "DT",
+                            ID = 2,
+                            Beatmap = CreateSampleBeatmap()
                         }
                     },
                 },
