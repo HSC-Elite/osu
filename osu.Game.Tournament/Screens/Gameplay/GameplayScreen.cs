@@ -49,7 +49,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
         private PlayerArea blueArea = null!;
 
         private Container matchHeaderContainer = null!;
-        private RoundInformationPreview roundPreview = null!;
+        private MultCoinRoundInformationPreview roundPreview = null!;
 
         [Resolved]
         private TournamentSceneManager? sceneManager { get; set; }
@@ -193,7 +193,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
                         RelativeSizeAxes = Axes.Both
                     }
                 },
-                roundPreview = new RoundInformationPreview
+                roundPreview = new MultCoinRoundInformationPreview
                 {
                     Alpha = 0f,
                     Anchor = Anchor.BottomCentre,

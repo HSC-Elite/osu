@@ -23,7 +23,7 @@ namespace osu.Game.Tournament.Tests.Components
             AddStep("Add Round Information preview", () => Add(new RefCountedBackbufferProvider
             {
                 RelativeSizeAxes = Axes.Both,
-                Child = new RoundInformationPreview
+                Child = new MultCoinRoundInformationPreview
                 {
                     Origin = Anchor.Centre,
                     Anchor = Anchor.Centre,
