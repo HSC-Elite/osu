@@ -12,6 +12,7 @@ using osu.Framework.Graphics.Shapes;
 using osu.Game.Graphics;
 using osu.Game.Tournament.Components;
 using osu.Game.Tournament.Models;
+using osu.Game.Tournament.Screens.Gameplay.Components.RoundInformation;
 using osuTK;
 using osuTK.Graphics;
 
@@ -53,8 +54,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
 
             if (TBMap != null)
             {
-                bool isTBSelected = remainChoices.Any(p => p?.BeatmapID == TBMap.ID);
-                MapContentContainer.Add(createTBMapBox(isTBSelected));
+                MapContentContainer.Add(new TbMapBox(TBMap));
             }
 
             Scheduler.Add(() =>

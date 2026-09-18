@@ -32,6 +32,7 @@ namespace osu.Game.Tournament.Tests
         protected LadderInfo Ladder { get; private set; } = new LadderInfo();
 
         [Cached(Type = typeof(MatchIPCInfo))]
+        [Cached(Type = typeof(MemoryBasedIPCWithMatchListener))]
         protected MatchIPCInfo IPCInfo { get; private set; } = new MemoryBasedIPCWithMatchListener();
 
         [Resolved]
@@ -206,8 +207,18 @@ namespace osu.Game.Tournament.Tests
                             Mods = "DT",
                             ID = 2,
                             Beatmap = CreateSampleBeatmap()
+                        },
+                        new RoundBeatmap
+                        {
+                            Mods = "TB",
+                            ID = 3,
+                            Beatmap = CreateSampleBeatmap()
                         }
                     },
+                    BestOf =
+                    {
+                        Value = 11,
+                    }
                 },
             },
             Team1Coin =
