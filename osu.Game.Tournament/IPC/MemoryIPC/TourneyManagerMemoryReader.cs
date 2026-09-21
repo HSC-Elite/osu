@@ -71,6 +71,13 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             }
         }
 
+        protected override void Reset()
+        {
+            base.Reset();
+            channelAddress = null;
+            chatAreaAddress = null;
+        }
+
         public TourneyState GetTourneyState()
         {
             if (!CheckInitialized())

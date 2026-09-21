@@ -50,7 +50,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
             if (!IsAttached)
             {
-                Status = AttachStatus.UnAttached;
+                Reset();
                 return false;
             }
 
@@ -124,6 +124,16 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                 throw new InvalidOperationException("osu! module not found");
 
             return initializeAddress();
+        }
+
+        protected virtual void Reset()
+        {
+            Status = AttachStatus.UnAttached;
+            GameBaseAddress = IntPtr.Zero;
+            RulesetsAddress = IntPtr.Zero;
+            PlayTimeAddress = IntPtr.Zero;
+            SpectatingUser = IntPtr.Zero;
+            ModsPointerAddress = IntPtr.Zero;
         }
 
         #region Pattern
