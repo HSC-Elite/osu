@@ -20,6 +20,9 @@ namespace osu.Game.Screens.Play
 
         private readonly Score score;
 
+        // Retained for derived multiplayer players; the base spectator message is intentionally not shown.
+        public bool ShowSettingsOverlay { get; init; } = true;
+
         protected SpectatorPlayer(Score score, PlayerConfiguration? configuration = null)
             : base(configuration)
         {

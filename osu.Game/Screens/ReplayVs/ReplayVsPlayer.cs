@@ -42,7 +42,9 @@ namespace osu.Game.Screens.ReplayVs
             if (cancellationToken.IsCancellationRequested)
                 return;
 
-            HUDOverlay.PlayerSettingsOverlay.Expire();
+            if (!LoadedBeatmapSuccessfully)
+                return;
+
             HUDOverlay.HoldToQuit.Expire();
 
             AddInternal(new OsuSpriteText
@@ -81,11 +83,7 @@ namespace osu.Game.Screens.ReplayVs
 
         protected override Score CreateScore(IBeatmap beatmap) => score;
 
-        protected override ResultsScreen CreateResults(ScoreInfo score) => new SoloResultsScreen(score)
-        {
-            AllowRetry = true,
-            IsLocalPlay = true,
-        };
+        protected override ResultsScreen CreateResults(ScoreInfo score) => new SoloResultsScreen(score);
 
         protected override GameplayClockContainer CreateGameplayClockContainer(WorkingBeatmap beatmap, double gameplayStart)
         {
