@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup Label="Project">
-    <TargetFramework>net8.0-windows10.0.26100.0</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
     <OutputType>Library</OutputType>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Description>tools for tournaments.</Description>
@@ -9,7 +9,6 @@
     <ProjectReference Include="..\osu.Game\osu.Game.csproj" />
   </ItemGroup>
   <ItemGroup Label="Package References">
-    <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
     <PackageReference Include="System.Drawing.Common" Version="9.0.6" />
     <PackageReference Include="System.Management" Version="9.0.6" />
     <PackageReference Include="Velopack" Version="0.0.1298" />
