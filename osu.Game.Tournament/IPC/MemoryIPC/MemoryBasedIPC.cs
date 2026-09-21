@@ -246,28 +246,6 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
             lastUpdateTime = 0;
 
-            switch (tourneyManagerMemoryReader.Status)
-            {
-                case AttachStatus.UnAttached:
-
-                    if (OperatingSystem.IsWindows())
-                        tourneyManagerMemoryReader.AttachToProcessByTitleNameAsync(" Tournament Manager");
-                    else
-                        tourneyManagerMemoryReader.AttachToProcessByProcessCommandLineAsync(s => !s.Contains($"-spectateclient"));
-
-                    available.Value = false;
-                    break;
-
-                case AttachStatus.Initializing:
-                    available.Value = false;
-                    break;
-
-                case AttachStatus.Attached:
-                    updateTourneyManagerData();
-                    available.Value = true;
-                    break;
-            }
-
             for (int i = 0; i < playersPerTeam.Value * 2; i++)
             {
                 var reader = readers[i];
@@ -333,6 +311,28 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                         }
                     }
                 }
+            }
+
+            switch (tourneyManagerMemoryReader.Status)
+            {
+                case AttachStatus.UnAttached:
+
+                    if (OperatingSystem.IsWindows())
+                        tourneyManagerMemoryReader.AttachToProcessByTitleNameAsync(" Tournament Manager");
+                    else
+                        tourneyManagerMemoryReader.AttachToProcessByProcessCommandLineAsync(s => !s.Contains($"-spectateclient"));
+
+                    available.Value = false;
+                    break;
+
+                case AttachStatus.Initializing:
+                    available.Value = false;
+                    break;
+
+                case AttachStatus.Attached:
+                    updateTourneyManagerData();
+                    available.Value = true;
+                    break;
             }
 
             UpdateScore();
