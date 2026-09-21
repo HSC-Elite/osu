@@ -164,14 +164,28 @@ namespace osu.Game.Tournament.Tests
                     {
                         new RoundBeatmap
                         {
-                            Mods = "DT"
+                            Mods = "NM",
+                            ID = 1,
+                            Beatmap = CreateSampleBeatmap(1)
+                        },
+                        new RoundBeatmap
+                        {
+                            Mods = "DT",
+                            ID = 2,
+                            Beatmap = CreateSampleBeatmap(2)
+                        },
+                        new RoundBeatmap
+                        {
+                            Mods = "TB",
+                            ID = 3,
+                            Beatmap = CreateSampleBeatmap(3)
                         }
                     }
                 },
             }
         };
 
-        public static TournamentBeatmap CreateSampleBeatmap() =>
+        public static TournamentBeatmap CreateSampleBeatmap(int? beatmapId = null) =>
             new TournamentBeatmap
             {
                 Metadata = new BeatmapMetadata
@@ -179,7 +193,7 @@ namespace osu.Game.Tournament.Tests
                     Title = "Test Title",
                     Artist = "Test Artist",
                 },
-                OnlineID = RNG.Next(0, 1000000),
+                OnlineID = beatmapId ?? RNG.Next(0, 1000000),
             };
 
         protected override ITestSceneTestRunner CreateRunner() => new TournamentTestSceneTestRunner();

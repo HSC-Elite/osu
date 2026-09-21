@@ -123,6 +123,12 @@ namespace osu.Game.Tournament.Screens.MapPool
                             Text = "Blue Pick",
                             Action = () => setMode(TeamColour.Blue, ChoiceType.Pick)
                         },
+                        new TourneyButton
+                        {
+                            RelativeSizeAxes = Axes.X,
+                            Text = "Pick TB",
+                            Action = addTB
+                        },
                         new ControlPanel.Spacer(),
                         new SettingsCheckbox
                         {
@@ -340,6 +346,20 @@ namespace osu.Game.Tournament.Screens.MapPool
             setNextMode();
         }
 
+        private void addTB()
+        {
+            var lastPickType = pickType;
+            pickType = ChoiceType.TB;
+
+            int? tbId = CurrentMatch.Value?.Round.Value?.Beatmaps.FirstOrDefault(b => b.Mods == "TB")?.ID;
+
+            if (tbId == null)
+                return;
+
+            addForBeatmap(tbId.Value);
+            pickType = lastPickType;
+        }
+
         private void addForBeatmap(int beatmapId)
         {
             if (CurrentMatch.Value?.Round.Value == null)
@@ -360,6 +380,10 @@ namespace osu.Game.Tournament.Screens.MapPool
                 // don't pick if map already in pickbans unless is protected.
                 return;
 
+            // not allow pick tb without ChoiceType.TB
+            if (CurrentMatch.Value.Round.Value?.Beatmaps.FirstOrDefault(b => b.Mods == "TB")?.ID == beatmapId && pickType != ChoiceType.TB)
+                return;
+
             CurrentMatch.Value.PicksBans.Add(new BeatmapChoice
             {
                 Team = pickColour,
@@ -369,7 +393,7 @@ namespace osu.Game.Tournament.Screens.MapPool
 
             if (LadderInfo.AutoProgressScreens.Value)
             {
-                if (pickType == ChoiceType.Pick && CurrentMatch.Value.PicksBans.Any(i => i.Type == ChoiceType.Pick))
+                if (pickType == ChoiceType.Pick && CurrentMatch.Value.PicksBans.Any(i => i.Type == ChoiceType.Pick) || pickType == ChoiceType.TB)
                 {
                     scheduledScreenChange?.Cancel();
                     controlPanel.Add(scheduledScreenChange = new AutoAdvancePrompt(() => { sceneManager?.SetScreen(typeof(GameplayScreen)); }, 10000));
