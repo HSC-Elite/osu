@@ -9,6 +9,8 @@
     <NoWarn Condition="'$(Configuration)'=='Debug'">$(NoWarn);CA1416</NoWarn>
 
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!-- https://github.com/dotnet/runtime/issues/129562 -->
+    <SuppressTrimAnalysisWarnings>true</SuppressTrimAnalysisWarnings>
   </PropertyGroup>
   <PropertyGroup>
     <ApplicationManifest>$(MSBuildThisFileDirectory)app.manifest</ApplicationManifest>
