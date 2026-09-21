@@ -24,7 +24,7 @@ using osu.Game.Rulesets;
 using osu.Game.Scoring;
 using osu.Game.Screens.OnlinePlay.Multiplayer.Spectate;
 using osu.Game.Screens.Play;
-using osu.Game.Screens.Select.Leaderboards;
+using osu.Game.Screens.Play.Leaderboards;
 using osu.Game.Screens.Spectate;
 using osu.Game.Tournament.IPC;
 using Realms;

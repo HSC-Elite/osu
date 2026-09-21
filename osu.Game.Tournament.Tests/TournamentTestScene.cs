@@ -5,8 +5,6 @@ using System.Linq;
 using System.Threading;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
-using osu.Framework.Graphics;
-using osu.Framework.Graphics.Containers;
 using osu.Framework.Platform;
 using osu.Framework.Testing;
 using osu.Framework.Utils;
@@ -70,7 +68,7 @@ namespace osu.Game.Tournament.Tests
                     Acronym = { Value = "JPN" },
                     FlagName = { Value = "JP" },
                     FullName = { Value = "Japan" },
-                    LastYearPlacing = { Value = 10 },
+                    LastYearPlacing = { Value = "#10" },
                     Seed = { Value = "#12" },
                     Note = { Value = "super veryyyyy loooooooooooooooong note" },
                     SeedingResults =
@@ -166,14 +164,28 @@ namespace osu.Game.Tournament.Tests
                     {
                         new RoundBeatmap
                         {
-                            Mods = "DT"
+                            Mods = "NM",
+                            ID = 1,
+                            Beatmap = CreateSampleBeatmap(1)
+                        },
+                        new RoundBeatmap
+                        {
+                            Mods = "DT",
+                            ID = 2,
+                            Beatmap = CreateSampleBeatmap(2)
+                        },
+                        new RoundBeatmap
+                        {
+                            Mods = "TB",
+                            ID = 3,
+                            Beatmap = CreateSampleBeatmap(3)
                         }
                     }
                 },
             }
         };
 
-        public static TournamentBeatmap CreateSampleBeatmap() =>
+        public static TournamentBeatmap CreateSampleBeatmap(int? beatmapId = null) =>
             new TournamentBeatmap
             {
                 Metadata = new BeatmapMetadata
@@ -181,7 +193,7 @@ namespace osu.Game.Tournament.Tests
                     Title = "Test Title",
                     Artist = "Test Artist",
                 },
-                OnlineID = RNG.Next(0, 1000000),
+                OnlineID = beatmapId ?? RNG.Next(0, 1000000),
             };
 
         protected override ITestSceneTestRunner CreateRunner() => new TournamentTestSceneTestRunner();
@@ -197,11 +209,7 @@ namespace osu.Game.Tournament.Tests
                     // this has to be run here rather than LoadComplete because
                     // TestScene.cs is checking the IsLoaded state (on another thread) and expects
                     // the runner to be loaded at that point.
-                    Add(new RefCountedBackbufferProvider
-                    {
-                        RelativeSizeAxes = Axes.Both,
-                        Child = runner = new TestSceneTestRunner.TestRunner()
-                    });
+                    Add(runner = new TestSceneTestRunner.TestRunner());
                 }));
             }
 

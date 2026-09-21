@@ -5,6 +5,7 @@ using System;
 using osu.Framework.Allocation;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
+using osu.Game.Overlays;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.IPC.MemoryIPC;
 using osu.Game.Tournament.Models;
@@ -19,6 +20,9 @@ namespace osu.Game.Tournament.Screens
 
         [Resolved]
         protected LadderInfo LadderInfo { get; private set; } = null!;
+
+        [Cached]
+        protected readonly OverlayColourProvider ColourProvider = new OverlayColourProvider(OverlayColourScheme.Blue);
 
         [Resolved]
         protected MatchIPCInfo IPC { get; private set; } = null!;

@@ -418,20 +418,20 @@ namespace osu.Game.Tournament
             }
         }
 
-        public void PopulateFmBeatmapStarRating(TournamentBeatmap beatmap)
+        public void PopulateFmBeatmapStarRating(TournamentBeatmap beatmap, string? baseMod = null)
         {
-            foreach (string mod in Freemods)
+            foreach (string mod in FreeModAcronyms)
             {
-                var getBeatmapStarRatingRequest = new GetBeatmapAttributesRequest(beatmap.OnlineID,
-                    ((int)ConvertFromAcronym(mod)).ToString(),
+                var request = new GetBeatmapAttributesRequest(beatmap.OnlineID,
+                    ((int)ConvertFromAcronym(mod) | (int)ConvertFromAcronym(baseMod)).ToString(),
                     ladder.Ruleset.Value?.OnlineID);
 
-                getBeatmapStarRatingRequest.Success += data =>
-                {
-                    beatmap.StarRatingWithMods[mod] = data.Attributes.StarRating;
-                };
+                API.Perform(request);
 
-                API.Perform(getBeatmapStarRatingRequest);
+                if (request.Response == null)
+                    return;
+
+                beatmap.StarRatingWithAdditionalMods[mod] = request.Response.Attributes.StarRating;
             }
         }
 
@@ -503,24 +503,40 @@ namespace osu.Game.Tournament
             }
         }
 
-        public static string[] Freemods => new[] { "NM", "HR", "EZ" };
+        public static string[] FreeModAcronyms => new[] { "NM", "HR", "HD", "EZ" };
 
-        public static LegacyMods ConvertFromAcronym(string acronym)
+        // Keep the previous name for existing Lazer-specific call sites.
+        public static string[] Freemods => FreeModAcronyms;
+
+        public static LegacyMods AllowFreeMods => LegacyMods.Easy | LegacyMods.HardRock | LegacyMods.Hidden | LegacyMods.NoMod;
+
+        public static LegacyMods ConvertFromAcronym(string? acronym)
         {
-            switch (acronym)
+            return acronym switch
             {
-                case "NM":
-                    return LegacyMods.None;
+                "NM" => LegacyMods.None,
+                "HR" => LegacyMods.HardRock,
+                "DT" => LegacyMods.DoubleTime,
+                "EZ" => LegacyMods.Easy,
+                "HD" => LegacyMods.Hidden,
+                "FL" => LegacyMods.Flashlight,
+                _ => LegacyMods.None,
+            };
+        }
 
-                case "HR":
-                    return LegacyMods.HardRock;
-
-                case "EZ":
-                    return LegacyMods.Easy;
-
-                default:
-                    throw new ArgumentException($"Unknown acronym: {acronym}");
-            }
+        public static string ConvertToAcronym(LegacyMods mods)
+        {
+            return mods switch
+            {
+                LegacyMods.None => "NM",
+                LegacyMods.NoMod => "NM",
+                LegacyMods.HardRock => "HR",
+                LegacyMods.DoubleTime => "DT",
+                LegacyMods.Easy => "EZ",
+                LegacyMods.Hidden => "HD",
+                LegacyMods.Flashlight => "FL",
+                _ => throw new ArgumentOutOfRangeException(nameof(mods), mods, "Unsupported legacy mod."),
+            };
         }
     }
 }

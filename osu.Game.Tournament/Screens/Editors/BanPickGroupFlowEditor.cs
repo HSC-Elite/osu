@@ -191,7 +191,7 @@ namespace osu.Game.Tournament.Screens.Editors
                             Padding = new MarginPadding { Right = 160 },
                             Children = new Drawable[]
                             {
-                                new LabelledEnumDropdown<ChoiceType>
+                                new LabelledEnumDropdown<ChoiceType>(true)
                                 {
                                     Width = 0.3f,
                                     Label = "选图模式",

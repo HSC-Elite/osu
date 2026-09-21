@@ -7,7 +7,7 @@ using osu.Game.Scoring;
 using osu.Game.Screens;
 using osu.Game.Screens.Backgrounds;
 using osu.Game.Screens.OnlinePlay.Multiplayer.Spectate;
-using osu.Game.Screens.Select.Leaderboards;
+using osu.Game.Screens.Play.Leaderboards;
 
 namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 {

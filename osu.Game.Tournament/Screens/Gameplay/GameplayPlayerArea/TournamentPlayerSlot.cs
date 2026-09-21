@@ -6,7 +6,7 @@ using osu.Framework.Graphics.Containers;
 using osu.Game.Scoring;
 using osu.Game.Screens;
 using osu.Game.Screens.OnlinePlay.Multiplayer.Spectate;
-using osu.Game.Screens.Select.Leaderboards;
+using osu.Game.Screens.Play.Leaderboards;
 using osu.Game.Tournament.Models;
 
 namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
