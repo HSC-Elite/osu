@@ -292,6 +292,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                     spectatorPlayer.ForceToResult();
                 }
             }, 5 * 1000);
+
+            syncManager.RemoveManagedClock(instance.SpectatorPlayerClock);
         });
 
         protected override void QuitGameplay(int userId) => Schedule(() =>
