@@ -132,7 +132,7 @@ namespace osu.Game.Tournament.IPC
             {
                 teamIdsCache.Clear();
                 updateUsers();
-            });
+            }, true);
 
             client.RoomUpdated += onRoomUpdated;
             client.SettingsChanged += onSettingsChanged;
@@ -195,6 +195,8 @@ namespace osu.Game.Tournament.IPC
 
             Scheduler.AddOnce(() =>
             {
+                State.Value = TourneyState.Idle;
+
                 updateGameplayState();
 
                 if (!workingBeatmap.IsDefault)
@@ -284,6 +286,7 @@ namespace osu.Game.Tournament.IPC
             {
                 var localBeatmap = beatmapManager.QueryBeatmap($@"{nameof(BeatmapInfo.OnlineID)} == $0 AND {nameof(BeatmapInfo.MD5Hash)} == {nameof(BeatmapInfo.OnlineMD5Hash)}", gameplayBeatmapId);
                 workingBeatmap.Value = beatmapManager.GetWorkingBeatmap(localBeatmap);
+                pendingBeatmapId = null;
             }
             else
             {
