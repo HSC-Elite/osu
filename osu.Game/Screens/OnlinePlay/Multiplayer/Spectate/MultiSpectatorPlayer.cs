@@ -65,15 +65,16 @@ namespace osu.Game.Screens.OnlinePlay.Multiplayer.Spectate
 
             HUDOverlay.HoldToQuit.Expire();
 
-            // Player username display
-            GameplayClockContainer.Add(new OsuTextFlowContainer(cp => cp.Font = OsuFont.Style.Title.With(size: 60, weight: FontWeight.SemiBold))
-            {
-                Anchor = Anchor.TopCentre,
-                Origin = Anchor.TopCentre,
-                AutoSizeAxes = Axes.Both,
-                Text = Score.ScoreInfo.User.Username,
-                Y = 50,
-            });
+            // 不需要
+            // // Player username display
+            // GameplayClockContainer.Add(new OsuTextFlowContainer(cp => cp.Font = OsuFont.Style.Title.With(size: 60, weight: FontWeight.SemiBold))
+            // {
+            //     Anchor = Anchor.TopCentre,
+            //     Origin = Anchor.TopCentre,
+            //     AutoSizeAxes = Axes.Both,
+            //     Text = Score.ScoreInfo.User.Username,
+            //     Y = 50,
+            // });
         }
 
         protected override void Update()
