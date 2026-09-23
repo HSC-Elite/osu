@@ -5,16 +5,11 @@ using System;
 using System.Threading;
 using osu.Framework.Allocation;
 using osu.Framework.Audio;
-using osu.Framework.Graphics;
 using osu.Game.Beatmaps;
-using osu.Game.Graphics;
-using osu.Game.Graphics.Containers;
 using osu.Game.Scoring;
 using osu.Game.Screens.Play;
 using osu.Game.Screens.Play.Leaderboards;
 using osu.Game.Screens.Ranking;
-using FontWeight = osu.Game.Graphics.FontWeight;
-using OsuFont = osu.Game.Graphics.OsuFont;
 
 namespace osu.Game.Screens.OnlinePlay.Multiplayer.Spectate
 {
