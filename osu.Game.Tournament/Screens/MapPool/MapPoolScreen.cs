@@ -348,13 +348,13 @@ namespace osu.Game.Tournament.Screens.MapPool
 
         private void addTB()
         {
-            var lastPickType = pickType;
-            pickType = ChoiceType.TB;
-
             int? tbId = CurrentMatch.Value?.Round.Value?.Beatmaps.FirstOrDefault(b => b.Mods == "TB")?.ID;
 
             if (tbId == null)
                 return;
+
+            var lastPickType = pickType;
+            pickType = ChoiceType.TB;
 
             addForBeatmap(tbId.Value);
             pickType = lastPickType;
