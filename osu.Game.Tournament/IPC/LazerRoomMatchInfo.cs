@@ -489,7 +489,7 @@ namespace osu.Game.Tournament.IPC
                         acc *
                         (Ladder.ModMultiplierSettings
                                .FirstOrDefault(s => s.ModAcronym.Value == mod.Acronym)
-                               ?.Multiplier.Value / mod.ScoreMultiplier
+                               ?.Multiplier.Value
                          ?? 1.0));
             }
 
