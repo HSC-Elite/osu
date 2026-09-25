@@ -4,7 +4,6 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
@@ -28,6 +27,7 @@ using osu.Game.Online;
 using osu.Game.Online.API;
 using osu.Game.Online.API.Requests;
 using osu.Game.Tournament.Configuration;
+using osu.Game.Tournament.Components;
 using osu.Game.Tournament.IO;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.IPC.MemoryIPC;
@@ -44,6 +44,7 @@ namespace osu.Game.Tournament
         public const string BRACKET_FILENAME = @"bracket.json";
         private LadderInfo ladder = new LadderInfo();
         private TournamentStorage storage = null!;
+        private TournamentBeatmapManager beatmapManager = null!;
         private DependencyContainer dependencies = null!;
         private MatchIPCInfo ipc = null!;
         private BeatmapLookupCache beatmapCache = null!;
@@ -138,6 +139,8 @@ namespace osu.Game.Tournament
 
             dependencies.CacheAs<Storage>(storage = new TournamentStorage(baseStorage));
             dependencies.CacheAs(storage);
+            dependencies.Cache(beatmapManager = new TournamentBeatmapManager(storage));
+            dependencies.Cache(new TournamentBeatmapDifficultyCache(beatmapManager, RulesetStore));
 
             dependencies.Cache(tournamentConfigManager = new TournamentConfigManager(baseStorage));
 
@@ -394,23 +397,6 @@ namespace osu.Game.Tournament
             }
         }
 
-        public void PopulateFmBeatmapStarRating(TournamentBeatmap beatmap, string? baseMod = null)
-        {
-            foreach (string mod in FreeModAcronyms)
-            {
-                var req = new GetBeatmapAttributesRequest(beatmap.OnlineID,
-                    ((int)ConvertFromAcronym(mod) | (int)ConvertFromAcronym(baseMod)).ToString(),
-                    ladder.Ruleset.Value?.OnlineID);
-
-                API.Perform(req);
-
-                if (req.Response == null)
-                    return;
-
-                beatmap.StarRatingWithAdditionalMods[mod] = req.Response.Attributes.StarRating;
-            }
-        }
-
         public void SaveChanges()
         {
             if (!bracketLoadTaskCompletionSource.Task.IsCompletedSuccessfully)
@@ -462,56 +448,28 @@ namespace osu.Game.Tournament
 
         public async Task DownloadAllRoundBeatmapOsuFile(bool forceRedownload, IProgress<BeatmapDownloadProgress>? progress = null, CancellationToken cancellationToken = default)
         {
-            int[] beatmapIds = ladder.Rounds
-                                     .SelectMany(r => r.Beatmaps)
-                                     .Where(b => b.ID != 0 && b.Beatmap != null && b.Beatmap.OnlineID != 0)
-                                     .Select(b => b.ID)
-                                     .Distinct()
-                                     .ToArray();
+            TournamentBeatmap[] allRoundBeatmaps = ladder.Rounds
+                                                           .SelectMany(r => r.Beatmaps)
+                                                           .Where(b => b.ID != 0 && b.Beatmap != null && b.Beatmap.OnlineID != 0)
+                                                           .Select(b => b.Beatmap!)
+                                                           .GroupBy(b => b.OnlineID)
+                                                           .Select(g => g.First())
+                                                           .ToArray();
 
             int failedMap = 0;
 
-            for (int i = 0; i < beatmapIds.Length; i++)
+            for (int i = 0; i < allRoundBeatmaps.Length; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                int beatmapId = beatmapIds[i];
-                progress?.Report(new BeatmapDownloadProgress(i, failedMap, beatmapIds.Length, beatmapId));
+                TournamentBeatmap beatmap = allRoundBeatmaps[i];
+                progress?.Report(new BeatmapDownloadProgress(i, failedMap, allRoundBeatmaps.Length, beatmap.OnlineID));
 
-                if (!await DownloadBeatmapOsuFile(beatmapId, forceRedownload, cancellationToken).ConfigureAwait(false))
+                if (!await beatmapManager.DownloadBeatmapOsuFile(beatmap, forceRedownload, cancellationToken).ConfigureAwait(false))
                     failedMap++;
             }
 
-            progress?.Report(new BeatmapDownloadProgress(beatmapIds.Length, failedMap, beatmapIds.Length, 0));
-        }
-
-        public async Task<bool> DownloadBeatmapOsuFile(int beatmapId, bool forceRedownload, CancellationToken cancellationToken = default)
-        {
-            string mapPath = storage.GetFullPath("map");
-
-            if (!Directory.Exists(mapPath))
-            {
-                Directory.CreateDirectory(mapPath);
-            }
-
-            string osuFilePath = Path.Combine(mapPath, $"{beatmapId}.osu");
-
-            if (!forceRedownload && Path.Exists(osuFilePath))
-                return true;
-
-            var req = new OsuWebRequest($"https://osu.ppy.sh/osu/{beatmapId}");
-
-            await req.PerformAsync(cancellationToken).ConfigureAwait(false);
-
-            if (!req.Completed)
-                return false;
-
-            using (var writer = new StreamWriter(File.Create(osuFilePath), Encoding.UTF8))
-            {
-                await writer.WriteAsync(req.GetResponseString()).ConfigureAwait(false);
-            }
-
-            return true;
+            progress?.Report(new BeatmapDownloadProgress(allRoundBeatmaps.Length, failedMap, allRoundBeatmaps.Length, 0));
         }
 
         protected override UserInputManager CreateUserInputManager() => new TournamentInputManager();
@@ -541,8 +499,6 @@ namespace osu.Game.Tournament
                 public override bool ChangeFocusOnClick => false;
             }
         }
-
-        public static string[] FreeModAcronyms => new[] { "NM", "HR", "HD", "EZ" };
 
         public static LegacyMods AllowFreeMods => LegacyMods.Easy | LegacyMods.HardRock | LegacyMods.Hidden | LegacyMods.NoMod;
 

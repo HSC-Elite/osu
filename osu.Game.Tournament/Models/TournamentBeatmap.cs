@@ -14,6 +14,8 @@ namespace osu.Game.Tournament.Models
     {
         public int OnlineID { get; set; }
 
+        public string MD5Hash { get; set; } = string.Empty;
+
         public string DifficultyName { get; set; } = string.Empty;
 
         public double BPM { get; set; }
@@ -41,6 +43,7 @@ namespace osu.Game.Tournament.Models
         public TournamentBeatmap(APIBeatmap beatmap)
         {
             OnlineID = beatmap.OnlineID;
+            MD5Hash = beatmap.MD5Hash;
             DifficultyName = beatmap.DifficultyName;
             BPM = beatmap.BPM;
             Length = beatmap.Length;
@@ -55,6 +58,7 @@ namespace osu.Game.Tournament.Models
         public TournamentBeatmap(IBeatmapInfo beatmap)
         {
             OnlineID = beatmap.OnlineID;
+            MD5Hash = beatmap.MD5Hash;
             DifficultyName = beatmap.DifficultyName;
             BPM = beatmap.BPM;
             Length = beatmap.Length;
@@ -96,8 +100,6 @@ namespace osu.Game.Tournament.Models
         BeatmapSetNominationStatus IBeatmapSetOnlineInfo.NominationStatus => throw new NotImplementedException();
 
         string IBeatmapInfo.Hash => throw new NotImplementedException();
-
-        string IBeatmapInfo.MD5Hash => throw new NotImplementedException();
 
         IRulesetInfo IBeatmapInfo.Ruleset => throw new NotImplementedException();
 
