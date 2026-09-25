@@ -4,6 +4,8 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using osu.Framework.Allocation;
@@ -447,6 +449,69 @@ namespace osu.Game.Tournament
                     DefaultValueHandling = DefaultValueHandling.Ignore,
                     Converters = new JsonConverter[] { new JsonPointConverter(), new JsonColour4Converter() }
                 });
+        }
+
+        public readonly record struct BeatmapDownloadProgress(
+            int Completed,
+            int Failed,
+            int Total,
+            int BeatmapId)
+        {
+            public float Ratio => Total == 0 ? 1 : (float)Completed / Total;
+        }
+
+        public async Task DownloadAllRoundBeatmapOsuFile(bool forceRedownload, IProgress<BeatmapDownloadProgress>? progress = null, CancellationToken cancellationToken = default)
+        {
+            int[] beatmapIds = ladder.Rounds
+                                     .SelectMany(r => r.Beatmaps)
+                                     .Where(b => b.ID != 0 && b.Beatmap != null && b.Beatmap.OnlineID != 0)
+                                     .Select(b => b.ID)
+                                     .Distinct()
+                                     .ToArray();
+
+            int failedMap = 0;
+
+            for (int i = 0; i < beatmapIds.Length; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                int beatmapId = beatmapIds[i];
+                progress?.Report(new BeatmapDownloadProgress(i, failedMap, beatmapIds.Length, beatmapId));
+
+                if (!await DownloadBeatmapOsuFile(beatmapId, forceRedownload, cancellationToken).ConfigureAwait(false))
+                    failedMap++;
+            }
+
+            progress?.Report(new BeatmapDownloadProgress(beatmapIds.Length, failedMap, beatmapIds.Length, 0));
+        }
+
+        public async Task<bool> DownloadBeatmapOsuFile(int beatmapId, bool forceRedownload, CancellationToken cancellationToken = default)
+        {
+            string mapPath = storage.GetFullPath("map");
+
+            if (!Directory.Exists(mapPath))
+            {
+                Directory.CreateDirectory(mapPath);
+            }
+
+            string osuFilePath = Path.Combine(mapPath, $"{beatmapId}.osu");
+
+            if (!forceRedownload && Path.Exists(osuFilePath))
+                return true;
+
+            var req = new OsuWebRequest($"https://osu.ppy.sh/osu/{beatmapId}");
+
+            await req.PerformAsync(cancellationToken).ConfigureAwait(false);
+
+            if (!req.Completed)
+                return false;
+
+            using (var writer = new StreamWriter(File.Create(osuFilePath), Encoding.UTF8))
+            {
+                await writer.WriteAsync(req.GetResponseString()).ConfigureAwait(false);
+            }
+
+            return true;
         }
 
         protected override UserInputManager CreateUserInputManager() => new TournamentInputManager();

@@ -121,6 +121,7 @@ namespace osu.Game.Tournament.Screens.Setup
                     Label = "Current tournament",
                     Description = "Changes the background videos and bracket to match the selected tournament. This requires a restart to apply changes.",
                 },
+                new RoundBeatmapDownloadAction(),
                 resolution = new ResolutionSelector
                 {
                     Label = "Stream area resolution",
