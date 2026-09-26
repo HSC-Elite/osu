@@ -111,6 +111,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 header = new MatchHeader(),
                 scoreWarningContainer = new Container
                 {
+                    Name = "Live score warning",
                     Anchor = Anchor.BottomCentre,
                     Origin = Anchor.BottomCentre,
                     Margin = new MarginPadding { Bottom = SongBar.HEIGHT + 15 },
