@@ -55,13 +55,25 @@ namespace osu.Game.Tournament.Tests.Screens
         [Test]
         public void TestLiveScoreWarningVisibility()
         {
+            AddStep("reset gameplay and API state", () =>
+            {
+                IPCInfo.State.Value = TourneyState.Idle;
+                scoreProcessor.CurrentlyListening.Value = false;
+                scoreProcessor.WaitingForAuthoritativeResult.Value = false;
+            });
             createScreen();
 
             AddStep("set playing state", () => IPCInfo.State.Value = TourneyState.Playing);
             checkLiveScoreWarningVisibility(false);
 
             toggleWarmup();
+            checkLiveScoreWarningVisibility(false);
+
+            AddStep("start API listener", () => scoreProcessor.CurrentlyListening.Value = true);
             checkLiveScoreWarningVisibility(true);
+
+            AddStep("stop API listener", () => scoreProcessor.CurrentlyListening.Value = false);
+            checkLiveScoreWarningVisibility(false);
 
             AddStep("set ranking state", () => IPCInfo.State.Value = TourneyState.Ranking);
             checkLiveScoreWarningVisibility(false);
@@ -70,14 +82,22 @@ namespace osu.Game.Tournament.Tests.Screens
         [Test]
         public void TestSongBarShowsWhileWaitingForAuthoritativeResult()
         {
-            AddStep("clear result wait", () => scoreProcessor.WaitingForAuthoritativeResult.Value = false);
+            AddStep("reset API listener and result wait", () =>
+            {
+                IPCInfo.State.Value = TourneyState.Idle;
+                scoreProcessor.CurrentlyListening.Value = false;
+                scoreProcessor.WaitingForAuthoritativeResult.Value = false;
+            });
             createScreen();
 
             AddUntilStep("song bar initially idle", () => !gameplaySongBar.IsLoading.Value);
             AddStep("wait for authoritative result", () => scoreProcessor.WaitingForAuthoritativeResult.Value = true);
+            AddUntilStep("no loading when API listener is off", () => !gameplaySongBar.IsLoading.Value);
+            AddStep("enable API listener", () => scoreProcessor.CurrentlyListening.Value = true);
             AddUntilStep("song bar shows loading", () => gameplaySongBar.IsLoading.Value);
             AddStep("authoritative result received", () => scoreProcessor.WaitingForAuthoritativeResult.Value = false);
             AddUntilStep("song bar hides loading", () => !gameplaySongBar.IsLoading.Value);
+            AddStep("stop API listener", () => scoreProcessor.CurrentlyListening.Value = false);
         }
 
         private void createScreen()

@@ -391,15 +391,28 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
             State.BindTo(IPC.State);
             State.BindValueChanged(_ => updateState(), true);
+
             if (scoreProcessor != null)
             {
-                scoreProcessor.WaitingForAuthoritativeResult.BindValueChanged(_ => updateState());
-                gameplaySongBar.WaitForResult.BindTo(scoreProcessor.WaitingForAuthoritativeResult);
+                scoreProcessor.WaitingForAuthoritativeResult.BindValueChanged(_ =>
+                {
+                    updateState();
+                    updateResultLoading();
+                });
+
+                scoreProcessor.CurrentlyListening.BindValueChanged(state =>
+                {
+                    updateMatchListenerButton(state);
+                    updateScoreWarning();
+                    updateResultLoading();
+                }, true);
+            }
+            else
+            {
+                matchListenerButton.Enabled.Value = false;
+                updateResultLoading();
             }
 
-            scoreProcessor?.CurrentlyListening.BindValueChanged(updateMatchListenerButton, true);
-            if (scoreProcessor == null)
-                matchListenerButton.Enabled.Value = false;
             LadderInfo.InvertScoreColour.BindValueChanged(v => scoreDisplay.InvertTextColor = v.NewValue, true);
         }
 
@@ -498,7 +511,9 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 {
                     if (warmup.Value || CurrentMatch.Value == null) return;
 
-                    if (scoreProcessor?.WaitingForAuthoritativeResult.Value == true)
+                    if (scoreProcessor != null
+                        && scoreProcessor.CurrentlyListening.Value
+                        && scoreProcessor.WaitingForAuthoritativeResult.Value)
                         return;
 
                     var lastPick = CurrentMatch.Value.PicksBans.LastOrDefault(p => p.Type == ChoiceType.Pick && p.BeatmapID == IPC.Beatmap.Value?.OnlineID);
@@ -568,10 +583,17 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
         private void updateScoreWarning()
         {
-            if (State.Value == TourneyState.Playing && !warmup.Value)
+            if (scoreProcessor?.CurrentlyListening.Value == true && State.Value == TourneyState.Playing && !warmup.Value)
                 scoreWarningContainer.FadeIn(100);
             else
                 scoreWarningContainer.FadeOut(100);
+        }
+
+        private void updateResultLoading()
+        {
+            gameplaySongBar.WaitForResult.Value = scoreProcessor != null
+                                                 && scoreProcessor.CurrentlyListening.Value
+                                                 && scoreProcessor.WaitingForAuthoritativeResult.Value;
         }
 
         public override void Hide()
