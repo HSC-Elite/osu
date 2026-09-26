@@ -47,6 +47,7 @@ namespace osu.Game.Tournament
         private TournamentBeatmapManager beatmapManager = null!;
         private DependencyContainer dependencies = null!;
         private MatchIPCInfo ipc = null!;
+        private TournamentMatchScoreProcessor scoreProcessor = null!;
         private BeatmapLookupCache beatmapCache = null!;
 
         protected override Container<Drawable> Content => content;
@@ -270,7 +271,9 @@ namespace osu.Game.Tournament
 
                 dependencies.Cache(ladder);
                 dependencies.CacheAs(ipc = new MemoryBasedIPC());
+                dependencies.Cache(scoreProcessor = new TournamentMatchScoreProcessor());
                 Add(ipc);
+                Add(scoreProcessor);
 
                 bracketLoadTaskCompletionSource.SetResult(true);
 

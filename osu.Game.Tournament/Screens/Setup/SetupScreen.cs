@@ -14,6 +14,7 @@ using osu.Game.Online.API;
 using osu.Game.Overlays;
 using osu.Game.Rulesets;
 using osu.Game.Tournament.IPC.MemoryIPC;
+using osu.Game.Tournament.Models;
 using osuTK;
 
 namespace osu.Game.Tournament.Screens.Setup
@@ -114,6 +115,13 @@ namespace osu.Game.Tournament.Screens.Setup
                     Description = "Decides what stats are displayed and which ranks are retrieved for players. This requires a restart to reload data for an existing bracket.",
                     Items = rulesets.AvailableRulesets,
                     Current = LadderInfo.Ruleset,
+                    DropdownWidth = 0.5f,
+                },
+                new LabelledEnumDropdown<TournamentScoringMode>(padded: true)
+                {
+                    Label = "Scoring mode",
+                    Description = "Chooses whether live match scores use the legacy score or the calculated performance value.",
+                    Current = LadderInfo.ScoringMode,
                     DropdownWidth = 0.5f,
                 },
                 new TournamentSwitcher

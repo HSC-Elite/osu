@@ -34,7 +34,7 @@ namespace osu.Game.Tournament.Components
         [Resolved]
         private MatchIPCInfo ipc { get; set; } = null!;
 
-        private IProvideAdditionalData? additionalData => ipc as MemoryBasedIPC;
+        private IProvideAdditionalData? additionalData => ipc as IProvideAdditionalData;
 
         public TournamentMatchChatDisplay()
         {

@@ -14,6 +14,7 @@ using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Primitives;
 using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Sprites;
+using osu.Framework.Logging;
 using osu.Framework.Localisation;
 using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.Legacy;
@@ -471,7 +472,8 @@ namespace osu.Game.Tournament.Components
 
             populateDifficultyData(tournamentBeatmap, modsForFetch).ContinueWith(task =>
             {
-                _ = task.Exception;
+                if (task.IsFaulted)
+                    Logger.Error(task.Exception, "Failed to populate beatmap difficulty data");
 
                 Scheduler.AddOnce(() =>
                 {

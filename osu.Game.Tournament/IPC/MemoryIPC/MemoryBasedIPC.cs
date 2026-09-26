@@ -335,33 +335,8 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                     break;
             }
 
-            UpdateScore();
-        }
-
-        protected void UpdateScore()
-        {
-            Score1.Value = GetTeamScore(TeamColour.Red).Sum(CalculateModMultiplier);
-            Score2.Value = GetTeamScore(TeamColour.Blue).Sum(CalculateModMultiplier);
-
             Team1Combo.Value = getCombo(TeamColour.Red);
             Team2Combo.Value = getCombo(TeamColour.Blue);
-        }
-
-        protected long CalculateModMultiplier(PlayerScore s)
-        {
-            return (long)(s.Score * (Ladder.ModMultiplierSettings.Where(m => (m.Mods.Value & s.Mods) > LegacyMods.None).Aggregate(1.0, (d, setting) => d * setting.Multiplier.Value)));
-        }
-
-        protected virtual IEnumerable<PlayerScore> GetTeamScore(TeamColour colour)
-        {
-            int[] teamIds = GetTeamIds(colour);
-
-            return SlotPlayers.Where(s => teamIds.Any(t => t == s.OnlineID.Value)).Select(s => new PlayerScore
-            {
-                OnlineId = s.OnlineID.Value,
-                Score = s.Score.Value,
-                Mods = s.Mods.Value
-            });
         }
 
         protected int[] GetTeamIds(TeamColour colour)
@@ -376,12 +351,5 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
             return SlotPlayers.Where(s => teamIds.Any(t => t == s.OnlineID.Value)).Select(s => s.Combo.Value).Sum();
         }
-    }
-
-    public struct PlayerScore
-    {
-        public int OnlineId;
-        public long Score;
-        public LegacyMods Mods;
     }
 }
