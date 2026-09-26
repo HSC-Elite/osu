@@ -39,6 +39,8 @@ namespace osu.Game.Tournament.Screens.Gameplay
         private OsuButton warmupButton = null!;
         private Sprite slotSprite = null!;
         private SettingsNumberBox frameRateInputBox = null!;
+        private SettingsNumberBox matchID = null!;
+        private TourneyButton matchListenerButton = null!;
 
         private PlayerArea redArea = null!;
         private PlayerArea blueArea = null!;
@@ -66,6 +68,9 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
         [Resolved]
         private TournamentConfigManager config { get; set; } = null!;
+
+        [Resolved]
+        private TournamentMatchScoreProcessor? scoreProcessor { get; set; }
 
         private Drawable chroma = null!;
 
@@ -194,10 +199,6 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     Current = frameRate,
                     KeyboardStep = 1,
                 },
-                frameRateInputBox = new SettingsNumberBox
-                {
-                    LabelText = "Frame rate",
-                },
                 !D3D11Interop.TryGetD3D11Device(renderer, out _, out _, out _) && OperatingSystem.IsWindows()
                     ? new TournamentSpriteText
                     {
@@ -210,6 +211,19 @@ namespace osu.Game.Tournament.Screens.Gameplay
                         Text = "目前的渲染器不是D3D11，无法使用WGC捕捉，已回滚至bitblt，可能会有延迟或者性能损失"
                     }
                     : Empty(),
+                frameRateInputBox = new SettingsNumberBox
+                {
+                    LabelText = "Frame rate",
+                },
+                matchID = new SettingsNumberBox
+                {
+                    LabelText = "Mplink ID",
+                },
+                matchListenerButton = new TourneyButton
+                {
+                    RelativeSizeAxes = Axes.X,
+                    Text = "开始监听",
+                },
                 new SettingsSlider<int>
                 {
                     LabelText = "Players per team",
@@ -360,7 +374,28 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
             State.BindTo(IPC.State);
             State.BindValueChanged(_ => updateState(), true);
+            scoreProcessor?.WaitingForAuthoritativeResult.BindValueChanged(_ => updateState());
+            scoreProcessor?.CurrentlyListening.BindValueChanged(updateMatchListenerButton, true);
+            if (scoreProcessor == null)
+                matchListenerButton.Enabled.Value = false;
             LadderInfo.InvertScoreColour.BindValueChanged(v => scoreDisplay.InvertTextColor = v.NewValue, true);
+        }
+
+        private void updateMatchListenerButton(ValueChangedEvent<bool> state)
+        {
+            if (scoreProcessor == null)
+            {
+                matchListenerButton.Enabled.Value = false;
+                return;
+            }
+
+            matchListenerButton.Enabled.Value = true;
+            matchListenerButton.Text = state.NewValue ? "停止监听" : "开始监听";
+
+            if (state.NewValue)
+                matchListenerButton.Action = scoreProcessor.StopListening;
+            else
+                matchListenerButton.Action = () => scoreProcessor.StartListening(matchID.Current.Value);
         }
 
         protected override void SetModAcronym(string acronym)
@@ -440,12 +475,18 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 {
                     if (warmup.Value || CurrentMatch.Value == null) return;
 
+                    if (scoreProcessor?.WaitingForAuthoritativeResult.Value == true)
+                        return;
+
                     var lastPick = CurrentMatch.Value.PicksBans.LastOrDefault(p => p.Type == ChoiceType.Pick && p.BeatmapID == IPC.Beatmap.Value?.OnlineID);
 
                     if (lastPick?.Winner.Value != null)
                         return;
 
-                    if (IPC.Score1.Value > IPC.Score2.Value)
+                    long score1 = scoreProcessor?.Score1.Value ?? IPC.Score1.Value;
+                    long score2 = scoreProcessor?.Score2.Value ?? IPC.Score2.Value;
+
+                    if (score1 > score2)
                     {
                         CurrentMatch.Value.Team1Score.Value++;
                         if (lastPick != null) lastPick.Winner.Value = TeamColour.Red;
