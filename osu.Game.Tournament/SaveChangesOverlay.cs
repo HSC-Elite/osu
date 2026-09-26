@@ -33,13 +33,14 @@ namespace osu.Game.Tournament
         {
             RelativeSizeAxes = Axes.Both;
 
-            InternalChild = new CircularContainer
+            InternalChild = new Container
             {
                 Anchor = Anchor.BottomRight,
                 Origin = Anchor.BottomRight,
                 Position = new Vector2(-5),
                 Masking = true,
                 AutoSizeAxes = Axes.Both,
+                CornerRadius = 5f,
                 Children = new Drawable[]
                 {
                     new Box

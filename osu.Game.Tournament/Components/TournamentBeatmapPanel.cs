@@ -6,13 +6,17 @@ using System.Collections.Specialized;
 using System.Linq;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
+using osu.Framework.Extensions.Color4Extensions;
 using osu.Framework.Graphics;
+using osu.Framework.Graphics.Colour;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Effects;
 using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Sprites;
 using osu.Framework.Graphics.Textures;
 using osu.Framework.Localisation;
+using osu.Framework.Threading;
+using osu.Framework.Utils;
 using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.Drawables;
 using osu.Game.Graphics;
@@ -300,12 +304,16 @@ namespace osu.Game.Tournament.Components
         private bool centerText = false;
         private FillFlowContainer information = null!;
 
+        private bool boarderRainbow;
+
         protected virtual void UpdateState()
         {
             if (currentMatch.Value == null)
             {
                 return;
             }
+
+            boarderRainbow = false;
 
             var found = currentMatch.Value.PicksBans.Where(p => p.BeatmapID == Beatmap?.OnlineID).ToList();
             var foundProtected = isMappool ? found.FirstOrDefault(s => s.Type == ChoiceType.Protected) : null;
@@ -330,10 +338,20 @@ namespace osu.Game.Tournament.Components
 
                 MainContainer.BorderThickness = 6;
 
+                if (lastFound.Type != ChoiceType.TB)
+                {
+                    boarderRainbowSchedule?.Cancel();
+                    MainContainer.BorderColour = TournamentGame.GetTeamColour(lastFound.Team);
+                }
+
                 MainContainer.BorderColour = TournamentGame.GetTeamColour(lastFound.Team);
 
                 switch (lastFound.Type)
                 {
+                    case ChoiceType.TB:
+                        rainbowBoarder();
+                        break;
+
                     case ChoiceType.Pick:
                         MainContainer.Colour = Color4.White;
 
@@ -375,6 +393,25 @@ namespace osu.Game.Tournament.Components
             }
 
             choice = lastFound;
+        }
+
+        private ScheduledDelegate? boarderRainbowSchedule;
+
+        private void rainbowBoarder()
+        {
+            boarderRainbowSchedule?.Cancel();
+
+            MainContainer.TransformTo(nameof(MainContainer.BorderColour), ColourInfo.GradientHorizontal(getRandomColour(), getRandomColour()), 1000);
+
+            boarderRainbowSchedule = Scheduler.AddDelayed(() =>
+            {
+                MainContainer.TransformTo(nameof(MainContainer.BorderColour), ColourInfo.GradientHorizontal(getRandomColour(), getRandomColour()), 1000);
+            }, 1000, true);
+
+            Color4 getRandomColour()
+            {
+                return Color4Extensions.FromHSV(RNG.NextSingle(0, 360) % 360, 1, 1);
+            }
         }
 
         private partial class NoUnloadBeatmapSetCover : UpdateableOnlineBeatmapSetCover

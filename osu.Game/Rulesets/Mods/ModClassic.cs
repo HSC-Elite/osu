@@ -13,8 +13,6 @@ namespace osu.Game.Rulesets.Mods
 
         public override string Acronym => "CL";
 
-        public override double ScoreMultiplier => 1;
-
         public override IconUsage? Icon => OsuIcon.ModClassic;
 
         public override LocalisableString Description => "Feeling nostalgic?";

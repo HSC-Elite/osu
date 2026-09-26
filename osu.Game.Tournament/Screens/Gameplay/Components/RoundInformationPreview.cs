@@ -22,15 +22,15 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
     public partial class RoundInformationPreview : CompositeDrawable
     {
         [Resolved]
-        private LadderInfo ladderInfo { get; set; } = null!;
+        protected LadderInfo LadderInfo { get; private set; } = null!;
 
-        private readonly FillFlowContainer mapContentContainer;
-        private readonly TournamentSpriteText mapCountText;
+        protected readonly FillFlowContainer MapContentContainer;
+        protected readonly TournamentSpriteText MapCountText;
         private static readonly Color4 boarder_color = Color4Extensions.FromHex("#808080");
 
         private const float cover_width = 50f;
 
-        private readonly Bindable<TournamentMatch?> currentMatch = new Bindable<TournamentMatch?>();
+        protected readonly Bindable<TournamentMatch?> CurrentMatch = new Bindable<TournamentMatch?>();
 
         public RoundInformationPreview()
         {
@@ -71,7 +71,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
                             RelativeSizeAxes = Axes.Both,
                             Children = new Drawable[]
                             {
-                                mapContentContainer = new FillFlowContainer
+                                MapContentContainer = new FillFlowContainer
                                 {
                                     Anchor = Anchor.TopCentre,
                                     Origin = Anchor.TopCentre,
@@ -124,7 +124,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
                                 }
                             }
                         },
-                        mapCountText = new TournamentSpriteText
+                        MapCountText = new TournamentSpriteText
                         {
                             Anchor = Anchor.BottomCentre,
                             Origin = Anchor.BottomCentre,
@@ -140,8 +140,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
         protected override void LoadComplete()
         {
             base.LoadComplete();
-            currentMatch.BindTo(ladderInfo.CurrentMatch);
-            currentMatch.BindValueChanged(matchChanged, true);
+            CurrentMatch.BindTo(LadderInfo.CurrentMatch);
+            CurrentMatch.BindValueChanged(matchChanged, true);
         }
 
         private void matchChanged(ValueChangedEvent<TournamentMatch?> match)
@@ -159,17 +159,27 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
 
         private void updateState()
         {
-            mapContentContainer.Clear();
-            mapCountText.Text = string.Empty;
+            MapContentContainer.Clear();
+            MapCountText.Text = string.Empty;
 
-            if (currentMatch.Value?.Round.Value == null)
+            if (CurrentMatch.Value?.Round.Value == null)
                 return;
 
-            var currentPicksBans = currentMatch.Value.PicksBans.ToList();
+            UpdateContent();
+            UpdateMapCount();
+            SetAnimation();
+        }
 
-            foreach (var group in currentMatch.Value.Round.Value.BanPickFlowGroups)
+        protected virtual void UpdateContent()
+        {
+            if (CurrentMatch.Value?.Round.Value == null)
+                return;
+
+            var currentPicksBans = CurrentMatch.Value.PicksBans.ToList();
+
+            foreach (var group in CurrentMatch.Value.Round.Value.BanPickFlowGroups)
             {
-                var currentMapDetail = new MapDetailContent(group.Name.Value);
+                var currentMapDetail = new MapDetailContent();
                 List<BeatmapChoice?> currentChoices = new List<BeatmapChoice?>();
 
                 for (int i = 0; i < group.TotalStep; i++)
@@ -191,41 +201,53 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
                 }
 
                 currentMapDetail.UpdateBeatmap(currentChoices);
-                mapContentContainer.Add(currentMapDetail);
-                mapContentContainer.Add(createDivideLine());
+                MapContentContainer.Add(currentMapDetail);
+                MapContentContainer.Add(createDivideLine());
             }
 
-            var TBMap = currentMatch.Value.Round.Value?.Beatmaps.FirstOrDefault(map => map.Mods == "TB");
+            var TBMap = CurrentMatch.Value.Round.Value?.Beatmaps.FirstOrDefault(map => map.Mods == "TB");
 
             if (TBMap != null)
             {
-                mapContentContainer.Add(new TbMapBox(TBMap));
+                MapContentContainer.Add(new TbMapBox(TBMap));
             }
+        }
 
-            int mapCount = currentMatch.Value.Round.Value!.Beatmaps.Count;
-            int remainMapCount = mapCount - currentMatch.Value.PicksBans.Count(p => p.IsConsumed());
+        protected virtual void UpdateMapCount()
+        {
+            var match = CurrentMatch.Value;
+            var round = match?.Round.Value;
 
-            mapCountText.Text = $"图池内谱面数量：{mapCount}  |  图池内剩余谱面：{remainMapCount}";
+            if (match == null || round == null)
+                return;
 
+            int mapCount = round.Beatmaps.Count;
+            int remainMapCount = mapCount - match.PicksBans.Count(p => p.IsConsumed());
+
+            MapCountText.Text = $"图池内谱面数量：{mapCount}  |  图池内剩余谱面：{remainMapCount}";
+        }
+
+        protected virtual void SetAnimation()
+        {
             Scheduler.Add(() =>
             {
                 FinishTransforms();
 
-                if (mapContentContainer.DrawWidth < 1000)
+                if (MapContentContainer.DrawWidth < 1000)
                 {
-                    mapContentContainer.Anchor = Anchor.TopCentre;
-                    mapContentContainer.Origin = Anchor.TopCentre;
-                    mapContentContainer.X = 0;
+                    MapContentContainer.Anchor = Anchor.TopCentre;
+                    MapContentContainer.Origin = Anchor.TopCentre;
+                    MapContentContainer.X = 0;
                     return;
                 }
 
-                mapContentContainer.Anchor = Anchor.TopLeft;
-                mapContentContainer.Origin = Anchor.TopLeft;
+                MapContentContainer.Anchor = Anchor.TopLeft;
+                MapContentContainer.Origin = Anchor.TopLeft;
 
                 // 每秒走50px
-                double timeToRepeat = (mapContentContainer.DrawWidth - 1000 + cover_width) / 30f * 1000;
-                mapContentContainer.X = cover_width;
-                mapContentContainer.MoveToX((1000 - cover_width - mapContentContainer.DrawWidth), timeToRepeat, Easing.OutSine).Then(5000).MoveToX(cover_width, timeToRepeat, Easing.OutSine).Then(5000)
+                double timeToRepeat = (MapContentContainer.DrawWidth - 1000 + cover_width) / 30f * 1000;
+                MapContentContainer.X = cover_width;
+                MapContentContainer.MoveToX((1000 - cover_width - MapContentContainer.DrawWidth), timeToRepeat, Easing.OutSine).Then(5000).MoveToX(cover_width, timeToRepeat, Easing.OutSine).Then(5000)
                                    .Loop();
             });
         }
@@ -247,13 +269,6 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
 
             [Resolved]
             private LadderInfo ladderInfo { get; set; } = null!;
-
-            private readonly string headerName;
-
-            public MapDetailContent(string headerName)
-            {
-                this.headerName = headerName;
-            }
 
             [BackgroundDependencyLoader]
             private void load()

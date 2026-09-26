@@ -54,6 +54,8 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
         private StableMemoryReader[] readers;
         private TourneyManagerMemoryReader tourneyManagerMemoryReader;
 
+        public int PlayTime => SlotPlayers.Max(s => s.PlayTime.Value);
+
         public MemoryBasedIPC()
         {
             readers = Enumerable.Range(0, 8).Select(i => new StableMemoryReader()).ToArray();
@@ -237,7 +239,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
         {
             base.Update();
 
-            if(!OperatingSystem.IsWindows()) return;
+            if (!OperatingSystem.IsWindows() && !OperatingSystem.IsLinux()) return;
 
             lastUpdateTime += Time.Elapsed;
 
@@ -245,23 +247,6 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                 return;
 
             lastUpdateTime = 0;
-
-            switch (tourneyManagerMemoryReader.Status)
-            {
-                case AttachStatus.UnAttached:
-                    tourneyManagerMemoryReader.AttachToProcessByTitleNameAsync(" Tournament Manager");
-                    available.Value = false;
-                    break;
-
-                case AttachStatus.Initializing:
-                    available.Value = false;
-                    break;
-
-                case AttachStatus.Attached:
-                    updateTourneyManagerData();
-                    available.Value = true;
-                    break;
-            }
 
             for (int i = 0; i < playersPerTeam.Value * 2; i++)
             {
@@ -271,7 +256,16 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                 switch (reader.Status)
                 {
                     case AttachStatus.UnAttached:
-                        reader.AttachToProcessByTitleNameAsync($"{TournamentGame.TOURNAMENT_CLIENT_NAME}{i}");
+                        if (OperatingSystem.IsWindows())
+                        {
+                            reader.AttachToProcessByTitleNameAsync($"{TournamentGame.TOURNAMENT_CLIENT_NAME}{i}");
+                        }
+                        else
+                        {
+                            int index = i;
+                            reader.AttachToProcessByProcessCommandLineAsync(s => s.Contains($"-spectateclient {index}"));
+                        }
+
                         continue;
 
                     case AttachStatus.Initializing:
@@ -305,6 +299,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                             player.HitMiss.Value = gameplayData.HitMiss;
                             player.Mods.Value = gameplayData.Mods;
                             player.Score.Value = gameplayData.Score;
+                            player.PlayTime.Value = reader.PlayTime;
                             continue;
                         }
                         catch (InvalidOperationException)
@@ -321,33 +316,30 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                 }
             }
 
-            UpdateScore();
-        }
+            switch (tourneyManagerMemoryReader.Status)
+            {
+                case AttachStatus.UnAttached:
 
-        protected void UpdateScore()
-        {
-            Score1.Value = GetTeamScore(TeamColour.Red).Sum(CalculateModMultiplier);
-            Score2.Value = GetTeamScore(TeamColour.Blue).Sum(CalculateModMultiplier);
+                    if (OperatingSystem.IsWindows())
+                        tourneyManagerMemoryReader.AttachToProcessByTitleNameAsync(" Tournament Manager");
+                    else
+                        tourneyManagerMemoryReader.AttachToProcessByProcessCommandLineAsync(s => !s.Contains($"-spectateclient"));
+
+                    available.Value = false;
+                    break;
+
+                case AttachStatus.Initializing:
+                    available.Value = false;
+                    break;
+
+                case AttachStatus.Attached:
+                    updateTourneyManagerData();
+                    available.Value = true;
+                    break;
+            }
 
             Team1Combo.Value = getCombo(TeamColour.Red);
             Team2Combo.Value = getCombo(TeamColour.Blue);
-        }
-
-        protected long CalculateModMultiplier(PlayerScore s)
-        {
-            return (long)(s.Score * (Ladder.ModMultiplierSettings.Where(m => (m.Mods.Value & s.Mods) > LegacyMods.None).Aggregate(1.0, (d, setting) => d * setting.Multiplier.Value)));
-        }
-
-        protected virtual IEnumerable<PlayerScore> GetTeamScore(TeamColour colour)
-        {
-            int[] teamIds = GetTeamIds(colour);
-
-            return SlotPlayers.Where(s => teamIds.Any(t => t == s.OnlineID.Value)).Select(s => new PlayerScore
-            {
-                OnlineId = s.OnlineID.Value,
-                Score = s.Score.Value,
-                Mods = s.Mods.Value
-            });
         }
 
         protected int[] GetTeamIds(TeamColour colour)
@@ -362,12 +354,5 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
             return SlotPlayers.Where(s => teamIds.Any(t => t == s.OnlineID.Value)).Select(s => s.Combo.Value).Sum();
         }
-    }
-
-    public struct PlayerScore
-    {
-        public int OnlineId;
-        public long Score;
-        public LegacyMods Mods;
     }
 }

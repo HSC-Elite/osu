@@ -4,12 +4,15 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using osu.Framework.Allocation;
+using osu.Framework.Bindables;
 using osu.Framework.Extensions;
 using osu.Framework.Extensions.ObjectExtensions;
 using osu.Framework.Graphics;
+using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Textures;
 using osu.Framework.Input;
 using osu.Framework.IO.Stores;
@@ -23,6 +26,8 @@ using osu.Game.Graphics;
 using osu.Game.Online;
 using osu.Game.Online.API;
 using osu.Game.Online.API.Requests;
+using osu.Game.Tournament.Components;
+using osu.Game.Tournament.Configuration;
 using osu.Game.Tournament.IO;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.Models;
@@ -40,9 +45,18 @@ namespace osu.Game.Tournament
         public const string BRACKET_FILENAME = @"bracket.json";
         private LadderInfo ladder = new LadderInfo();
         private TournamentStorage storage = null!;
+        private TournamentBeatmapManager beatmapManager = null!;
         private DependencyContainer dependencies = null!;
         private MatchIPCInfo ipc = null!;
+        private TournamentMatchScoreProcessor scoreProcessor = null!;
         private BeatmapLookupCache beatmapCache = null!;
+
+        protected override Container<Drawable> Content => content;
+
+        private readonly RefCountedBackbufferProvider content = new RefCountedBackbufferProvider
+        {
+            RelativeSizeAxes = Axes.Both
+        };
 
         [Cached]
         protected readonly TournamentStageState StageState = new TournamentStageState();
@@ -103,10 +117,16 @@ namespace osu.Game.Tournament
         private string versionSniffer => ReleaseStream.General.GetDescription();
 
         private TournamentSpriteText initialisationText = null!;
+        private TournamentConfigManager tournamentConfigManager = null!;
+
+        private readonly BindableInt frameRate = new BindableInt();
 
         [BackgroundDependencyLoader]
         private void load(Storage baseStorage)
         {
+            base.Content.Add(content);
+            dependencies.CacheAs<IBackbufferProvider>(content);
+
             Add(initialisationText = new TournamentSpriteText
             {
                 Anchor = Anchor.Centre,
@@ -118,12 +138,19 @@ namespace osu.Game.Tournament
 
             dependencies.CacheAs<Storage>(storage = new TournamentStorage(baseStorage));
             dependencies.CacheAs(storage);
+            dependencies.Cache(beatmapManager = new TournamentBeatmapManager(storage));
+            dependencies.Cache(new TournamentBeatmapDifficultyCache(beatmapManager, RulesetStore));
+
+            dependencies.Cache(tournamentConfigManager = new TournamentConfigManager(baseStorage));
 
             dependencies.Cache(new TournamentVideoResourceStore(storage));
 
             Textures.AddTextureSource(new TextureLoaderStore(new StorageBackedResourceStore(storage)));
 
             beatmapCache = dependencies.Get<BeatmapLookupCache>();
+
+            tournamentConfigManager.BindWith(TournamentConfig.CaptureFrameRate, frameRate);
+            frameRate.BindValueChanged(f => host.MaximumInactiveHz = Math.Max(f.NewValue, 60), true);
         }
 
         protected override void LoadComplete()
@@ -212,7 +239,6 @@ namespace osu.Game.Tournament
                 addedInfo |= addPlayers();
                 addedInfo |= await addRoundBeatmaps().ConfigureAwait(false);
                 addedInfo |= await addSeedingBeatmaps().ConfigureAwait(false);
-                addedInfo |= addFmBeatmapStar();
 
                 if (addedInfo)
                     saveChanges();
@@ -231,7 +257,6 @@ namespace osu.Game.Tournament
                     SaveChanges();
                 });
 
-                ladder.FrameRate.BindValueChanged(f => host.MaximumInactiveHz = Math.Max(f.NewValue, 60), true);
             }
             catch (Exception e)
             {
@@ -251,7 +276,9 @@ namespace osu.Game.Tournament
 
                 dependencies.CacheAs(ipc = new StableMatchIPCInfo());
                 dependencies.CacheAs((StableMatchIPCInfo)ipc);
+                dependencies.Cache(scoreProcessor = new TournamentMatchScoreProcessor());
                 Add(ipc);
+                Add(scoreProcessor);
 
                 bracketLoadTaskCompletionSource.SetResult(true);
 
@@ -336,24 +363,6 @@ namespace osu.Game.Tournament
             return true;
         }
 
-        private bool addFmBeatmapStar()
-        {
-            var beatmapsRequiringPopulation = ladder.Rounds
-                                                    .SelectMany(r => r.Beatmaps)
-                                                    .Where(b => b.Mods == "FM" && b.Beatmap != null && b.Beatmap.OnlineID != 0 && b.Beatmap.StarRatingWithMods.Count != Freemods.Length)
-                                                    .ToList();
-
-            if (beatmapsRequiringPopulation.Count == 0)
-                return false;
-
-            foreach (var t in beatmapsRequiringPopulation)
-            {
-                PopulateFmBeatmapStarRating(t.Beatmap!);
-            }
-
-            return true;
-        }
-
         private void updateLoadProgressMessage(string s) => Schedule(() => initialisationText.Text = s);
 
         public void PopulatePlayer(TournamentUser user, Action? success = null, Action? failure = null, bool immediate = false)
@@ -393,23 +402,6 @@ namespace osu.Game.Tournament
                 user.PP = res.Statistics?.PP;
 
                 success?.Invoke();
-            }
-        }
-
-        public void PopulateFmBeatmapStarRating(TournamentBeatmap beatmap)
-        {
-            foreach (string mod in Freemods)
-            {
-                var getBeatmapStarRatingRequest = new GetBeatmapAttributesRequest(beatmap.OnlineID,
-                    ((int)ConvertFromAcronym(mod)).ToString(),
-                    ladder.Ruleset.Value?.OnlineID);
-
-                getBeatmapStarRatingRequest.Success += data =>
-                {
-                    beatmap.StarRatingWithMods[mod] = data.Attributes.StarRating;
-                };
-
-                API.Perform(getBeatmapStarRatingRequest);
             }
         }
 
@@ -453,6 +445,41 @@ namespace osu.Game.Tournament
                 });
         }
 
+        public readonly record struct BeatmapDownloadProgress(
+            int Completed,
+            int Failed,
+            int Total,
+            int BeatmapId)
+        {
+            public float Ratio => Total == 0 ? 1 : (float)Completed / Total;
+        }
+
+        public async Task DownloadAllRoundBeatmapOsuFile(bool forceRedownload, IProgress<BeatmapDownloadProgress>? progress = null, CancellationToken cancellationToken = default)
+        {
+            TournamentBeatmap[] allRoundBeatmaps = ladder.Rounds
+                                                           .SelectMany(r => r.Beatmaps)
+                                                           .Where(b => b.ID != 0 && b.Beatmap != null && b.Beatmap.OnlineID != 0)
+                                                           .Select(b => b.Beatmap!)
+                                                           .GroupBy(b => b.OnlineID)
+                                                           .Select(g => g.First())
+                                                           .ToArray();
+
+            int failedMap = 0;
+
+            for (int i = 0; i < allRoundBeatmaps.Length; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                TournamentBeatmap beatmap = allRoundBeatmaps[i];
+                progress?.Report(new BeatmapDownloadProgress(i, failedMap, allRoundBeatmaps.Length, beatmap.OnlineID));
+
+                if (!await beatmapManager.DownloadBeatmapOsuFile(beatmap, forceRedownload, cancellationToken).ConfigureAwait(false))
+                    failedMap++;
+            }
+
+            progress?.Report(new BeatmapDownloadProgress(allRoundBeatmaps.Length, failedMap, allRoundBeatmaps.Length, 0));
+        }
+
         protected override UserInputManager CreateUserInputManager() => new TournamentInputManager();
 
         private partial class TournamentInputManager : UserInputManager
@@ -481,9 +508,9 @@ namespace osu.Game.Tournament
             }
         }
 
-        public static string[] Freemods => new[] { "NM", "HR", "EZ" };
+        public static LegacyMods AllowFreeMods => LegacyMods.Easy | LegacyMods.HardRock | LegacyMods.Hidden | LegacyMods.NoMod;
 
-        public static LegacyMods ConvertFromAcronym(string acronym)
+        public static LegacyMods ConvertFromAcronym(string? acronym)
         {
             switch (acronym)
             {
@@ -493,12 +520,37 @@ namespace osu.Game.Tournament
                 case "HR":
                     return LegacyMods.HardRock;
 
+                case "DT":
+                    return LegacyMods.DoubleTime;
+
                 case "EZ":
                     return LegacyMods.Easy;
 
+                case "HD":
+                    return LegacyMods.Hidden;
+
+                case "FL":
+                    return LegacyMods.Flashlight;
+
                 default:
-                    throw new ArgumentException($"Unknown acronym: {acronym}");
+                    return LegacyMods.None;
             }
+        }
+
+        public static string ConvertToAcronym(LegacyMods mods)
+        {
+            return mods switch
+            {
+                LegacyMods.None => "NM",
+                LegacyMods.NoMod => "NM",
+                LegacyMods.HardRock => "HR",
+                LegacyMods.DoubleTime => "DT",
+                LegacyMods.Easy => "EZ",
+                LegacyMods.Hidden => "HD",
+                LegacyMods.Flashlight => "FL",
+
+                _ => throw new ArgumentOutOfRangeException(nameof(mods), mods, "Unsupported legacy mod.")
+            };
         }
     }
 }

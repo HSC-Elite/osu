@@ -21,6 +21,7 @@ using osu.Game.Graphics.UserInterface;
 using osu.Game.Overlays.Settings;
 using osu.Game.Screens;
 using osu.Game.Tournament.Components;
+using osu.Game.Tournament.Configuration;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.Models;
 using osu.Game.Tournament.Screens.Gameplay.Components;
@@ -42,10 +43,13 @@ namespace osu.Game.Tournament.Screens.Gameplay
         private OsuButton warmupButton = null!;
         private Sprite slotSprite = null!;
         private SettingsNumberBox frameRateInputBox = null!;
+        private SettingsNumberBox matchID = null!;
+        private TourneyButton matchListenerButton = null!;
+        private StableMatchIPCInfo stableIpc = null!;
 
         private MatchHeader header = null!;
         private RoundInformationPreview roundPreview = null!;
-        private StableMatchIPCInfo stableIpc = null!;
+        private Container scoreWarningContainer = null!;
 
         [Resolved]
         private TournamentSceneManager? sceneManager { get; set; }
@@ -66,6 +70,12 @@ namespace osu.Game.Tournament.Screens.Gameplay
         private OsuColour colours { get; set; } = null!;
 
         [Resolved]
+        private TournamentConfigManager config { get; set; } = null!;
+
+        [Resolved]
+        private TournamentMatchScoreProcessor? scoreProcessor { get; set; }
+
+        [Resolved]
         private Bindable<WorkingBeatmap> globalWorkingBeatmap { get; set; } = null!;
 
         private OsuScreenStack chroma = null!;
@@ -83,10 +93,13 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
         private bool switchFromMappool;
 
+        private readonly BindableInt frameRate = new BindableInt(60);
+
         [BackgroundDependencyLoader]
         private void load(TextureStore store)
         {
-            this.stableIpc = (StableMatchIPCInfo)IPC;
+            stableIpc = (StableMatchIPCInfo)IPC;
+            config.BindWith(TournamentConfig.CaptureFrameRate, frameRate);
 
             AddRangeInternal(new Drawable[]
             {
@@ -102,6 +115,20 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     FillMode = FillMode.Fit,
                 },
                 header = new MatchHeader(),
+                scoreWarningContainer = new Container
+                {
+                    Name = "Live score warning",
+                    Anchor = Anchor.BottomCentre,
+                    Origin = Anchor.BottomCentre,
+                    Margin = new MarginPadding { Bottom = SongBar.HEIGHT + 15 },
+                    AutoSizeAxes = Axes.Both,
+                    Alpha = 0,
+                    Child = new TournamentSpriteText
+                    {
+                        Text = "回合进行中获取的分数可能存在偏差，结束后将会自动(?)获取分数。",
+                        Font = OsuFont.Torus.With(size: 17),
+                    },
+                },
                 new Container
                 {
                     RelativeSizeAxes = Axes.X,
@@ -171,14 +198,10 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 new SettingsSlider<int>
                 {
                     LabelText = "Frame rate",
-                    Current = LadderInfo.FrameRate,
+                    Current = frameRate,
                     KeyboardStep = 1,
                 },
-                frameRateInputBox = new SettingsNumberBox
-                {
-                    LabelText = "Frame rate",
-                },
-                !D3D11Interop.TryGetD3D11Device(renderer, out _, out _, out _)
+                !D3D11Interop.TryGetD3D11Device(renderer, out _, out _, out _) && OperatingSystem.IsWindows()
                     ? new TournamentSpriteText
                     {
                         Colour = colours.Orange1,
@@ -190,6 +213,20 @@ namespace osu.Game.Tournament.Screens.Gameplay
                         Text = "目前的渲染器不是D3D11，无法使用WGC捕捉，已回滚至bitblt，可能会有延迟或者性能损失"
                     }
                     : Empty(),
+                frameRateInputBox = new SettingsNumberBox
+                {
+                    LabelText = "Frame rate",
+                },
+                matchID = new SettingsNumberBox
+                {
+                    LabelText = "Mplink ID",
+                },
+                matchListenerButton = new TourneyButton
+                {
+                    RelativeSizeAxes = Axes.X,
+                    Text = "开始监听",
+                },
+                new TournamentMatchScoreProcessorDetail(),
                 new SettingsSlider<int>
                 {
                     LabelText = "Players per team",
@@ -217,25 +254,6 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 {
                     RelativeSizeAxes = Axes.X,
                 },
-                // new TourneyButton
-                // {
-                //     Text = "红飞",
-                //     Action = redArea.Launch
-                // },
-                // new TourneyButton
-                // {
-                //     Text = "蓝飞",
-                //     Action = blueArea.Launch
-                // },
-                // new TourneyButton
-                // {
-                //     Text = "飞重置",
-                //     Action = () =>
-                //     {
-                //         redArea.Reset();
-                //         blueArea.Reset();
-                //     }
-                // },
                 new TourneyButton
                 {
                     RelativeSizeAxes = Axes.X,
@@ -265,6 +283,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
             {
                 warmupButton.Alpha = !w.NewValue ? 0.5f : 1;
                 header.ShowScores = !w.NewValue;
+                updateScoreWarning();
             }, true);
 
             sceneManager?.CurrentScreen.BindValueChanged(s =>
@@ -278,13 +297,13 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 switchFromMappool = false;
             });
 
-            LadderInfo.FrameRate.BindValueChanged(f => frameRateInputBox.Current.Value = f.NewValue, true);
+            frameRate.BindValueChanged(f => frameRateInputBox.Current.Value = f.NewValue, true);
             frameRateInputBox.Current.BindValueChanged(f =>
             {
                 if (f.NewValue == null)
                     return;
 
-                LadderInfo.FrameRate.Value = f.NewValue.Value;
+                frameRate.Value = f.NewValue.Value;
             });
 
             chroma.Push(new StableTournamentIdleScreen());
@@ -343,7 +362,46 @@ namespace osu.Game.Tournament.Screens.Gameplay
             State.BindTo(IPC.State);
             State.BindValueChanged(_ => Schedule(updateState), true);
             State.BindValueChanged(s => LadderInfo.PlayersPerTeam.Disabled = s.NewValue == TourneyState.Playing, true);
+
+            if (scoreProcessor != null)
+            {
+                scoreProcessor.WaitingForAuthoritativeResult.BindValueChanged(_ =>
+                {
+                    updateState();
+                    updateResultLoading();
+                });
+
+                scoreProcessor.CurrentlyListening.BindValueChanged(state =>
+                {
+                    updateMatchListenerButton(state);
+                    updateScoreWarning();
+                    updateResultLoading();
+                }, true);
+            }
+            else
+            {
+                matchListenerButton.Enabled.Value = false;
+                updateResultLoading();
+            }
+
             LadderInfo.InvertScoreColour.BindValueChanged(v => scoreDisplay.InvertTextColor = v.NewValue, true);
+        }
+
+        private void updateMatchListenerButton(ValueChangedEvent<bool> state)
+        {
+            if (scoreProcessor == null)
+            {
+                matchListenerButton.Enabled.Value = false;
+                return;
+            }
+
+            matchListenerButton.Enabled.Value = true;
+            matchListenerButton.Text = state.NewValue ? "停止监听" : "开始监听";
+
+            if (state.NewValue)
+                matchListenerButton.Action = scoreProcessor.StopListening;
+            else
+                matchListenerButton.Action = () => scoreProcessor.StartListening(matchID.Current.Value);
         }
 
         protected override void SetModAcronym(string acronym)
@@ -412,18 +470,32 @@ namespace osu.Game.Tournament.Screens.Gameplay
         {
             try
             {
+                updateScoreWarning();
                 scheduledScreenChange?.Cancel();
 
                 if (State.Value == TourneyState.Ranking)
                 {
+                    rankingScore();
+                }
+
+                void rankingScore()
+                {
                     if (warmup.Value || CurrentMatch.Value == null) return;
+
+                    if (scoreProcessor != null
+                        && scoreProcessor.CurrentlyListening.Value
+                        && scoreProcessor.WaitingForAuthoritativeResult.Value)
+                        return;
 
                     var lastPick = CurrentMatch.Value.PicksBans.LastOrDefault(p => p.Type == ChoiceType.Pick && p.BeatmapID == IPC.Beatmap.Value?.OnlineID);
 
                     if (lastPick?.Winner.Value != null)
                         return;
 
-                    if (IPC.Score1.Value > IPC.Score2.Value)
+                    long score1 = scoreProcessor?.Score1.Value ?? IPC.Score1.Value;
+                    long score2 = scoreProcessor?.Score2.Value ?? IPC.Score2.Value;
+
+                    if (score1 > score2)
                     {
                         CurrentMatch.Value.Team1Score.Value++;
                         if (lastPick != null) lastPick.Winner.Value = TeamColour.Red;
@@ -443,7 +515,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
                         contract();
 
-                        if (LadderInfo.AutoProgressScreens.Value && lastState == TourneyState.Ranking && !warmup.Value)
+                        if (LadderInfo.AutoProgressScreens.Value)
                         {
                             const float delay_before_progression = 4000;
 
@@ -491,6 +563,21 @@ namespace osu.Game.Tournament.Screens.Gameplay
             {
                 lastState = State.Value;
             }
+        }
+
+        private void updateScoreWarning()
+        {
+            if (scoreProcessor?.CurrentlyListening.Value == true && State.Value == TourneyState.Playing && !warmup.Value)
+                scoreWarningContainer.FadeIn(100);
+            else
+                scoreWarningContainer.FadeOut(100);
+        }
+
+        private void updateResultLoading()
+        {
+            gameplaySongBar.WaitForResult.Value = scoreProcessor != null
+                                                 && scoreProcessor.CurrentlyListening.Value
+                                                 && scoreProcessor.WaitingForAuthoritativeResult.Value;
         }
 
         public override void Hide()
@@ -590,7 +677,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
             private void performLayout(ValueChangedEvent<int> playerCount)
             {
-                if (!OperatingSystem.IsWindows())
+                if (!OperatingSystem.IsWindows() && !OperatingSystem.IsLinux())
                 {
                     switch (playerCount.NewValue)
                     {
@@ -651,14 +738,14 @@ namespace osu.Game.Tournament.Screens.Gameplay
                                 {
                                     RelativeSizeAxes = Axes.Both,
                                     Height = 0.5f,
-                                    RelativeAnchorPosition = new Vector2(0.25f, 0.5f),
+                                    RelativeAnchorPosition = new Vector2(0.5f, 0.25f),
                                     Origin = Anchor.Centre,
                                 },
                                 new PlayerWindow(clientIndex)
                                 {
                                     RelativeSizeAxes = Axes.Both,
                                     Height = 0.5f,
-                                    RelativeAnchorPosition = new Vector2(0.75f, 0.5f),
+                                    RelativeAnchorPosition = new Vector2(0.5f, 0.75f),
                                     Origin = Anchor.Centre,
                                 }
                             };

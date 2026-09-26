@@ -35,7 +35,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
         private const int attach_retry_interval_ms = 2000;
 
-        private int playTime;
+        public int PlayTime { get; private set; }
 
         private readonly object attachLock = new object();
         private Task<bool>? attachTask;
@@ -50,7 +50,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
             if (!IsAttached)
             {
-                Status = AttachStatus.UnAttached;
+                Reset();
                 return false;
             }
 
@@ -60,6 +60,8 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
         public Task<bool> AttachToProcessAsync(Process process) => beginAttach(() => AttachToProcess(process));
 
         public Task<bool> AttachToProcessByTitleNameAsync(string titleName) => beginAttach(() => AttachToProcessByTitleName(titleName));
+
+        public Task<bool> AttachToProcessByProcessCommandLineAsync(Func<string, bool> matches) => beginAttach(() => AttachToProcessByProcessCommandLine("osu!.exe", matches));
 
         private Task<bool> beginAttach(Func<bool> attach)
         {
@@ -118,10 +120,20 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                 return false;
 
             ProcessModule? osuModule = Process?.MainModule;
-            if (osuModule == null || osuModule.ModuleName != "osu!.exe")
+            if (OperatingSystem.IsWindows() && (osuModule == null || osuModule.ModuleName != "osu!.exe"))
                 throw new InvalidOperationException("osu! module not found");
 
             return initializeAddress();
+        }
+
+        protected virtual void Reset()
+        {
+            Status = AttachStatus.UnAttached;
+            GameBaseAddress = IntPtr.Zero;
+            RulesetsAddress = IntPtr.Zero;
+            PlayTimeAddress = IntPtr.Zero;
+            SpectatingUser = IntPtr.Zero;
+            ModsPointerAddress = IntPtr.Zero;
         }
 
         #region Pattern
@@ -175,6 +187,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                 InitializeAddressInternal(regions);
 
                 Status = AttachStatus.Attached;
+                Logger.Log($"[StableMemoryReader] Attached! PID: {Process?.Id}, ReaderType: {GetType()}");
                 return true;
             }
             catch (OperationCanceledException)
@@ -214,7 +227,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             if (rulesetAddr == IntPtr.Zero)
                 return null;
 
-            IntPtr gameplayBaseAddr = ReadInt32(rulesetAddr + 0x68);
+            IntPtr gameplayBaseAddr = ReadInt32(rulesetAddr + 0x64);
             if (gameplayBaseAddr == IntPtr.Zero)
                 return null;
 
@@ -226,7 +239,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             if (hpBarAddr == IntPtr.Zero)
                 return null;
 
-            // [[[Ruleset + 0x68] + 0x38] + 0x28]
+            // [[[Ruleset + 0x64] + 0x38] + 0x28]
             string? playerName = ReadSharpString(ReadInt32(scoreAddr + 0x28));
 
             IntPtr modsAddr = ReadInt32(scoreAddr + 0x1c);
@@ -237,7 +250,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
             int modeId = ReadInt32(scoreAddr + 0x64);
 
-            int score = ReadInt32(rulesetAddr + 0xfc);
+            int score = ReadInt32(rulesetAddr + 0xf8);
             double hpSmooth = ReadDouble(hpBarAddr + 0x14);
             double hp = ReadDouble(hpBarAddr + 0x1c);
             double acc = ReadDouble(ReadInt32(gameplayBaseAddr + 0x48) + 0xc);
@@ -253,7 +266,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
             UpdatePlayTime();
 
-            if (playTime > 1000)
+            if (PlayTime > 1000)
             {
                 Span<byte> hitData = stackalloc byte[14];
                 ReadBytes(scoreAddr + 0x88, hitData);
@@ -317,7 +330,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
             try
             {
-                playTime = ReadInt32(ReadInt32(PlayTimeAddress));
+                PlayTime = ReadInt32(ReadInt32(PlayTimeAddress));
             }
             catch (Exception ex)
             {

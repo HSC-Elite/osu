@@ -1,4 +1,4 @@
-﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
+﻿﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
 using System.Linq;
@@ -14,7 +14,7 @@ using osu.Game.Beatmaps;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Sprites;
 using osu.Game.Graphics.UserInterface;
-using osu.Game.Graphics.UserInterfaceV2;
+using osu.Game.Overlays.Settings;
 using osu.Game.Scoring;
 using osu.Game.Screens.ReplayVs.Select;
 using osuTK;
@@ -63,7 +63,7 @@ namespace osu.Game.Screens.ReplayVs
                             },
                         }
                     },
-                    new RoundedButton
+                    new SettingsButtonV2
                     {
                         Text = "Start",
                         Action = validateAndPush,
@@ -174,10 +174,12 @@ namespace osu.Game.Screens.ReplayVs
 
             var firstScore = teamRedScoreInfos.Count > 0 ? teamRedScoreInfos[0] : teamBlueScoreInfos[0];
             var beatmapInfo = firstScore.BeatmapInfo;
-            var teamRedScores = teamRedScoreInfos.Where(s => s.BeatmapInfo!.Equals(beatmapInfo)).Select(s => scoreManager.GetScore(s)!).ToArray();
-            var teamBlueScores = teamBlueScoreInfos.Where(s => s.BeatmapInfo!.Equals(beatmapInfo)).Select(s => scoreManager.GetScore(s)!).ToArray();
+            var teamRedScores = teamRedScoreInfos.Where(s => s.BeatmapInfo!.Equals(beatmapInfo)).Select(s => scoreManager.GetScore(s)).ToArray();
+            var teamBlueScores = teamBlueScoreInfos.Where(s => s.BeatmapInfo!.Equals(beatmapInfo)).Select(s => scoreManager.GetScore(s)).ToArray();
 
-            this.Push(new ReplayVsScreen(teamRedScores, teamBlueScores, beatmapManager.GetWorkingBeatmap(beatmapInfo)));
+            var beatmap = beatmapManager.GetWorkingBeatmap(beatmapInfo);
+            Beatmap.Value = beatmap;
+            this.Push(new ReplayVsScreen(teamRedScores, teamBlueScores, beatmap));
         }
     }
 }

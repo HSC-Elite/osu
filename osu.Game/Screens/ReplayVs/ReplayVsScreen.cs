@@ -1,4 +1,4 @@
-﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
+﻿﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
@@ -9,9 +9,13 @@ using osu.Framework.Audio;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
+using osu.Framework.Input.Bindings;
+using osu.Framework.Input.Events;
 using osu.Framework.Screens;
 using osu.Game.Beatmaps;
+using osu.Game.Configuration;
 using osu.Game.Graphics;
+using osu.Game.Input.Bindings;
 using osu.Game.Scoring;
 using osu.Game.Screens.OnlinePlay.Multiplayer.Spectate;
 using osu.Game.Screens.Play;
@@ -19,7 +23,7 @@ using osu.Game.Screens.Play.HUD;
 
 namespace osu.Game.Screens.ReplayVs
 {
-    public partial class ReplayVsScreen : OsuScreen
+    public partial class ReplayVsScreen : OsuScreen, IKeyBindingHandler<GlobalAction>
     {
         // Isolates beatmap/ruleset to this screen.
         public override bool DisallowExternalBeatmapRulesetChanges => true;
@@ -50,6 +54,8 @@ namespace osu.Game.Screens.ReplayVs
         private readonly BindableLong teamRedScore = new BindableLong();
         private readonly BindableLong teamBlueScore = new BindableLong();
         private IAggregateAudioAdjustment? boundAdjustments;
+        private ReplayOverlay replayOverlay = null!;
+        private Bindable<bool> configSettingsOverlay = null!;
 
         public ReplayVsScreen(Score[] teamRedScores, Score[] teamBlueScores, WorkingBeatmap beatmap)
         {
@@ -60,10 +66,11 @@ namespace osu.Game.Screens.ReplayVs
             this.beatmap = beatmap;
         }
 
-        protected override void LoadComplete()
+        [BackgroundDependencyLoader]
+        private void load(OsuConfigManager config)
         {
+            configSettingsOverlay = config.GetBindable<bool>(OsuSetting.ReplaySettingsOverlay);
             Container scoreDisplayContainer;
-            Beatmap.Value = beatmap;
             masterClockContainer = new MasterGameplayClockContainer(Beatmap.Value, 0);
 
             InternalChildren = new[]
@@ -95,6 +102,10 @@ namespace osu.Game.Screens.ReplayVs
                         },
                     }
                 }),
+                replayOverlay = new ReplayOverlay
+                {
+                    Alpha = 0,
+                },
                 new HoldForMenuButton
                 {
                     Action = this.Exit,
@@ -134,10 +145,6 @@ namespace osu.Game.Screens.ReplayVs
                 }, scoreDisplayContainer.Add);
             }
 
-            base.LoadComplete();
-
-            masterClockContainer.Reset();
-
             for (int i = 0; i < teamRedScores.Length; i++)
             {
                 instances[i].LoadScore(teamRedScores[i]);
@@ -147,8 +154,26 @@ namespace osu.Game.Screens.ReplayVs
             {
                 instances[i + teamRedScores.Length].LoadScore(teamBlueScores[i]);
             }
+        }
 
+        protected override void LoadComplete()
+        {
+            base.LoadComplete();
+
+            masterClockContainer.Reset();
+
+            // Start with adjustments from the first player to keep a sane state.
             bindAudioAdjustments(instances.First());
+
+            configSettingsOverlay.BindValueChanged(_ => updateVisibility(), true);
+        }
+
+        private void updateVisibility()
+        {
+            if (configSettingsOverlay.Value)
+                replayOverlay.Show();
+            else
+                replayOverlay.Hide();
         }
 
         private void bindAudioAdjustments(PlayerArea first)
@@ -164,17 +189,7 @@ namespace osu.Game.Screens.ReplayVs
         {
             base.Update();
 
-            if (!isCandidateAudioSource(currentAudioSource?.SpectatorPlayerClock))
-            {
-                currentAudioSource = instances.Where(i => isCandidateAudioSource(i.SpectatorPlayerClock)).MinBy(i => Math.Abs(i.SpectatorPlayerClock.CurrentTime - syncManager.CurrentMasterTime));
-
-                // Only bind adjustments if there's actually a valid source, else just use the previous ones to ensure no sudden changes to audio.
-                if (currentAudioSource != null)
-                    bindAudioAdjustments(currentAudioSource);
-
-                foreach (var instance in instances)
-                    instance.Mute = instance != currentAudioSource;
-            }
+            checkAudioSource();
 
             if (!AllPlayersLoaded) return;
 
@@ -199,6 +214,74 @@ namespace osu.Game.Screens.ReplayVs
 
             teamRedScore.Value = team1Score;
             teamBlueScore.Value = team2Score;
+        }
+
+        public bool OnPressed(KeyBindingPressEvent<GlobalAction> e)
+        {
+            if (!AllPlayersLoaded)
+                return false;
+
+            switch (e.Action)
+            {
+                case GlobalAction.SeekReplayBackward:
+                    SeekInDirection(-5);
+                    return true;
+
+                case GlobalAction.SeekReplayForward:
+                    SeekInDirection(5);
+                    return true;
+
+                case GlobalAction.TogglePauseReplay:
+                    if (masterClockContainer.IsPaused.Value)
+                        masterClockContainer.Start();
+                    else
+                        masterClockContainer.Stop();
+                    return true;
+            }
+
+            return false;
+        }
+
+        public void OnReleased(KeyBindingReleaseEvent<GlobalAction> e)
+        {
+        }
+
+        public void SeekInDirection(float amount)
+        {
+            double target = Math.Clamp(masterClockContainer.CurrentTime + amount * ReplayPlayer.BASE_SEEK_AMOUNT, 0, beatmap.Beatmap.GetLastObjectTime());
+
+            masterClockContainer.Seek(target);
+
+            for (int i = 0; i < instances.Length; i++)
+            {
+                var player = instances[i];
+
+                player.SpectatorPlayerClock.Seek(target);
+            }
+        }
+
+        private void checkAudioSource()
+        {
+            // always use the maximised player instance as the current audio source if there is one
+            if (grid.MaximisedCell?.Content is PlayerArea maximisedPlayer && maximisedPlayer == currentAudioSource)
+                return;
+
+            // if there is no maximised player instance and the previous audio source is still good to use, keep using it
+            if (grid.MaximisedCell == null && isCandidateAudioSource(currentAudioSource?.SpectatorPlayerClock))
+                return;
+
+            // at this point we're in one of the following scenarios:
+            // - the maximised player instance is not the current audio source => we want to switch to the maximised player instance
+            // - there is no maximised player instance, and the previous audio source is stopped => find another running audio source
+            currentAudioSource = grid.MaximisedCell?.Content as PlayerArea
+                                 ?? instances.Where(i => isCandidateAudioSource(i.SpectatorPlayerClock)).MinBy(i => Math.Abs(i.SpectatorPlayerClock.CurrentTime - syncManager.CurrentMasterTime));
+
+            // Only bind adjustments if there's actually a valid source, else just use the previous ones to ensure no sudden changes to audio.
+            if (currentAudioSource != null)
+                bindAudioAdjustments(currentAudioSource);
+
+            foreach (var instance in instances)
+                instance.Mute = instance != currentAudioSource;
         }
 
         private bool isCandidateAudioSource(SpectatorPlayerClock? clock)

@@ -8,13 +8,13 @@ using osu.Framework.Configuration;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
-using osu.Game.Graphics;
 using osu.Game.Graphics.Containers;
 using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Online.API;
 using osu.Game.Overlays;
 using osu.Game.Rulesets;
 using osu.Game.Tournament.IPC.MemoryIPC;
+using osu.Game.Tournament.Models;
 using osuTK;
 
 namespace osu.Game.Tournament.Screens.Setup
@@ -47,7 +47,7 @@ namespace osu.Game.Tournament.Screens.Setup
                 new Box
                 {
                     RelativeSizeAxes = Axes.Both,
-                    Colour = OsuColour.Gray(0.2f),
+                    Colour = ColourProvider.Background5,
                 },
                 new OsuScrollContainer
                 {
@@ -109,18 +109,27 @@ namespace osu.Game.Tournament.Screens.Setup
                     Failing = api.IsLoggedIn != true,
                     Description = "In order to access the API and display metadata, signing in is required."
                 },
-                new LabelledDropdown<RulesetInfo?>
+                new LabelledDropdown<RulesetInfo?>(padded: true)
                 {
                     Label = "Ruleset",
                     Description = "Decides what stats are displayed and which ranks are retrieved for players. This requires a restart to reload data for an existing bracket.",
                     Items = rulesets.AvailableRulesets,
                     Current = LadderInfo.Ruleset,
+                    DropdownWidth = 0.5f,
+                },
+                new LabelledEnumDropdown<TournamentScoringMode>(padded: true)
+                {
+                    Label = "Scoring mode",
+                    Description = "Chooses whether live match scores use the legacy score or the calculated performance value.",
+                    Current = LadderInfo.ScoringMode,
+                    DropdownWidth = 0.5f,
                 },
                 new TournamentSwitcher
                 {
                     Label = "Current tournament",
                     Description = "Changes the background videos and bracket to match the selected tournament. This requires a restart to apply changes.",
                 },
+                new RoundBeatmapDownloadAction(),
                 resolution = new ResolutionSelector
                 {
                     Label = "Stream area resolution",

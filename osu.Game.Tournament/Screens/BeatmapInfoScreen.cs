@@ -37,7 +37,7 @@ namespace osu.Game.Tournament.Screens
                 SongBar = CreateSongBar(),
                 ControlPanel = new ControlPanel
                 {
-                    Children = new Drawable[]
+                    /*Children = new Drawable[]
                     {
                         new TournamentSpriteText
                         {
@@ -73,7 +73,7 @@ namespace osu.Game.Tournament.Screens
                             Text = "Set DT",
                             Action = () => setMods(LegacyMods.DoubleTime, "DT")
                         },
-                    }
+                    }*/
                 }
             ]);
         }
@@ -119,7 +119,6 @@ namespace osu.Game.Tournament.Screens
 
         protected virtual void IpcModsChanged(ValueChangedEvent<LegacyMods> mods)
         {
-            SongBar.Mods = mods.NewValue;
         }
 
         protected virtual void IpcBeatmapChanged(ValueChangedEvent<TournamentBeatmap?> beatmap)
