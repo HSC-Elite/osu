@@ -8,12 +8,14 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 {
     public interface IProvideAdditionalData
     {
-        public SlotPlayerStatus[] SlotPlayers { get; }
+        SlotPlayerStatus[] SlotPlayers { get; }
 
-        public Bindable<Channel> TourneyChatChannel { get; }
+        Bindable<Channel> TourneyChatChannel { get; }
 
-        public BindableInt Team1Combo { get; }
+        BindableInt Team1Combo { get; }
 
-        public BindableInt Team2Combo { get; }
+        BindableInt Team2Combo { get; }
+
+        int PlayTime { get; }
     }
 }

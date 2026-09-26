@@ -35,7 +35,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
         private const int attach_retry_interval_ms = 2000;
 
-        private int playTime;
+        public int PlayTime { get; private set; }
 
         private readonly object attachLock = new object();
         private Task<bool>? attachTask;
@@ -266,7 +266,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
             UpdatePlayTime();
 
-            if (playTime > 1000)
+            if (PlayTime > 1000)
             {
                 Span<byte> hitData = stackalloc byte[14];
                 ReadBytes(scoreAddr + 0x88, hitData);

@@ -54,6 +54,8 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
         private StableMemoryReader[] readers;
         private TourneyManagerMemoryReader tourneyManagerMemoryReader;
 
+        public int PlayTime => SlotPlayers.Max(s => s.PlayTime.Value);
+
         public MemoryBasedIPC()
         {
             readers = Enumerable.Range(0, 8).Select(i => new StableMemoryReader()).ToArray();
@@ -297,6 +299,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                             player.HitMiss.Value = gameplayData.HitMiss;
                             player.Mods.Value = gameplayData.Mods;
                             player.Score.Value = gameplayData.Score;
+                            player.PlayTime.Value = reader.PlayTime;
                             continue;
                         }
                         catch (InvalidOperationException)
