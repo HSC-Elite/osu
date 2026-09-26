@@ -330,7 +330,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
             try
             {
-                playTime = ReadInt32(ReadInt32(PlayTimeAddress));
+                PlayTime = ReadInt32(ReadInt32(PlayTimeAddress));
             }
             catch (Exception ex)
             {
