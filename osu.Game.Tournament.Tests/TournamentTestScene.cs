@@ -231,6 +231,8 @@ namespace osu.Game.Tournament.Tests
             public BindableInt Team1Combo { get; } = new BindableInt();
 
             public BindableInt Team2Combo { get; } = new BindableInt();
+
+            public int PlayTime => SlotPlayers.Max(s => s.PlayTime.Value);
         }
     }
 }
