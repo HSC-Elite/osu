@@ -47,6 +47,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
         private MatchHeader header = null!;
         private RoundInformationPreview roundPreview = null!;
+        private Container scoreWarningContainer = null!;
 
         [Resolved]
         private TournamentSceneManager? sceneManager { get; set; }
@@ -108,6 +109,19 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     FillMode = FillMode.Fit,
                 },
                 header = new MatchHeader(),
+                scoreWarningContainer = new Container
+                {
+                    Anchor = Anchor.BottomCentre,
+                    Origin = Anchor.BottomCentre,
+                    Margin = new MarginPadding { Bottom = SongBar.HEIGHT + 15 },
+                    AutoSizeAxes = Axes.Both,
+                    Alpha = 0,
+                    Child = new TournamentSpriteText
+                    {
+                        Text = "回合进行中获取的分数可能存在偏差，结束后将会自动(?)获取分数。",
+                        Font = OsuFont.Torus.With(size: 17),
+                    },
+                },
                 new Container
                 {
                     RelativeSizeAxes = Axes.X,
@@ -224,6 +238,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     RelativeSizeAxes = Axes.X,
                     Text = "开始监听",
                 },
+                new TournamentMatchScoreProcessorDetail(),
                 new SettingsSlider<int>
                 {
                     LabelText = "Players per team",
@@ -299,6 +314,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
             {
                 warmupButton.Alpha = !w.NewValue ? 0.5f : 1;
                 header.ShowScores = !w.NewValue;
+                updateScoreWarning();
             }, true);
 
             sceneManager?.CurrentScreen.BindValueChanged(s =>
@@ -374,7 +390,12 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
             State.BindTo(IPC.State);
             State.BindValueChanged(_ => updateState(), true);
-            scoreProcessor?.WaitingForAuthoritativeResult.BindValueChanged(_ => updateState());
+            if (scoreProcessor != null)
+            {
+                scoreProcessor.WaitingForAuthoritativeResult.BindValueChanged(_ => updateState());
+                gameplaySongBar.WaitForResult.BindTo(scoreProcessor.WaitingForAuthoritativeResult);
+            }
+
             scoreProcessor?.CurrentlyListening.BindValueChanged(updateMatchListenerButton, true);
             if (scoreProcessor == null)
                 matchListenerButton.Enabled.Value = false;
@@ -464,6 +485,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
         {
             try
             {
+                updateScoreWarning();
                 scheduledScreenChange?.Cancel();
 
                 if (State.Value == TourneyState.Ranking)
@@ -541,6 +563,14 @@ namespace osu.Game.Tournament.Screens.Gameplay
             {
                 lastState = State.Value;
             }
+        }
+
+        private void updateScoreWarning()
+        {
+            if (State.Value == TourneyState.Playing && !warmup.Value)
+                scoreWarningContainer.FadeIn(100);
+            else
+                scoreWarningContainer.FadeOut(100);
         }
 
         public override void Hide()

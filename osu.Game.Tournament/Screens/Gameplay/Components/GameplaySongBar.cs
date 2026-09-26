@@ -22,6 +22,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
         private TeamColour? pickTeamColour;
         private bool expanded;
 
+        public readonly BindableBool WaitForResult = new BindableBool();
+
         public bool Expanded
         {
             get => expanded;
@@ -35,6 +37,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
         [BackgroundDependencyLoader]
         private void load()
         {
+            WaitForResult.BindValueChanged(waiting => ExternalLoadingInternal.Value = waiting.NewValue, true);
+
             currentMatch.BindValueChanged(matchChanged);
             currentMatch.BindTo(Ladder.CurrentMatch);
 

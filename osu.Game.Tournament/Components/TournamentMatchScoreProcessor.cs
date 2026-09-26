@@ -57,6 +57,11 @@ namespace osu.Game.Tournament.Components
         public BindableLong Score2 { get; } = new BindableLong();
         public BindableBool WaitingForAuthoritativeResult { get; } = new BindableBool();
         public BindableBool CurrentlyListening { get; } = new BindableBool();
+        public Bindable<string> LastAPIRequestStatus { get; } = new Bindable<string>("未监听");
+
+        public int CurrentMatchID => currentMatchID;
+        public long CurrentApiGameID => currentGameID;
+        public long LatestMatchEventID => matchEvents.LastOrDefault()?.Id ?? 0;
 
         private readonly Dictionary<DifficultyLookup, Task<DifficultyAttributes?>> difficultyTasks = new Dictionary<DifficultyLookup, Task<DifficultyAttributes?>>();
         private readonly HashSet<Task<DifficultyAttributes?>> loggedDifficultyFailures = new HashSet<Task<DifficultyAttributes?>>();
@@ -184,6 +189,7 @@ namespace osu.Game.Tournament.Components
             StopListening();
             currentMatchID = matchID.Value;
             CurrentlyListening.Value = true;
+            LastAPIRequestStatus.Value = api.IsLoggedIn ? "等待首次请求" : "等待 API 登录";
 
             if (api.IsLoggedIn)
                 fetchMatch();
@@ -207,6 +213,9 @@ namespace osu.Game.Tournament.Components
             timeSinceApiUpdate = 0;
             resultFetchTimeout?.Cancel();
             resultFetchTimeout = null;
+
+            if (currentMatchID <= 0)
+                LastAPIRequestStatus.Value = "未监听";
 
             if (additionalData == null)
                 bindScoresToIPC();
@@ -249,6 +258,7 @@ namespace osu.Game.Tournament.Components
 
             timeSinceApiUpdate = 0;
             apiRequestPending = true;
+            LastAPIRequestStatus.Value = "请求中";
 
             var request = new GetAPIMatchInfo(currentMatchID)
             {
@@ -261,14 +271,19 @@ namespace osu.Game.Tournament.Components
 
                 if (content.APIMatch.ID != currentMatchID
                     || (request.AfterEvent.HasValue && request.AfterEvent != matchEvents.LastOrDefault()?.Id))
+                {
+                    LastAPIRequestStatus.Value = "忽略过期响应";
                     return;
+                }
 
+                LastAPIRequestStatus.Value = "成功";
                 processMatchUpdate(content);
             };
 
             request.Failure += _ =>
             {
                 apiRequestPending = false;
+                LastAPIRequestStatus.Value = "失败";
                 Logger.Log("Match score API request failed.");
             };
 

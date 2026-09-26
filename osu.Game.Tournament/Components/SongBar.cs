@@ -55,7 +55,9 @@ namespace osu.Game.Tournament.Components
         public const float HEIGHT = 50f;
 
         protected BindableBool IsLoadingInternal = new BindableBool();
-        public IBindable<bool> IsLoading => IsLoadingInternal;
+        protected BindableBool ExternalLoadingInternal = new BindableBool();
+        private readonly BindableBool isLoading = new BindableBool();
+        public IBindable<bool> IsLoading => isLoading;
 
         [Resolved]
         protected LadderInfo Ladder { get; private set; } = null!;
@@ -287,6 +289,9 @@ namespace osu.Game.Tournament.Components
                 rightArrow.FadeColour(c.NewValue, 300);
             });
 
+            IsLoadingInternal.BindValueChanged(_ => updateLoading());
+            ExternalLoadingInternal.BindValueChanged(_ => updateLoading());
+
             IsLoading.BindValueChanged(s =>
             {
                 if (s.NewValue)
@@ -348,6 +353,11 @@ namespace osu.Game.Tournament.Components
             });
 
             SongBarColour.BindValueChanged(c => ArrowColor.Value = c.NewValue ?? Color4.White);
+        }
+
+        private void updateLoading()
+        {
+            isLoading.Value = IsLoadingInternal.Value || ExternalLoadingInternal.Value;
         }
 
         protected override void LoadComplete()
