@@ -6,7 +6,11 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using NUnit.Framework;
+using osu.Game.Tournament.IPC;
+using osu.Game.Tournament.StableClient;
+using osu.Game.Tournament.StableClient.IPC;
 using osu.Game.Tournament.StableClient.Protocol;
+using osu.Game.Tournament.StableClient.Screens;
 
 namespace osu.Game.Tournament.Tests.NonVisual.Stable
 {
@@ -33,6 +37,19 @@ namespace osu.Game.Tournament.Tests.NonVisual.Stable
 
             Assert.That(reader.ReadBString(), Is.EqualTo(value));
             Assert.That(reader.BaseStream.Position, Is.EqualTo(reader.BaseStream.Length));
+        }
+
+        [TestCase(PacketType.Osu_ChannelJoin, 63)]
+        [TestCase(PacketType.Osu_ChannelLeave, 78)]
+        public void TestLobbyChannelPacketEncoding(PacketType packetType, byte packetId)
+        {
+            byte[] expected =
+            {
+                packetId, 0, 0, 8, 0, 0, 0,
+                0x0b, 6, (byte)'#', (byte)'l', (byte)'o', (byte)'b', (byte)'b', (byte)'y',
+            };
+
+            Assert.That(StableBanchoClient.CreateStringPacket(packetType, "#lobby"), Is.EqualTo(expected));
         }
 
         [TestCase("#spectator", false)]
@@ -81,7 +98,7 @@ namespace osu.Game.Tournament.Tests.NonVisual.Stable
             slotMods[10] = 576;
 
             using var reader = createReader(writeMatch(
-                id: 42,
+                id: 60000,
                 inProgress: true,
                 matchType: 0,
                 mods: 72,
@@ -97,13 +114,13 @@ namespace osu.Game.Tournament.Tests.NonVisual.Stable
                 playMode: 3,
                 scoringType: 3,
                 teamType: 2,
-                freeMods: true,
+                freeModsFlags: 3,
                 slotMods: slotMods,
                 seed: 987654321));
 
             var match = new MultiplayerMatch(reader);
 
-            Assert.That(match.Id, Is.EqualTo(42));
+            Assert.That(match.Id, Is.EqualTo(60000));
             Assert.That(match.InProgress, Is.True);
             Assert.That(match.MatchType, Is.Zero);
             Assert.That(match.Mods, Is.EqualTo(72));
@@ -246,6 +263,42 @@ namespace osu.Game.Tournament.Tests.NonVisual.Stable
             Assert.That((byte)ReplayAction.WatchingOther, Is.EqualTo(8));
         }
 
+        [TestCase(true, false, true, TourneyState.Playing)]
+        [TestCase(true, false, false, TourneyState.Idle)]
+        [TestCase(true, true, true, TourneyState.Playing)]
+        [TestCase(false, true, false, TourneyState.Ranking)]
+        [TestCase(false, false, true, TourneyState.Idle)]
+        public void TestLiveMatchStateSelection(bool inProgress, bool wasInProgress, bool beatmapAvailableLocally, TourneyState expected)
+        {
+            Assert.That(StableMatchIPCInfo.SelectTourneyState(inProgress, wasInProgress, beatmapAvailableLocally), Is.EqualTo(expected));
+        }
+
+        [TestCase(42, "token", true)]
+        [TestCase(0, "token", false)]
+        [TestCase(-1, "token", false)]
+        [TestCase(null, "token", false)]
+        [TestCase(42, "", false)]
+        public void TestLoginRequiresUserIdAndToken(int? userId, string token, bool expected)
+        {
+            Assert.That(StableBanchoClient.HasSuccessfulLogin(userId, token), Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void TestLoginPayloadDoesNotHaveUtf8Preamble()
+        {
+            byte[] payload = StableBanchoClient.CreateLoginPayload("stableqa01", "password-md5", "b20260927tourney", 0, "client-hashes");
+
+            Assert.That(Encoding.UTF8.GetString(payload), Is.EqualTo("stableqa01\npassword-md5\nb20260927tourney|0|0|client-hashes|0\n"));
+        }
+
+        [TestCase("", "saved-password-hash", "saved-password-hash")]
+        [TestCase("password", "", "5f4dcc3b5aa765d61d8327deb882cf99")]
+        [TestCase("0123456789abcdef0123456789abcdef", "saved-password-hash", "0123456789abcdef0123456789abcdef")]
+        public void TestResolveStablePasswordHash(string enteredPassword, string savedPasswordHash, string expected)
+        {
+            Assert.That(StableSetupScreen.ResolvePasswordHash(enteredPassword, savedPasswordHash), Is.EqualTo(expected));
+        }
+
         private static BinaryReader createReader(byte[] data) => new BinaryReader(new MemoryStream(data), Encoding.UTF8);
 
         private static byte[] writeBString(string value)
@@ -278,7 +331,7 @@ namespace osu.Game.Tournament.Tests.NonVisual.Stable
         }
 
         private static byte[] writeMatch(
-            short id,
+            ushort id,
             bool inProgress,
             byte matchType,
             int mods,
@@ -294,7 +347,7 @@ namespace osu.Game.Tournament.Tests.NonVisual.Stable
             byte playMode,
             byte scoringType,
             byte teamType,
-            bool freeMods,
+            byte freeModsFlags,
             int[] slotMods,
             int seed)
         {
@@ -326,9 +379,9 @@ namespace osu.Game.Tournament.Tests.NonVisual.Stable
                 writer.Write(playMode);
                 writer.Write(scoringType);
                 writer.Write(teamType);
-                writer.Write((byte)(freeMods ? 1 : 0));
+                writer.Write(freeModsFlags);
 
-                if (freeMods)
+                if ((freeModsFlags & 1) != 0)
                 {
                     for (int i = 0; i < 16; i++)
                         writer.Write(slotMods[i]);

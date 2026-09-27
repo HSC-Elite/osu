@@ -29,6 +29,9 @@ namespace osu.Game.Tournament.StableClient
         private string passwordHash = string.Empty;
         private string clientHashes = string.Empty;
         private string? version;
+        private readonly string endpoint;
+        private readonly string? endpointHost;
+        private readonly bool allowInsecureEndpoint;
 
         private string? token;
         private readonly CancellationTokenSource cts = new CancellationTokenSource();
@@ -54,10 +57,21 @@ namespace osu.Game.Tournament.StableClient
 
         public int? LocalUserId => localUserId;
 
-        public StableBanchoClient(string clientHashes = "", string version = "")
+        public StableBanchoClient(string clientHashes = "", string version = "", string? endpoint = null)
         {
-            this.clientHashes = clientHashes;
-            this.version = version;
+            this.clientHashes = string.IsNullOrEmpty(clientHashes)
+                ? Environment.GetEnvironmentVariable("OSU_TOURNAMENT_BANCHO_CLIENT_HASHES") ?? string.Empty
+                : clientHashes;
+            this.version = string.IsNullOrEmpty(version)
+                ? Environment.GetEnvironmentVariable("OSU_TOURNAMENT_BANCHO_VERSION")
+                : version;
+            this.endpoint = endpoint
+                            ?? Environment.GetEnvironmentVariable("OSU_TOURNAMENT_BANCHO_ENDPOINT")
+                            ?? "https://c.ppy.sh";
+            allowInsecureEndpoint = Uri.TryCreate(this.endpoint, UriKind.Absolute, out var endpointUri)
+                                     && endpointUri.Scheme == Uri.UriSchemeHttp
+                                     && endpointUri.IsLoopback;
+            endpointHost = Environment.GetEnvironmentVariable("OSU_TOURNAMENT_BANCHO_HOST");
         }
 
         [BackgroundDependencyLoader]
@@ -96,13 +110,15 @@ namespace osu.Game.Tournament.StableClient
             });
         }
 
-        public async Task ConnectAsync(string username, string passwordHash)
+        public async Task<bool> ConnectAsync(string username, string passwordHash)
         {
             if (IsDisposing)
-                return;
+                return false;
 
             Username = username;
             this.passwordHash = passwordHash;
+            token = null;
+            localUserId = null;
 
             try
             {
@@ -110,39 +126,66 @@ namespace osu.Game.Tournament.StableClient
                 await initializationSource.Task.ConfigureAwait(false);
 
                 await loginAsync().ConfigureAwait(false);
-                pollTask = Task.Run(pollLoop, cts.Token);
+                if (!HasSuccessfulLogin(localUserId, token))
+                {
+                    token = null;
+                    localUserId = null;
+                    throw new InvalidOperationException("Stable Bancho login was rejected or returned no session token.");
+                }
+
+                Logger.Log($"StableClient [{Username}] logged in.");
+                if (pollTask == null || pollTask.IsCompleted)
+                    pollTask = Task.Run(pollLoop, cts.Token);
+                return true;
             }
             catch (Exception e)
             {
-                if (!IsShuttingDown(e))
-                    Logger.Error(e, $"StableClient [{Username}] connection/initialization failed.");
+                token = null;
+                localUserId = null;
+
+                if (IsShuttingDown(e))
+                    return false;
+
+                Logger.Error(e, $"StableClient [{Username}] connection/initialization failed.");
+                return false;
             }
         }
 
-        public void JoinLobby() => sendEmptyPacket(PacketType.Osu_LobbyJoin).FireAndForget();
-        public void PartLobby() => sendEmptyPacket(PacketType.Osu_LobbyPart).FireAndForget();
+        internal static bool HasSuccessfulLogin(int? userId, string? token) => userId is > 0 && !string.IsNullOrEmpty(token);
+
+        public void JoinLobby()
+        {
+            sendEmptyPacket(PacketType.Osu_LobbyJoin).FireAndForget();
+            sendStringPacket(PacketType.Osu_ChannelJoin, "#lobby").FireAndForget();
+        }
+        public void PartLobby()
+        {
+            sendEmptyPacket(PacketType.Osu_LobbyPart).FireAndForget();
+            sendStringPacket(PacketType.Osu_ChannelLeave, "#lobby").FireAndForget();
+        }
         public void SpecialJoinMatchChannel(int matchId) => sendPacket(PacketType.Osu_SpecialJoinMatchChannel, matchId).FireAndForget();
 
         private async Task loginAsync()
         {
             int utcOffset = (int)DateTimeOffset.Now.Offset.TotalHours;
-            byte[] loginPayload;
+            byte[] loginPayload = CreateLoginPayload(Username, passwordHash, version!, utcOffset, clientHashes);
 
-            using (var ms = new MemoryStream())
-            using (var writer = new StreamWriter(ms, Encoding.UTF8, leaveOpen: true))
+            await performRequestAsync(loginPayload, includeTokenHeader: false, includeVersionHeader: true, updateTokenFromResponse: true).ConfigureAwait(false);
+        }
+
+        internal static byte[] CreateLoginPayload(string username, string passwordHash, string version, int utcOffset, string clientHashes)
+        {
+            using var ms = new MemoryStream();
+            using (var writer = new StreamWriter(ms, new UTF8Encoding(false), leaveOpen: true))
             {
                 writer.NewLine = "\n";
-                writer.WriteLine(Username);
+                writer.WriteLine(username);
                 writer.WriteLine(passwordHash);
                 writer.WriteLine($"{version}|{utcOffset}|0|{clientHashes}|0");
                 writer.Flush();
-                loginPayload = ms.ToArray();
             }
 
-            await performRequestAsync(loginPayload, includeTokenHeader: false, includeVersionHeader: true, updateTokenFromResponse: true).ConfigureAwait(false);
-
-            if (!string.IsNullOrEmpty(token))
-                Logger.Log($"StableClient [{Username}] logged in, token: {token}");
+            return ms.ToArray();
         }
 
         private async Task pollLoop()
@@ -207,7 +250,7 @@ namespace osu.Game.Tournament.StableClient
 
                     case PacketType.Bancho_LoginReply:
                         int userId = reader.ReadInt32();
-                        if (userId > 0)
+                        if (HasSuccessfulLogin(userId, token))
                         {
                             localUserId = userId;
                             OnLoginSuccess?.Invoke(userId);
@@ -336,6 +379,47 @@ namespace osu.Game.Tournament.StableClient
             }
         }
 
+        private async Task sendStringPacket(PacketType type, string value)
+        {
+            if (token == null || IsDisposing || cts.IsCancellationRequested) return;
+
+            await performRequestAsync(CreateStringPacket(type, value)).ConfigureAwait(false);
+        }
+
+        internal static byte[] CreateStringPacket(PacketType type, string value)
+        {
+            byte[] stringPayload;
+            using (var payloadStream = new MemoryStream())
+            using (var payloadWriter = new BinaryWriter(payloadStream, Encoding.UTF8, leaveOpen: true))
+            {
+                byte[] encodedValue = Encoding.UTF8.GetBytes(value);
+                payloadWriter.Write((byte)0x0b);
+
+                int remainingLength = encodedValue.Length;
+                while (remainingLength >= 0x80)
+                {
+                    payloadWriter.Write((byte)((remainingLength & 0x7f) | 0x80));
+                    remainingLength >>= 7;
+                }
+
+                payloadWriter.Write((byte)remainingLength);
+                payloadWriter.Write(encodedValue);
+                payloadWriter.Flush();
+                stringPayload = payloadStream.ToArray();
+            }
+
+            using var packetStream = new MemoryStream();
+            using (var packetWriter = new BinaryWriter(packetStream, Encoding.UTF8, leaveOpen: true))
+            {
+                packetWriter.Write((short)type);
+                packetWriter.Write((byte)0);
+                packetWriter.Write(stringPayload.Length);
+                packetWriter.Write(stringPayload);
+            }
+
+            return packetStream.ToArray();
+        }
+
         private async Task performRequestAsync(byte[] payload, bool includeTokenHeader = true, bool includeVersionHeader = false, bool updateTokenFromResponse = false)
         {
             if (IsDisposing || cts.IsCancellationRequested)
@@ -348,8 +432,18 @@ namespace osu.Game.Tournament.StableClient
                 if (IsDisposing || cts.IsCancellationRequested)
                     return;
 
-                var request = new OsuWebRequest("https://c.ppy.sh");
+                var request = new OsuWebRequest(endpoint);
                 request.Method = HttpMethod.Post;
+                request.AllowInsecureRequests = allowInsecureEndpoint;
+
+                if (!string.IsNullOrWhiteSpace(endpointHost))
+                    request.AddHeader("Host", endpointHost);
+
+                if (allowInsecureEndpoint)
+                {
+                    request.AddHeader("X-Forwarded-For", "127.0.0.1");
+                    request.AddHeader("X-Real-IP", "127.0.0.1");
+                }
 
                 if (includeVersionHeader)
                     request.AddHeader("osu-version", version!);
@@ -427,6 +521,8 @@ namespace osu.Game.Tournament.StableClient
         Bancho_FellowSpectatorLeft = 43,
         Osu_LobbyPart = 29,
         Osu_LobbyJoin = 30,
+        Osu_ChannelJoin = 63,
+        Osu_ChannelLeave = 78,
         Bancho_UserPresence = 83,
         Bancho_UserPresenceSingle = 95,
         Bancho_UserPresenceBundle = 96,

@@ -24,6 +24,8 @@ namespace osu.Game.Tournament.Configuration
             SetDefault(TournamentConfig.CurrentTournament, default_tournament);
             SetDefault(TournamentConfig.CaptureFrameRate, 60, 30, 360);
             SetDefault(TournamentConfig.UseExternalStageDisplay, false);
+            SetDefault(TournamentConfig.StableUsername, string.Empty);
+            SetDefault(TournamentConfig.StablePasswordHash, string.Empty);
         }
     }
 
@@ -32,5 +34,7 @@ namespace osu.Game.Tournament.Configuration
         CurrentTournament,
         CaptureFrameRate,
         UseExternalStageDisplay,
+        StableUsername,
+        StablePasswordHash,
     }
 }

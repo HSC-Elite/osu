@@ -29,7 +29,6 @@ using osu.Game.Tournament.Screens.Gameplay.Components.MatchHeader;
 using osu.Game.Tournament.Screens.MapPool;
 using osu.Game.Tournament.Screens.TeamWin;
 using osu.Game.Tournament.StableClient;
-using osu.Game.Tournament.StableClient.IPC;
 using osuTK;
 using osuTK.Graphics;
 
@@ -45,7 +44,6 @@ namespace osu.Game.Tournament.Screens.Gameplay
         private SettingsNumberBox frameRateInputBox = null!;
         private SettingsNumberBox matchID = null!;
         private TourneyButton matchListenerButton = null!;
-        private StableMatchIPCInfo stableIpc = null!;
 
         private MatchHeader header = null!;
         private RoundInformationPreview roundPreview = null!;
@@ -98,7 +96,6 @@ namespace osu.Game.Tournament.Screens.Gameplay
         [BackgroundDependencyLoader]
         private void load(TextureStore store)
         {
-            stableIpc = (StableMatchIPCInfo)IPC;
             config.BindWith(TournamentConfig.CaptureFrameRate, frameRate);
 
             AddRangeInternal(new Drawable[]

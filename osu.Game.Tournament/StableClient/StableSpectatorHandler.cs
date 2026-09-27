@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
+using osu.Framework.Extensions;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Logging;
 using osu.Game.Beatmaps;
@@ -108,7 +109,7 @@ namespace osu.Game.Tournament.StableClient
 
             banchoClient.ConnectAsync(username_credential, passwordHash).ContinueWith(t =>
             {
-                if (!t.IsFaulted)
+                if (t.IsCompletedSuccessfully && t.GetResultSafely())
                     Schedule(requestSpectate);
             });
         }

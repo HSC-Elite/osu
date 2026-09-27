@@ -28,7 +28,7 @@ namespace osu.Game.Tournament.StableClient.Protocol
 
     public class MultiplayerMatch
     {
-        public short Id;
+        public ushort Id;
         public bool InProgress;
         public byte MatchType;
         public int Mods;
@@ -50,7 +50,7 @@ namespace osu.Game.Tournament.StableClient.Protocol
 
         public MultiplayerMatch(BinaryReader reader)
         {
-            Id = reader.ReadInt16();
+            Id = reader.ReadUInt16();
             InProgress = reader.ReadByte() == 1;
             MatchType = reader.ReadByte();
             Mods = reader.ReadInt32();
@@ -74,7 +74,7 @@ namespace osu.Game.Tournament.StableClient.Protocol
             PlayMode = reader.ReadByte();
             ScoringType = reader.ReadByte();
             TeamType = reader.ReadByte();
-            FreeMods = reader.ReadByte() == 1;
+            FreeMods = (reader.ReadByte() & 1) != 0;
 
             if (FreeMods)
             {

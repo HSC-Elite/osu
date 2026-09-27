@@ -260,27 +260,28 @@ namespace osu.Game.Tournament.StableClient.IPC
         {
             bool beatmapAvailableLocally = beatmaps.QueryBeatmap(b => b.OnlineID == match.BeatmapId) != null;
 
-            if (match.InProgress)
-            {
-                if (previousMatch == null || !previousMatch.InProgress)
-                    userScores.Clear();
+            if (match.InProgress && (previousMatch == null || !previousMatch.InProgress))
+                userScores.Clear();
 
-                State.Value = beatmapAvailableLocally ? TourneyState.Playing : TourneyState.Idle;
-
-                if (!beatmapAvailableLocally)
-                {
-                    Logger.Log($"StableMatchIPCInfo: match {match.Id} is in progress but beatmap {match.BeatmapId} is unavailable locally; staying idle until download completes.");
-                }
-            }
-            else if (previousMatch?.InProgress == true)
+            if (!match.InProgress && previousMatch?.InProgress == true)
             {
-                State.Value = TourneyState.Ranking;
                 waitingForIdle = 0;
             }
-            else
+
+            State.Value = SelectTourneyState(match.InProgress, previousMatch?.InProgress == true, beatmapAvailableLocally);
+
+            if (match.InProgress && !beatmapAvailableLocally)
             {
-                State.Value = TourneyState.Idle;
+                Logger.Log($"StableMatchIPCInfo: match {match.Id} is in progress but beatmap {match.BeatmapId} is unavailable locally; staying idle until download completes.");
             }
+        }
+
+        internal static TourneyState SelectTourneyState(bool inProgress, bool wasInProgress, bool beatmapAvailableLocally)
+        {
+            if (inProgress)
+                return beatmapAvailableLocally ? TourneyState.Playing : TourneyState.Idle;
+
+            return wasInProgress ? TourneyState.Ranking : TourneyState.Idle;
         }
 
         private void resetRoomState()
