@@ -254,6 +254,25 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 {
                     RelativeSizeAxes = Axes.X,
                 },
+                // new TourneyButton
+                // {
+                //     Text = "红飞",
+                //     Action = redArea.Launch
+                // },
+                // new TourneyButton
+                // {
+                //     Text = "蓝飞",
+                //     Action = blueArea.Launch
+                // },
+                // new TourneyButton
+                // {
+                //     Text = "飞重置",
+                //     Action = () =>
+                //     {
+                //         redArea.Reset();
+                //         blueArea.Reset();
+                //     }
+                // },
                 new TourneyButton
                 {
                     RelativeSizeAxes = Axes.X,
