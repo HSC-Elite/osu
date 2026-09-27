@@ -12,6 +12,7 @@ using osu.Framework.Graphics.Sprites;
 using osu.Framework.Graphics.Textures;
 using osu.Framework.Threading;
 using osu.Game.Beatmaps;
+using osu.Game.Graphics;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Online.Multiplayer;
@@ -36,9 +37,12 @@ namespace osu.Game.Tournament.Screens.Gameplay
         public readonly Bindable<TourneyState> State = new Bindable<TourneyState>();
         private OsuButton warmupButton = null!;
         private Sprite slotSprite = null!;
+        private SettingsNumberBox matchID = null!;
+        private TourneyButton matchListenerButton = null!;
 
         private MatchHeader header = null!;
         private RoundInformationPreview roundPreview = null!;
+        private Container scoreWarningContainer = null!;
 
         [Resolved]
         private TournamentSceneManager? sceneManager { get; set; }
@@ -72,6 +76,9 @@ namespace osu.Game.Tournament.Screens.Gameplay
         private readonly IBindableList<MultiplayerRoomUser> redTeamUsers = new BindableList<MultiplayerRoomUser>();
         private readonly IBindableList<MultiplayerRoomUser> blueTeamUsers = new BindableList<MultiplayerRoomUser>();
 
+        [Resolved]
+        private TournamentMatchScoreProcessor? scoreProcessor { get; set; }
+
         protected override SongBar CreateSongBar() => new GameplaySongBar
         {
             Depth = float.MinValue,
@@ -104,6 +111,20 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     FillMode = FillMode.Fit,
                 },
                 header = new MatchHeader(),
+                scoreWarningContainer = new Container
+                {
+                    Name = "Live score warning",
+                    Anchor = Anchor.BottomCentre,
+                    Origin = Anchor.BottomCentre,
+                    Margin = new MarginPadding { Bottom = SongBar.HEIGHT + 15 },
+                    AutoSizeAxes = Axes.Both,
+                    Alpha = 0,
+                    Child = new TournamentSpriteText
+                    {
+                        Text = "回合进行中获取的分数可能存在偏差，结束后将会自动(?)获取分数。",
+                        Font = OsuFont.Torus.With(size: 17),
+                    },
+                },
                 playerAreaContainer = new Container
                 {
                     RelativeSizeAxes = Axes.None,
@@ -175,6 +196,16 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     Current = LadderInfo.ChromaKeyWidth,
                     KeyboardStep = 1,
                 },
+                matchID = new SettingsNumberBox
+                {
+                    LabelText = "Mplink ID",
+                },
+                matchListenerButton = new TourneyButton
+                {
+                    RelativeSizeAxes = Axes.X,
+                    Text = "开始监听",
+                },
+                new TournamentMatchScoreProcessorDetail(),
                 new ControlPanel.Spacer(),
                 new SettingsSlider<double>
                 {
@@ -248,6 +279,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
             {
                 warmupButton.Alpha = !w.NewValue ? 0.5f : 1;
                 header.ShowScores = !w.NewValue;
+                updateScoreWarning();
             }, true);
 
             sceneManager?.CurrentScreen.BindValueChanged(s =>
@@ -332,7 +364,46 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
             State.BindTo(IPC.State);
             State.BindValueChanged(_ => updateState(), true);
+
+            if (scoreProcessor != null)
+            {
+                scoreProcessor.WaitingForAuthoritativeResult.BindValueChanged(_ =>
+                {
+                    updateState();
+                    updateResultLoading();
+                });
+
+                scoreProcessor.CurrentlyListening.BindValueChanged(state =>
+                {
+                    updateMatchListenerButton(state);
+                    updateScoreWarning();
+                    updateResultLoading();
+                }, true);
+            }
+            else
+            {
+                matchListenerButton.Enabled.Value = false;
+                updateResultLoading();
+            }
+
             LadderInfo.InvertScoreColour.BindValueChanged(v => scoreDisplay.InvertTextColor = v.NewValue, true);
+        }
+
+        private void updateMatchListenerButton(ValueChangedEvent<bool> state)
+        {
+            if (scoreProcessor == null)
+            {
+                matchListenerButton.Enabled.Value = false;
+                return;
+            }
+
+            matchListenerButton.Enabled.Value = true;
+            matchListenerButton.Text = state.NewValue ? "停止监听" : "开始监听";
+
+            if (state.NewValue)
+                matchListenerButton.Action = scoreProcessor.StopListening;
+            else
+                matchListenerButton.Action = () => scoreProcessor.StartListening(matchID.Current.Value);
         }
 
         protected override void SetModAcronym(string acronym)
@@ -448,6 +519,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
         {
             try
             {
+                updateScoreWarning();
                 scheduledScreenChange?.Cancel();
 
                 if (State.Value == TourneyState.Ranking)
@@ -459,12 +531,20 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 {
                     if (warmup.Value || CurrentMatch.Value == null) return;
 
+                    if (scoreProcessor != null
+                        && scoreProcessor.CurrentlyListening.Value
+                        && scoreProcessor.WaitingForAuthoritativeResult.Value)
+                        return;
+
                     var lastPick = CurrentMatch.Value.PicksBans.LastOrDefault(p => p.Type == ChoiceType.Pick && p.BeatmapID == IPC.Beatmap.Value?.OnlineID);
 
                     if (lastPick?.Winner.Value != null)
                         return;
 
-                    if (IPC.Score1.Value > IPC.Score2.Value)
+                    long score1 = scoreProcessor?.Score1.Value ?? IPC.Score1.Value;
+                    long score2 = scoreProcessor?.Score2.Value ?? IPC.Score2.Value;
+
+                    if (score1 > score2)
                     {
                         CurrentMatch.Value.Team1Score.Value++;
                         if (lastPick != null) lastPick.Winner.Value = TeamColour.Red;
@@ -530,6 +610,21 @@ namespace osu.Game.Tournament.Screens.Gameplay
             {
                 lastState = State.Value;
             }
+        }
+
+        private void updateScoreWarning()
+        {
+            if (scoreProcessor?.CurrentlyListening.Value == true && State.Value == TourneyState.Playing && !warmup.Value)
+                scoreWarningContainer.FadeIn(100);
+            else
+                scoreWarningContainer.FadeOut(100);
+        }
+
+        private void updateResultLoading()
+        {
+            gameplaySongBar.WaitForResult.Value = scoreProcessor != null
+                                                 && scoreProcessor.CurrentlyListening.Value
+                                                 && scoreProcessor.WaitingForAuthoritativeResult.Value;
         }
 
         public override void Hide()

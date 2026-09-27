@@ -13,6 +13,7 @@ using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Online.API;
 using osu.Game.Overlays;
 using osu.Game.Rulesets;
+using osu.Game.Tournament.Models;
 using osuTK;
 
 namespace osu.Game.Tournament.Screens.Setup
@@ -101,11 +102,19 @@ namespace osu.Game.Tournament.Screens.Setup
                     Current = LadderInfo.Ruleset,
                     DropdownWidth = 0.5f,
                 },
+                new LabelledEnumDropdown<TournamentScoringMode>(padded: true)
+                {
+                    Label = "Scoring mode",
+                    Description = "Chooses whether live match scores use the legacy score or the calculated performance value.",
+                    Current = LadderInfo.ScoringMode,
+                    DropdownWidth = 0.5f,
+                },
                 new TournamentSwitcher
                 {
                     Label = "Current tournament",
                     Description = "Changes the background videos and bracket to match the selected tournament. This requires a restart to apply changes.",
                 },
+                new RoundBeatmapDownloadAction(),
                 resolution = new ResolutionSelector
                 {
                     Label = "Stream area resolution",

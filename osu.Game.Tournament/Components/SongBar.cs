@@ -7,12 +7,14 @@ using System.Linq;
 using System.Threading.Tasks;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
+using osu.Framework.Extensions;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Colour;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Primitives;
 using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Sprites;
+using osu.Framework.Logging;
 using osu.Framework.Localisation;
 using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.Legacy;
@@ -20,9 +22,8 @@ using osu.Game.Extensions;
 using osu.Game.Graphics;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Models;
-using osu.Game.Online.API;
-using osu.Game.Online.API.Requests;
 using osu.Game.Rulesets;
+using osu.Game.Rulesets.Difficulty;
 using osu.Game.Tournament.Models;
 using osu.Game.Tournament.Screens.Gameplay.Components.MatchHeader;
 using osuTK;
@@ -54,13 +55,18 @@ namespace osu.Game.Tournament.Components
         public const float HEIGHT = 50f;
 
         protected BindableBool IsLoadingInternal = new BindableBool();
-        public IBindable<bool> IsLoading => IsLoadingInternal;
+        protected BindableBool ExternalLoadingInternal = new BindableBool();
+        private readonly BindableBool isLoading = new BindableBool();
+        public IBindable<bool> IsLoading => isLoading;
 
         [Resolved]
         protected LadderInfo Ladder { get; private set; } = null!;
 
         [Resolved]
         private IBindable<RulesetInfo> ruleset { get; set; } = null!;
+
+        [Resolved]
+        private TournamentBeatmapDifficultyCache difficultyCache { get; set; } = null!;
 
         protected List<Drawable[]> LeftData = new List<Drawable[]>();
         protected List<Drawable[]> RightData = new List<Drawable[]>();
@@ -80,24 +86,28 @@ namespace osu.Game.Tournament.Components
 
         private RoundBeatmap? roundBeatmap;
 
-        [Resolved]
-        private IAPIProvider api { get; set; } = null!;
-
-        [Resolved]
-        private TournamentGameBase game { get; set; } = null!;
-
         private LegacyMods mods;
+
+        private double? calculatedStarRating;
+        private readonly Dictionary<string, double> calculatedFreeModStarRatings = new Dictionary<string, double>();
+        private int refreshGeneration;
+
+        private readonly record struct DifficultyDisplayResult(
+            double? StarRating,
+            IReadOnlyDictionary<string, double> FreeModStarRatings);
 
         public LegacyMods Mods
         {
             get => mods;
             set
             {
-                if (mods == value || roundBeatmap == null)
+                if (mods == value)
                     return;
 
                 mods = value;
-                refreshContent();
+
+                if (IsLoaded)
+                    refreshContent();
             }
         }
 
@@ -279,6 +289,9 @@ namespace osu.Game.Tournament.Components
                 rightArrow.FadeColour(c.NewValue, 300);
             });
 
+            IsLoadingInternal.BindValueChanged(_ => updateLoading());
+            ExternalLoadingInternal.BindValueChanged(_ => updateLoading());
+
             IsLoading.BindValueChanged(s =>
             {
                 if (s.NewValue)
@@ -342,6 +355,11 @@ namespace osu.Game.Tournament.Components
             SongBarColour.BindValueChanged(c => ArrowColor.Value = c.NewValue ?? Color4.White);
         }
 
+        private void updateLoading()
+        {
+            isLoading.Value = IsLoadingInternal.Value || ExternalLoadingInternal.Value;
+        }
+
         protected override void LoadComplete()
         {
             base.LoadComplete();
@@ -379,6 +397,9 @@ namespace osu.Game.Tournament.Components
             UpdateState();
 
             waitTime = 0;
+            int generation = ++refreshGeneration;
+            calculatedStarRating = null;
+            calculatedFreeModStarRatings.Clear();
 
             roundBeatmap = Ladder.CurrentMatch.Value?.Round.Value?.Beatmaps.FirstOrDefault(b => b.ID == beatmap?.OnlineID);
 
@@ -452,37 +473,69 @@ namespace osu.Game.Tournament.Components
 
             IsLoadingInternal.Value = true;
 
-            Task.WhenAll(populateBeatmapStarRating((TournamentBeatmap)beatmap, modsForFetch), populateFreeModData(modString)).ContinueWith(_ =>
+            if (beatmap is not TournamentBeatmap tournamentBeatmap)
             {
+                IsLoadingInternal.Value = false;
+                Scheduler.AddOnce(PostUpdate);
+                return;
+            }
+
+            populateDifficultyData(tournamentBeatmap, modsForFetch).ContinueWith(task =>
+            {
+                if (task.IsFaulted)
+                    Logger.Error(task.Exception, "Failed to populate beatmap difficulty data");
+
                 Scheduler.AddOnce(() =>
                 {
+                    if (generation != refreshGeneration)
+                        return;
+
                     IsLoadingInternal.Value = false;
+
+                    if (task.IsCompletedSuccessfully)
+                    {
+                        calculatedStarRating = task.GetResultSafely().StarRating;
+                        calculatedFreeModStarRatings.Clear();
+
+                        foreach (var result in task.GetResultSafely().FreeModStarRatings)
+                            calculatedFreeModStarRatings[result.Key] = result.Value;
+                    }
+
                     PostUpdate();
                 });
             });
         });
 
-        private async Task populateBeatmapStarRating(TournamentBeatmap beatmap, LegacyMods mods)
+        private async Task<DifficultyDisplayResult> populateDifficultyData(TournamentBeatmap beatmap, LegacyMods mods)
         {
-            var req = new GetBeatmapAttributesRequest(
-                beatmap.OnlineID,
-                ((int)mods).ToString(),
-                ruleset.Value.OnlineID);
+            Task<DifficultyAttributes?> difficultyTask = difficultyCache.GetDifficultyAsync(beatmap, ruleset.Value, mods);
+            Task<IReadOnlyDictionary<string, double>> freeModTask = populateFreeModData(beatmap);
 
-            await api.PerformAsync(req).ConfigureAwait(false);
+            await Task.WhenAll(difficultyTask, freeModTask).ConfigureAwait(false);
 
-            if (req.Response != null)
-                beatmap.StarRating = req.Response.Attributes.StarRating;
+            return new DifficultyDisplayResult(difficultyTask.GetResultSafely()?.StarRating, freeModTask.GetResultSafely());
         }
 
-        private Task populateFreeModData(string modString)
+        private async Task<IReadOnlyDictionary<string, double>> populateFreeModData(TournamentBeatmap beatmap)
         {
             var b = roundBeatmap;
 
-            if (b?.Beatmap == null || b.AllowFreeMods == LegacyMods.None || b.Beatmap.OnlineID == 0)
-                return Task.CompletedTask;
+            if (b == null || b.AllowFreeMods == LegacyMods.None || beatmap.OnlineID == 0)
+                return new Dictionary<string, double>();
 
-            return Task.Run(() => game.PopulateFmBeatmapStarRating(b.Beatmap, modString));
+            LegacyMods allowFreeMods = b.AllowFreeMods;
+            RulesetInfo currentRuleset = ruleset.Value;
+
+            var results = await Task.WhenAll(Enum.GetValues<LegacyMods>()
+                                             .Where(mod => mod != LegacyMods.None && allowFreeMods.HasFlag(mod))
+                                             .Select(async mod => new
+                                             {
+                                                 Mod = mod,
+                                                 Attributes = await difficultyCache.GetDifficultyAsync(beatmap, currentRuleset, mod).ConfigureAwait(false)
+                                             })).ConfigureAwait(false);
+
+            return results.Where(result => result.Attributes != null)
+                          .ToDictionary(result => TournamentGameBase.ConvertToAcronym(result.Mod), result => result.Attributes!.StarRating);
         }
 
         protected string? GetBeatmapModPosition()
@@ -581,7 +634,7 @@ namespace osu.Game.Tournament.Components
 
             List<(string, string)> diffPieces = new List<(string, string)>(2)
             {
-                ("星级", $"{beatmap!.StarRating:0.00}")
+                ("星级", $"{calculatedStarRating ?? beatmap!.StarRating:0.00}")
             };
 
             if (modPosition != null)
@@ -610,8 +663,10 @@ namespace osu.Game.Tournament.Components
                 if (mod != LegacyMods.None && allowFreeMod.HasFlag(mod))
                 {
                     GetBeatmapInformation(mod, out _, out _, out _, out var stats);
-                    double sr = roundBeatmap?.Beatmap?.StarRatingWithAdditionalMods
-                                            .GetValueOrDefault(TournamentGameBase.ConvertToAcronym(mod)) ?? beatmap!.StarRating;
+                    string modAcronym = TournamentGameBase.ConvertToAcronym(mod);
+                    double sr = calculatedFreeModStarRatings.GetValueOrDefault(modAcronym,
+                                                                               roundBeatmap?.Beatmap?.StarRatingWithAdditionalMods
+                                                                                           .GetValueOrDefault(modAcronym) ?? beatmap!.StarRating);
 
                     diffPieces.Add(new[]
                     {

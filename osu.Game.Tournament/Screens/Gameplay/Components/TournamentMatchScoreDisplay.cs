@@ -7,6 +7,7 @@ using osu.Framework.Localisation;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Sprites;
 using osu.Game.Screens.Play.HUD;
+using osu.Game.Tournament.Components;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.IPC.MemoryIPC;
 using osu.Game.Tournament.Models;
@@ -26,6 +27,9 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
         [Resolved]
         private MatchIPCInfo ipc { get; set; } = null!;
 
+        [Resolved]
+        private TournamentMatchScoreProcessor? scoreProcessor { get; set; }
+
         public bool InvertTextColor
         {
             get => invertTextColor;
@@ -39,8 +43,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
         [BackgroundDependencyLoader]
         private void load()
         {
-            Team1Score.BindTo(ipc.Score1);
-            Team2Score.BindTo(ipc.Score2);
+            Team1Score.BindTo(scoreProcessor?.Score1 ?? ipc.Score1);
+            Team2Score.BindTo(scoreProcessor?.Score2 ?? ipc.Score2);
 
             if (ipc is not IProvideAdditionalData additionalData)
                 return;

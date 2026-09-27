@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using osu.Framework.Allocation;
@@ -26,6 +27,7 @@ using osu.Game.Online.API;
 using osu.Game.Online.API.Requests;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Screens.OnlinePlay;
+using osu.Game.Tournament.Components;
 using osu.Game.Tournament.IO;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.MultiWindow;
@@ -42,8 +44,10 @@ namespace osu.Game.Tournament
         public const string BRACKET_FILENAME = @"bracket.json";
         private LadderInfo ladder = new LadderInfo();
         private TournamentStorage storage = null!;
+        private TournamentBeatmapManager beatmapManager = null!;
         private DependencyContainer dependencies = null!;
         private MatchIPCInfo ipc = null!;
+        private TournamentMatchScoreProcessor scoreProcessor = null!;
         private BeatmapLookupCache beatmapCache = null!;
 
         [Cached]
@@ -130,6 +134,8 @@ namespace osu.Game.Tournament
 
             dependencies.CacheAs<Storage>(storage = new TournamentStorage(baseStorage));
             dependencies.CacheAs(storage);
+            dependencies.Cache(beatmapManager = new TournamentBeatmapManager(storage));
+            dependencies.Cache(new TournamentBeatmapDifficultyCache(beatmapManager, RulesetStore));
 
             dependencies.Cache(new TournamentVideoResourceStore(storage));
 
@@ -269,7 +275,9 @@ namespace osu.Game.Tournament
                 ipc = new LazerRoomMatchInfo();
                 dependencies.CacheAs((LazerRoomMatchInfo)ipc);
                 dependencies.CacheAs(ipc);
+                dependencies.Cache(scoreProcessor = new TournamentMatchScoreProcessor());
                 Add(ipc);
+                Add(scoreProcessor);
 
                 modMultiplierProvider = new ModMultiplierProvider();
                 dependencies.CacheAs<IModMultiplierProvider>(modMultiplierProvider);
@@ -473,6 +481,37 @@ namespace osu.Game.Tournament
                     DefaultValueHandling = DefaultValueHandling.Ignore,
                     Converters = new JsonConverter[] { new JsonPointConverter(), new JsonColour4Converter() }
                 });
+        }
+
+        public readonly record struct BeatmapDownloadProgress(int Completed, int Failed, int Total, int BeatmapId)
+        {
+            public float Ratio => Total == 0 ? 1 : (float)Completed / Total;
+        }
+
+        public async Task DownloadAllRoundBeatmapOsuFile(bool forceRedownload, IProgress<BeatmapDownloadProgress>? progress = null, CancellationToken cancellationToken = default)
+        {
+            TournamentBeatmap[] allRoundBeatmaps = ladder.Rounds
+                                                           .SelectMany(r => r.Beatmaps)
+                                                           .Where(b => b.ID != 0 && b.Beatmap != null && b.Beatmap.OnlineID != 0)
+                                                           .Select(b => b.Beatmap!)
+                                                           .GroupBy(b => b.OnlineID)
+                                                           .Select(g => g.First())
+                                                           .ToArray();
+
+            int failedMap = 0;
+
+            for (int i = 0; i < allRoundBeatmaps.Length; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                TournamentBeatmap beatmap = allRoundBeatmaps[i];
+                progress?.Report(new BeatmapDownloadProgress(i, failedMap, allRoundBeatmaps.Length, beatmap.OnlineID));
+
+                if (!await beatmapManager.DownloadBeatmapOsuFile(beatmap, forceRedownload, cancellationToken).ConfigureAwait(false))
+                    failedMap++;
+            }
+
+            progress?.Report(new BeatmapDownloadProgress(allRoundBeatmaps.Length, failedMap, allRoundBeatmaps.Length, 0));
         }
 
         protected override UserInputManager CreateUserInputManager() => new TournamentInputManager();
