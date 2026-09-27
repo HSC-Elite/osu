@@ -72,9 +72,14 @@ namespace osu.Game.Tournament.StableClient
         private readonly List<FrameDataBundle> pendingBundles = new List<FrameDataBundle>();
 
         private StableSpectatorHandler? handler;
+        private PlayerLoader? activePlayerLoader;
+        private StableSoloSpectatorPlayer? activePlayer;
+        private Protocol.ReplayAction? pendingReplayAction;
+        private bool awaitingNextSong;
         private Score? score;
         private bool playerPushed;
         private ScheduledDelegate? beatmapFetchCallback;
+        private APIBeatmap? currentBeatmap;
         private APIBeatmapSet? beatmapSet;
         private BeatmapDownloadTracker? downloadTracker;
         private int displayedUserId;
@@ -210,7 +215,15 @@ namespace osu.Game.Tournament.StableClient
         {
             base.OnResuming(e);
 
-            if (playerPushed && this.GetChildScreen() == null)
+            activePlayerLoader = null;
+            activePlayer = null;
+
+            if (pendingReplayAction is Protocol.ReplayAction replayAction)
+            {
+                pendingReplayAction = null;
+                resetGameplayState(getReplayActionStatus(replayAction), exitChildScreen: false);
+            }
+            else if (playerPushed && this.GetChildScreen() == null)
                 resetGameplayState("Waiting for replay frames...");
         }
 
@@ -243,7 +256,18 @@ namespace osu.Game.Tournament.StableClient
             displayedUserId = userId;
             beatmapPanelContainer.Child = createPlaceholderPanel("Waiting for beatmap info");
 
-            handler = new StableSpectatorHandler(userId, username, passwordHash);
+            var newHandler = new StableSpectatorHandler(userId, username, passwordHash);
+            AttachHandler(newHandler);
+            AddInternal(newHandler);
+            connectButton.Enabled.Value = true;
+            connectButton.Text = "Reconnect & Spectate";
+        }
+
+        internal void AttachHandler(StableSpectatorHandler newHandler)
+        {
+            handler = newHandler;
+            displayedUserId = handler.UserId;
+
             handler.Beatmap.BindValueChanged(beatmap => Schedule(() =>
             {
                 if (playerPushed && score?.ScoreInfo.BeatmapInfo?.OnlineID != beatmap.NewValue?.BeatmapInfo.OnlineID)
@@ -257,16 +281,20 @@ namespace osu.Game.Tournament.StableClient
             handler.Ruleset.BindValueChanged(_ => Schedule(tryStartGameplay));
             handler.OnFramesReceived += onFramesReceived;
             handler.OnReplayActionReceived += onReplayActionReceived;
-            AddInternal(handler);
 
-            connectButton.Enabled.Value = true;
-            connectButton.Text = "Reconnect & Spectate";
+            refreshDisplayedUser();
         }
 
         private void onFramesReceived(FrameDataBundle bundle)
         {
+            if (pendingReplayAction != null || awaitingNextSong)
+                return;
+
             Schedule(() =>
             {
+                if (pendingReplayAction != null || awaitingNextSong)
+                    return;
+
                 pendingBundles.Add(bundle);
                 Logger.Log(
                     $"StableSoloSpectatorScreen: received bundle #{pendingBundles.Count}, frames={bundle.Frames.Count}, " +
@@ -280,31 +308,50 @@ namespace osu.Game.Tournament.StableClient
 
         private void onReplayActionReceived(Protocol.ReplayAction action, int extra)
         {
-            Schedule(() =>
+            if (action == Protocol.ReplayAction.NewSong)
+                awaitingNextSong = false;
+            else if (isTerminalReplayAction(action))
+                awaitingNextSong = true;
+
+            if (isTerminalReplayAction(action))
             {
-                switch (action)
-                {
-                    case Protocol.ReplayAction.NewSong:
-                        resetGameplayState("New song detected. Waiting for first frames...");
-                        break;
+                pendingReplayAction = action;
 
-                    case Protocol.ReplayAction.Completion:
-                        resetGameplayState("Player finished. Waiting for next beatmap...");
-                        break;
+                if (activePlayerLoader != null && activePlayer is StableSoloSpectatorPlayer player)
+                    player.HandleReplayAction(action);
+                else if (activePlayerLoader == null)
+                    Schedule(() => processPendingReplayAction(action));
 
-                    case Protocol.ReplayAction.Fail:
-                        resetGameplayState("Player failed. Waiting for next beatmap...");
-                        break;
+                return;
+            }
 
-                    case Protocol.ReplayAction.WatchingOther:
-                        resetGameplayState("Target changed. Waiting for next replay target...");
-                        break;
+            Schedule(() => setStatus($"Replay action: {action} ({extra})"));
+        }
 
-                    default:
-                        setStatus($"Replay action: {action} ({extra})");
-                        break;
-                }
-            });
+        private static bool isTerminalReplayAction(Protocol.ReplayAction action) =>
+            action is Protocol.ReplayAction.NewSong
+                or Protocol.ReplayAction.Completion
+                or Protocol.ReplayAction.Fail
+                or Protocol.ReplayAction.SongSelect
+                or Protocol.ReplayAction.WatchingOther;
+
+        private static string getReplayActionStatus(Protocol.ReplayAction action) => action switch
+        {
+            Protocol.ReplayAction.NewSong => "New song detected. Waiting for first frames...",
+            Protocol.ReplayAction.Completion => "Player finished. Waiting for next beatmap...",
+            Protocol.ReplayAction.Fail => "Player failed. Waiting for next beatmap...",
+            Protocol.ReplayAction.SongSelect => "Player returned to song select. Waiting for next beatmap...",
+            Protocol.ReplayAction.WatchingOther => "Target changed. Waiting for next replay target...",
+            _ => $"Replay action: {action}",
+        };
+
+        private void processPendingReplayAction(Protocol.ReplayAction action)
+        {
+            if (pendingReplayAction != action)
+                return;
+
+            pendingReplayAction = null;
+            resetGameplayState(getReplayActionStatus(action));
         }
 
         private void tryStartGameplay()
@@ -355,17 +402,26 @@ namespace osu.Game.Tournament.StableClient
             setStatus("Gameplay started.");
             Logger.Log($"StableSoloSpectatorScreen: pushing PlayerLoader with replay frame count={score.Replay.Frames.Count}");
 
-            this.Push(new PlayerLoader(() =>
+            PlayerLoader? loader = null;
+            loader = new PlayerLoader(() =>
             {
-                var player = new StableSoloSpectatorPlayer(score, handler);
+                var player = activePlayer = new StableSoloSpectatorPlayer(score, handler, () => this.MakeCurrent(), pendingReplayAction);
                 player.PlayerFinished += onPlayerFinished;
                 return player;
-            }));
+            });
+            activePlayerLoader = loader;
+            this.Push(loader);
         }
 
         private void onPlayerFinished()
         {
-            Schedule(() => resetGameplayState("Player finished. Waiting for next beatmap..."));
+            awaitingNextSong = true;
+            pendingReplayAction = Protocol.ReplayAction.Completion;
+
+            if (activePlayer is StableSoloSpectatorPlayer player)
+                player.HandleReplayAction(Protocol.ReplayAction.Completion);
+            else if (activePlayerLoader == null)
+                Schedule(() => processPendingReplayAction(Protocol.ReplayAction.Completion));
         }
 
         private void refreshDisplayedUser()
@@ -408,6 +464,7 @@ namespace osu.Game.Tournament.StableClient
             if (beatmap.BeatmapSet == null)
                 return;
 
+            currentBeatmap = beatmap;
             beatmapSet = beatmap.BeatmapSet;
             beatmapPanelContainer.Child = new BeatmapCardNormal(beatmapSet, allowExpansion: false);
             attachDownloadTracker(beatmapSet);
@@ -454,13 +511,13 @@ namespace osu.Game.Tournament.StableClient
 
         private void checkForAutomaticDownload()
         {
-            if (beatmapSet == null)
+            if (currentBeatmap == null || beatmapSet == null)
                 return;
 
             if (!automaticDownload.Current.Value)
                 return;
 
-            if (beatmaps.IsAvailableLocally(new BeatmapSetInfo { OnlineID = beatmapSet.OnlineID }))
+            if (beatmaps.IsAvailableLocally(currentBeatmap))
                 return;
 
             beatmapDownloader.Download(beatmapSet);
@@ -470,7 +527,9 @@ namespace osu.Game.Tournament.StableClient
         {
             resetGameplayState("Idle", clearBeatmapPanel: true, exitChildScreen: true);
 
+            awaitingNextSong = false;
             displayedUserId = 0;
+            currentBeatmap = null;
             beatmapSet = null;
             beatmapFetchCallback?.Cancel();
             beatmapFetchCallback = null;
@@ -502,13 +561,18 @@ namespace osu.Game.Tournament.StableClient
             pendingBundles.Clear();
             score = null;
             playerPushed = false;
+            pendingReplayAction = null;
 
             if (exitChildScreen)
             {
                 if (this.GetChildScreen() is PlayerLoader loader && loader.CurrentPlayer is StableSoloSpectatorPlayer player)
                     player.PlayerFinished -= onPlayerFinished;
 
-                this.GetChildScreen()?.Exit();
+                if (this.GetChildScreen() != null)
+                    this.MakeCurrent();
+
+                activePlayerLoader = null;
+                activePlayer = null;
             }
 
             if (clearBeatmapPanel)

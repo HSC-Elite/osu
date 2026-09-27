@@ -242,7 +242,7 @@ namespace osu.Game.Tournament.StableClient.IPC
 
                         if (apiBeatmap?.BeatmapSet != null)
                         {
-                            if (!beatmaps.IsAvailableLocally(new BeatmapSetInfo { OnlineID = apiBeatmap.BeatmapSet.OnlineID }))
+                            if (!beatmaps.IsAvailableLocally(apiBeatmap))
                                 beatmapDownloader.Download(apiBeatmap.BeatmapSet);
                         }
                     });

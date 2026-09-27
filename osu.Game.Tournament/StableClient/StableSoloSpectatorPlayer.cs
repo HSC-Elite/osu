@@ -25,15 +25,20 @@ namespace osu.Game.Tournament.StableClient
 
         private readonly Score score;
         private readonly StableSpectatorHandler handler;
+        private readonly Action exitToSpectator;
+        private readonly Protocol.ReplayAction? initialReplayAction;
+        private bool exitScheduled;
 
         [Cached(typeof(IGameplayLeaderboardProvider))]
         private readonly EmptyGameplayLeaderboardProvider leaderboardProvider = new EmptyGameplayLeaderboardProvider();
 
-        public StableSoloSpectatorPlayer(Score score, StableSpectatorHandler handler)
+        public StableSoloSpectatorPlayer(Score score, StableSpectatorHandler handler, Action exitToSpectator, Protocol.ReplayAction? initialReplayAction)
             : base(new PlayerConfiguration { AllowUserInteraction = false })
         {
             this.score = score;
             this.handler = handler;
+            this.exitToSpectator = exitToSpectator;
+            this.initialReplayAction = initialReplayAction;
         }
 
         [BackgroundDependencyLoader]
@@ -48,6 +53,9 @@ namespace osu.Game.Tournament.StableClient
             base.LoadComplete();
 
             handler.OnFramesReceived += onNewFrames;
+
+            if (initialReplayAction is Protocol.ReplayAction action)
+                HandleReplayAction(action);
 
             Logger.Log($"StableSoloSpectatorPlayer: load complete, initial replay frame count={score.Replay.Frames.Count}");
 
@@ -69,14 +77,23 @@ namespace osu.Game.Tournament.StableClient
                 ReplayFrame? lastFrame = score.Replay.Frames.LastOrDefault();
                 int frameCountBefore = score.Replay.Frames.Count;
                 double lastFrameTime = lastFrame?.Time ?? double.NegativeInfinity;
+                int droppedFrameCount = 0;
+                double firstDroppedFrameTime = double.NegativeInfinity;
+                double lastDroppedFrameTime = double.NegativeInfinity;
+                double replayTailAtFirstDrop = double.NegativeInfinity;
 
                 foreach (var frame in bundle.Frames)
                 {
                     if (frame.Time < lastFrameTime)
                     {
-                        Logger.Log(
-                            $"StableSoloSpectatorPlayer: dropping out-of-order frame at {frame.Time} " +
-                            $"because the current replay tail is {lastFrameTime}.");
+                        if (droppedFrameCount == 0)
+                        {
+                            firstDroppedFrameTime = frame.Time;
+                            replayTailAtFirstDrop = lastFrameTime;
+                        }
+
+                        lastDroppedFrameTime = frame.Time;
+                        droppedFrameCount++;
                         continue;
                     }
 
@@ -92,9 +109,21 @@ namespace osu.Game.Tournament.StableClient
                     lastFrameTime = convertedFrame.Time;
                 }
 
-                Logger.Log(
-                    $"StableSoloSpectatorPlayer: appended {score.Replay.Frames.Count - frameCountBefore} replay frames " +
-                    $"from bundle (total={score.Replay.Frames.Count}, score={bundle.Header.TotalScore}, acc={bundle.Header.Accuracy:P2})");
+                int appendedFrameCount = score.Replay.Frames.Count - frameCountBefore;
+
+                if (droppedFrameCount > 0)
+                {
+                    Logger.Log(
+                        $"StableSoloSpectatorPlayer: dropped {droppedFrameCount} out-of-order frames from bundle " +
+                        $"(firstTime={firstDroppedFrameTime}, lastTime={lastDroppedFrameTime}, replayTail={replayTailAtFirstDrop}).");
+                }
+
+                if (appendedFrameCount > 0)
+                {
+                    Logger.Log(
+                        $"StableSoloSpectatorPlayer: appended {appendedFrameCount} replay frames " +
+                        $"from bundle (total={score.Replay.Frames.Count}, score={bundle.Header.TotalScore}, acc={bundle.Header.Accuracy:P2})");
+                }
 
                 if (isFirstBundle && score.Replay.Frames.Count > 0)
                 {
@@ -109,6 +138,28 @@ namespace osu.Game.Tournament.StableClient
         protected override void PrepareReplay()
         {
             DrawableRuleset?.SetReplayScore(score);
+        }
+
+        internal void HandleReplayAction(Protocol.ReplayAction action)
+        {
+            if (exitScheduled)
+                return;
+
+            switch (action)
+            {
+                case Protocol.ReplayAction.Completion:
+                case Protocol.ReplayAction.Fail:
+                    exitScheduled = true;
+                    Schedule(() => Schedule(exitToSpectator));
+                    break;
+
+                case Protocol.ReplayAction.NewSong:
+                case Protocol.ReplayAction.SongSelect:
+                case Protocol.ReplayAction.WatchingOther:
+                    exitScheduled = true;
+                    Schedule(exitToSpectator);
+                    break;
+            }
         }
 
         protected override ResultsScreen CreateResults(ScoreInfo score)

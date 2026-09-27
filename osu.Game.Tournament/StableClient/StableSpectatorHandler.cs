@@ -100,7 +100,7 @@ namespace osu.Game.Tournament.StableClient
             AddInternal(banchoClient);
 
             banchoClient.OnUserStatusChanged += handleUserStatus;
-            banchoClient.OnReplayFramesReceived += handleReplayFrames;
+            banchoClient.OnReplayFramesReceived += ProcessReplayFrameBundle;
             banchoClient.OnSpectatorJoined += handleSpectatorJoined;
             banchoClient.OnSpectatorLeft += handleSpectatorLeft;
             banchoClient.OnFellowSpectatorJoined += handleFellowSpectatorJoined;
@@ -183,7 +183,7 @@ namespace osu.Game.Tournament.StableClient
             });
         }
 
-        private void handleReplayFrames(bReplayFrameBundle bundle)
+        internal void ProcessReplayFrameBundle(bReplayFrameBundle bundle)
         {
             lastFrameReceivedTime = Time.Current;
             receivedFramesForCurrentBeatmap = true;
@@ -237,6 +237,7 @@ namespace osu.Game.Tournament.StableClient
             if (rulesetInfo == null)
             {
                 Logger.Log($"StableSpectatorHandler: Received replay frames before ruleset was known. BeatmapHash={currentBeatmapHash ?? "<null>"}");
+
                 return;
             }
 
@@ -434,7 +435,7 @@ namespace osu.Game.Tournament.StableClient
         protected override void Dispose(bool isDisposing)
         {
             banchoClient.OnUserStatusChanged -= handleUserStatus;
-            banchoClient.OnReplayFramesReceived -= handleReplayFrames;
+            banchoClient.OnReplayFramesReceived -= ProcessReplayFrameBundle;
             banchoClient.OnSpectatorJoined -= handleSpectatorJoined;
             banchoClient.OnSpectatorLeft -= handleSpectatorLeft;
             banchoClient.OnFellowSpectatorJoined -= handleFellowSpectatorJoined;
