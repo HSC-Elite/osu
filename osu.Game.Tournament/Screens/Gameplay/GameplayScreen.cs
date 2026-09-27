@@ -175,27 +175,6 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     Current = LadderInfo.ChromaKeyWidth,
                     KeyboardStep = 1,
                 },
-                new SettingsSlider<double>
-                {
-                    LabelText = "Master Volume",
-                    Current = audio.Volume
-                },
-                new SettingsSlider<double>
-                {
-                    LabelText = "Track Volume",
-                    Current = audio.VolumeTrack
-                },
-                new SettingsSlider<double>
-                {
-                    LabelText = "Sample Volume",
-                    Current = audio.VolumeSample
-                },
-                new SettingsSlider<int>
-                {
-                    LabelText = "Players per team",
-                    Current = LadderInfo.PlayersPerTeam,
-                    KeyboardStep = 1,
-                },
                 new ControlPanel.Spacer(),
                 new SettingsSlider<double>
                 {
