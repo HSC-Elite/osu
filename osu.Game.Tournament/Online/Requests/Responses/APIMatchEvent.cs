@@ -3,7 +3,6 @@
 
 using System;
 using Newtonsoft.Json;
-using osu.Game.Tournament.Online;
 
 namespace osu.Game.Tournament.Online.Requests.Responses
 {
