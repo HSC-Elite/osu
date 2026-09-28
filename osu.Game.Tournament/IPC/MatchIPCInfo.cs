@@ -24,9 +24,9 @@ namespace osu.Game.Tournament.IPC
 
         public BindableBool HasActiveMatch { get; } = new BindableBool();
 
-        protected readonly BindableList<MatchRoomPlayerInfo> roomPlayers = new BindableList<MatchRoomPlayerInfo>();
+        protected readonly BindableList<MatchRoomPlayerInfo> RoomPlayersInternal = new BindableList<MatchRoomPlayerInfo>();
 
-        public IBindableList<MatchRoomPlayerInfo> RoomPlayers => roomPlayers;
+        public IBindableList<MatchRoomPlayerInfo> RoomPlayers => RoomPlayersInternal;
 
         public virtual void RefreshChatChannel()
         {

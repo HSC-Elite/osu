@@ -459,11 +459,11 @@ namespace osu.Game.Tournament.IPC
         {
             var playerArray = players.ToArray();
 
-            if (roomPlayers.SequenceEqual(playerArray))
+            if (RoomPlayersInternal.SequenceEqual(playerArray))
                 return;
 
-            roomPlayers.Clear();
-            roomPlayers.AddRange(playerArray);
+            RoomPlayersInternal.Clear();
+            RoomPlayersInternal.AddRange(playerArray);
         }
 
         internal override void SetLiveLeaderboardProvider(TournamentLiveLeaderboardProvider? provider)

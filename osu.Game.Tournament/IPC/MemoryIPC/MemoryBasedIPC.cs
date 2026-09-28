@@ -145,11 +145,11 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                 }
             }
 
-            if (roomPlayers.SequenceEqual(players))
+            if (RoomPlayersInternal.SequenceEqual(players))
                 return;
 
-            roomPlayers.Clear();
-            roomPlayers.AddRange(players);
+            RoomPlayersInternal.Clear();
+            RoomPlayersInternal.AddRange(players);
         }
 
         private const int update_hz = 5;
