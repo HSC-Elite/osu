@@ -21,7 +21,6 @@ using osu.Game.Rulesets.Mods;
 using osu.Game.Scoring;
 using osu.Game.Scoring.Legacy;
 using osu.Game.Tournament.IPC;
-using osu.Game.Tournament.IPC.MemoryIPC;
 using osu.Game.Tournament.Models;
 using osu.Game.Tournament.Online.Requests;
 using osu.Game.Tournament.Online.Requests.Responses;
@@ -29,12 +28,10 @@ using osu.Game.Tournament.Online.Requests.Responses;
 namespace osu.Game.Tournament.Components
 {
     /// <summary>
-    /// Provides the live or authoritative score for the current match without coupling scoring rules to a particular IPC implementation.
+    /// Applies match API results over the live score supplied by the current match source.
     /// </summary>
     public partial class TournamentMatchScoreProcessor : Component
     {
-        private const double update_interval = 1000.0 / 5;
-
         [Resolved]
         private MatchIPCInfo ipc { get; set; } = null!;
 
@@ -66,7 +63,6 @@ namespace osu.Game.Tournament.Components
         private readonly Dictionary<DifficultyLookup, Task<DifficultyAttributes?>> difficultyTasks = new Dictionary<DifficultyLookup, Task<DifficultyAttributes?>>();
         private readonly HashSet<Task<DifficultyAttributes?>> loggedDifficultyFailures = new HashSet<Task<DifficultyAttributes?>>();
 
-        private IProvideAdditionalData? additionalData;
         private readonly BindableList<APIMatchEvent> matchEvents = new BindableList<APIMatchEvent>();
         private int currentMatchID = -1;
         private long currentGameID = -1;
@@ -77,15 +73,10 @@ namespace osu.Game.Tournament.Components
         private bool scoresBoundToIPC;
         private WorkingBeatmap? workingBeatmap;
         private BeatmapLookup? workingBeatmapLookup;
-        private double timeSinceUpdate;
-
         [BackgroundDependencyLoader]
         private void load()
         {
-            additionalData = ipc as IProvideAdditionalData;
-
-            if (additionalData == null)
-                bindScoresToIPC();
+            bindScoresToIPC();
 
             ipc.Beatmap.BindValueChanged(_ => resetDifficultyState());
             ladder.Ruleset.BindValueChanged(_ => resetDifficultyState());
@@ -103,14 +94,6 @@ namespace osu.Game.Tournament.Components
         protected override void Update()
         {
             base.Update();
-
-            timeSinceUpdate += Time.Elapsed;
-
-            if (timeSinceUpdate >= update_interval)
-            {
-                timeSinceUpdate = 0;
-                updateScores();
-            }
 
             if (!api.IsLoggedIn || currentMatchID <= 0)
                 return;
@@ -142,23 +125,7 @@ namespace osu.Game.Tournament.Components
                 return;
             }
 
-            if (additionalData == null)
-                return;
-
-            long legacyScore1 = getTeamPlayers(TeamColour.Red).Sum(calculateLegacyScore);
-            long legacyScore2 = getTeamPlayers(TeamColour.Blue).Sum(calculateLegacyScore);
-
-            if (ladder.ScoringMode.Value == TournamentScoringMode.PerformancePoint
-                && tryCalculatePerformanceScore(TeamColour.Red, out double performanceScore1)
-                && tryCalculatePerformanceScore(TeamColour.Blue, out double performanceScore2))
-            {
-                Score1.Value = (long)Math.Round(performanceScore1);
-                Score2.Value = (long)Math.Round(performanceScore2);
-                return;
-            }
-
-            Score1.Value = legacyScore1;
-            Score2.Value = legacyScore2;
+            bindScoresToIPC();
         }
 
         private void bindScoresToIPC()
@@ -217,8 +184,7 @@ namespace osu.Game.Tournament.Components
             if (currentMatchID <= 0)
                 LastAPIRequestStatus.Value = "未监听";
 
-            if (additionalData == null)
-                bindScoresToIPC();
+            bindScoresToIPC();
 
             updateScores();
         }
@@ -228,8 +194,7 @@ namespace osu.Game.Tournament.Components
             authoritativeGame = null;
             WaitingForAuthoritativeResult.Value = false;
 
-            if (additionalData == null)
-                bindScoresToIPC();
+            bindScoresToIPC();
         }
 
         private void requestCurrentRoundResultFromApi()
@@ -465,9 +430,6 @@ namespace osu.Game.Tournament.Components
         private int[] getTeamIDs(TeamColour colour) =>
             ladder.CurrentMatch.Value?.GetTeamByColor(colour)?.Players.Select(p => p.OnlineID).ToArray() ?? Array.Empty<int>();
 
-        private long calculateLegacyScore(SlotPlayerStatus player)
-            => calculateLegacyScore(player.Score.Value, player.Mods.Value);
-
         private long calculateLegacyScore(long score, LegacyMods mods)
         {
             double multiplier = ladder.ModMultiplierSettings
@@ -475,85 +437,6 @@ namespace osu.Game.Tournament.Components
                                       .Aggregate(1.0, (value, setting) => value * setting.Multiplier.Value);
 
             return (long)(score * multiplier);
-        }
-
-        private bool tryCalculatePerformanceScore(TeamColour colour, out double score)
-        {
-            score = 0;
-
-            TournamentBeatmap? beatmap = ipc.Beatmap.Value;
-            RulesetInfo? rulesetInfo = ladder.Ruleset.Value;
-
-            if (beatmap == null || rulesetInfo == null)
-                return false;
-
-            foreach (SlotPlayerStatus player in getTeamPlayers(colour))
-            {
-                double? playerScore = calculatePerformanceScore(beatmap, rulesetInfo, player);
-
-                if (!playerScore.HasValue)
-                    return false;
-
-                score += playerScore.Value;
-            }
-
-            return true;
-        }
-
-        private double? calculatePerformanceScore(TournamentBeatmap beatmap, RulesetInfo rulesetInfo, SlotPlayerStatus player)
-        {
-            if (!beatmapManager.HasBeatmap(beatmap))
-                return null;
-
-            Ruleset ruleset = rulesetInfo.CreateInstance();
-            PerformanceCalculator? performanceCalculator = ruleset.CreatePerformanceCalculator();
-
-            if (performanceCalculator == null)
-                return null;
-
-            LegacyMods mods = normaliseMods(player.Mods.Value);
-            Task<DifficultyAttributes?> difficultyTask = getDifficultyTask(beatmap, rulesetInfo, mods);
-
-            if (!difficultyTask.IsCompletedSuccessfully)
-            {
-                if (difficultyTask.IsFaulted)
-                {
-                    if (loggedDifficultyFailures.Add(difficultyTask))
-                        Logger.Error(difficultyTask.Exception, "Difficulty task failed");
-                }
-
-                return null;
-            }
-
-            DifficultyAttributes? difficultyAttributes = difficultyTask.GetResultSafely();
-
-            if (difficultyAttributes == null)
-                return null;
-
-            WorkingBeatmap? working = getWorkingBeatmap(beatmap);
-
-            if (working == null)
-                return null;
-
-            var score = new ScoreInfo(working.BeatmapInfo, rulesetInfo)
-            {
-                Accuracy = Math.Clamp(player.Accuracy.Value, 0, 1),
-                Combo = Math.Max(0, player.Combo.Value),
-                MaxCombo = Math.Max(0, player.MaxCombo.Value),
-                TotalScore = Math.Max(0, player.Score.Value),
-                IsLegacyScore = true,
-                LegacyTotalScore = Math.Max(0, player.Score.Value),
-                Mods = ruleset.ConvertFromLegacyMods(mods).ToArray(),
-            };
-
-            score.SetCount300(Math.Max(0, player.Hit300.Value));
-            score.SetCount100(Math.Max(0, player.Hit100.Value));
-            score.SetCount50(Math.Max(0, player.Hit50.Value));
-            score.SetCountGeki(Math.Max(0, player.HitGeki.Value));
-            score.SetCountKatu(Math.Max(0, player.HitKatu.Value));
-            score.SetCountMiss(Math.Max(0, player.HitMiss.Value));
-
-            return performanceCalculator.Calculate(score, difficultyAttributes).Total;
         }
 
         private Task<DifficultyAttributes?> getDifficultyTask(TournamentBeatmap beatmap, RulesetInfo rulesetInfo, LegacyMods mods)
@@ -586,13 +469,6 @@ namespace osu.Game.Tournament.Components
                 workingBeatmap = null;
                 return null;
             }
-        }
-
-        private IEnumerable<SlotPlayerStatus> getTeamPlayers(TeamColour colour)
-        {
-            int[] teamIds = ladder.CurrentMatch.Value?.GetTeamByColor(colour)?.Players.Select(p => p.OnlineID).ToArray() ?? Array.Empty<int>();
-
-            return additionalData!.SlotPlayers.Where(s => teamIds.Contains(s.OnlineID.Value));
         }
 
         private static LegacyMods normaliseMods(LegacyMods mods)

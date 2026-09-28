@@ -15,8 +15,11 @@ using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.Legacy;
 using osu.Game.Database;
 using osu.Game.Online;
+using osu.Game.Online.API;
 using osu.Game.Online.API.Requests.Responses;
+using osu.Game.Online.Chat;
 using osu.Game.Online.Multiplayer;
+using osu.Game.Online.Multiplayer.MatchTypes.TeamVersus;
 using osu.Game.Online.Rooms;
 using osu.Game.Rulesets;
 using osu.Game.Rulesets.Mods;
@@ -24,6 +27,7 @@ using osu.Game.Screens.OnlinePlay;
 using osu.Game.Screens.OnlinePlay.Multiplayer;
 using osu.Game.Screens.Play.Leaderboards;
 using osu.Game.Tournament.Models;
+using osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea;
 
 namespace osu.Game.Tournament.IPC
 {
@@ -50,24 +54,14 @@ namespace osu.Game.Tournament.IPC
         [Resolved]
         private Bindable<WorkingBeatmap> workingBeatmap { get; set; } = null!;
 
-        public MultiSpectatorLeaderboardProvider? LeaderboardProvider
-        {
-            set => leaderboardProvider = value;
-        }
-
-        private readonly BindableList<MultiplayerRoomUser> redTeamUser = new BindableList<MultiplayerRoomUser>();
-        private readonly BindableList<MultiplayerRoomUser> blueTeamUser = new BindableList<MultiplayerRoomUser>();
-        private readonly BindableList<MultiplayerRoomUser> roomUser = new BindableList<MultiplayerRoomUser>();
-
-        public IBindableList<MultiplayerRoomUser> RedTeamUser => redTeamUser;
-        public IBindableList<MultiplayerRoomUser> BlueTeamUser => blueTeamUser;
-        public IBindableList<MultiplayerRoomUser> RoomUser => roomUser;
-
-        private MultiSpectatorLeaderboardProvider? leaderboardProvider;
+        private TournamentLiveLeaderboardProvider? leaderboardProvider;
 
         private readonly OnlinePlayBeatmapAvailabilityTracker beatmapAvailabilityTracker = new MultiplayerBeatmapAvailabilityTracker();
 
         private readonly Bindable<Room?> currentRoom = new Bindable<Room?>();
+
+        private ChannelManager chatManager = null!;
+        private Channel? joinedChatChannel;
 
         public IBindable<Room?> CurrentRoom => currentRoom;
 
@@ -76,6 +70,12 @@ namespace osu.Game.Tournament.IPC
         public LazerRoomMatchInfo()
         {
             AddInternal(beatmapAvailabilityTracker);
+        }
+
+        [BackgroundDependencyLoader]
+        private void load(IAPIProvider api)
+        {
+            AddInternal(chatManager = new ChannelManager(api));
         }
 
         public void Join(Room room, string? password, Action<Room>? onSuccess = null, Action<string, Exception?>? onFailure = null) => Schedule(() =>
@@ -92,6 +92,7 @@ namespace osu.Game.Tournament.IPC
                     Scheduler.Add(() =>
                     {
                         currentRoom.Value = room;
+                        HasActiveMatch.Value = true;
                         onSuccess?.Invoke(room);
                     });
                 }
@@ -119,11 +120,14 @@ namespace osu.Game.Tournament.IPC
 
             client.LeaveRoom().FireAndForget();
             currentRoom.Value = null;
+            HasActiveMatch.Value = false;
         }
 
         protected override void LoadComplete()
         {
             base.LoadComplete();
+
+            HasActiveMatch.Value = client.Room != null;
 
             currentRoom.BindValueChanged(onRoomUpdated);
             beatmapAvailabilityTracker.Availability.BindValueChanged(onBeatmapAvailabilityChanged, true);
@@ -142,11 +146,7 @@ namespace osu.Game.Tournament.IPC
             client.UserJoined += _ => updateUsers();
             client.UserLeft += _ => updateUsers();
             client.UserKicked += _ => updateUsers();
-            client.UserStateChanged += (_, s) =>
-            {
-                if (s == MultiplayerUserState.Idle || s == MultiplayerUserState.Spectating)
-                    updateUsers();
-            };
+            client.UserStateChanged += (_, _) => updateUsers();
             client.ResultsReady += () =>
             {
                 if (State.Value == TourneyState.Playing)
@@ -159,6 +159,8 @@ namespace osu.Game.Tournament.IPC
 
         private void onRoomUpdated() => Scheduler.AddOnce(() =>
         {
+            HasActiveMatch.Value = client.Room != null;
+
             if (currentRoom.Value != null && client.Room == null)
             {
                 Logger.Log("exiting room");
@@ -180,7 +182,7 @@ namespace osu.Game.Tournament.IPC
             State.Value = TourneyState.Idle;
         }
 
-        public void ForceReSpectate()
+        internal override void ForceReSpectate()
         {
             if (client.Room?.State != MultiplayerRoomState.Playing)
                 return;
@@ -364,12 +366,56 @@ namespace osu.Game.Tournament.IPC
                 updateChannel();
         }
 
-        private void updateChannel()
+        private void updateChannel(bool force = false)
         {
-            if (currentRoom.Value?.RoomID == null || currentRoom.Value.ChannelId == 0)
+            var room = currentRoom.Value;
+
+            if (room?.RoomID == null || room.ChannelId == 0)
+            {
+                leaveChatChannel();
+                ChatChannel.Value = null;
+                return;
+            }
+
+            if (!force && joinedChatChannel?.Id == room.ChannelId)
                 return;
 
-            ChatChannel.Value = currentRoom.Value.ChannelId;
+            leaveChatChannel();
+
+            joinedChatChannel = chatManager.JoinChannel(new Channel
+            {
+                Id = room.ChannelId,
+                Type = ChannelType.Multiplayer,
+                Name = $"#lazermp_{room.RoomID.Value}",
+            });
+
+            ChatChannel.Value = joinedChatChannel;
+        }
+
+        public override void RefreshChatChannel() => updateChannel(force: true);
+
+        private void leaveChatChannel()
+        {
+            if (joinedChatChannel == null)
+                return;
+
+            chatManager.LeaveChannel(joinedChatChannel);
+            joinedChatChannel = null;
+        }
+
+        public override bool PostChatMessage(string message)
+        {
+            if (joinedChatChannel == null || string.IsNullOrWhiteSpace(message))
+                return false;
+
+            chatManager.PostMessage(message, target: joinedChatChannel);
+            return true;
+        }
+
+        protected override void Dispose(bool isDisposing)
+        {
+            leaveChatChannel();
+            base.Dispose(isDisposing);
         }
 
         private double waitingForIdle;
@@ -379,35 +425,50 @@ namespace osu.Game.Tournament.IPC
         {
             if (client.Room == null || client.LocalUser == null)
             {
-                roomUser.Clear();
-                redTeamUser.Clear();
-                blueTeamUser.Clear();
+                updateRoomPlayers(Array.Empty<MatchRoomPlayerInfo>());
                 return;
             }
 
-            var currentUser = client.Room.Users.Where(p => p.State != MultiplayerUserState.Spectating);
+            var activeUsers = client.Room.Users.Where(p => p.State != MultiplayerUserState.Spectating).ToArray();
+            var slotByUserId = new Dictionary<int, (TeamColour Team, int SlotIndex)>();
 
-            roomUser.AddRange(currentUser.Except(roomUser));
-            var toRemove = roomUser.Except(currentUser).ToArray();
+            foreach ((TeamColour team, int slotIndex, MultiplayerRoomUser user) in activeUsers
+                         .Where(user => GetTeamIds(TeamColour.Red).Contains(user.UserID))
+                         .Select((user, index) => (TeamColour.Red, index, user))
+                         .Concat(activeUsers
+                                     .Where(user => GetTeamIds(TeamColour.Blue).Contains(user.UserID))
+                                     .Select((user, index) => (TeamColour.Blue, index, user))))
+            {
+                slotByUserId[user.UserID] = (team, slotIndex);
+            }
 
-            foreach (var user in toRemove)
-                roomUser.Remove(user);
+            updateRoomPlayers(activeUsers.Select(user =>
+            {
+                slotByUserId.TryGetValue(user.UserID, out var slot);
 
-            updateTeamUser(TeamColour.Red);
-            updateTeamUser(TeamColour.Blue);
+                return new MatchRoomPlayerInfo(
+                    user.UserID,
+                    user.User?.Username,
+                    slotByUserId.ContainsKey(user.UserID) ? slot.Team : null,
+                    slotByUserId.ContainsKey(user.UserID) ? slot.SlotIndex : null,
+                    user.State);
+            }));
         });
 
-        private void updateTeamUser(TeamColour colour)
+        private void updateRoomPlayers(IEnumerable<MatchRoomPlayerInfo> players)
         {
-            var teamUser = roomUser.Where(p => GetTeamIds(colour).Any(id => p.UserID == id)).ToArray();
+            var playerArray = players.ToArray();
 
-            var localTeamUser = colour == TeamColour.Red ? redTeamUser : blueTeamUser;
+            if (roomPlayers.SequenceEqual(playerArray))
+                return;
 
-            localTeamUser.AddRange(teamUser.Except(localTeamUser));
+            roomPlayers.Clear();
+            roomPlayers.AddRange(playerArray);
+        }
 
-            var toRemove = localTeamUser.Except(teamUser).ToArray();
-            foreach (var user in toRemove)
-                localTeamUser.Remove(user);
+        internal override void SetLiveLeaderboardProvider(TournamentLiveLeaderboardProvider? provider)
+        {
+            leaderboardProvider = provider;
         }
 
         protected override void Update()

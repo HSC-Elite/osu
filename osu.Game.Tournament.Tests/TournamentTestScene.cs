@@ -4,7 +4,6 @@
 using System.Linq;
 using System.Threading;
 using osu.Framework.Allocation;
-using osu.Framework.Bindables;
 using osu.Framework.Platform;
 using osu.Framework.Testing;
 using osu.Framework.Utils;
@@ -12,10 +11,8 @@ using osu.Game.Beatmaps;
 using osu.Game.Overlays;
 using osu.Game.Rulesets;
 using osu.Game.Tests.Visual;
-using osu.Game.Online.Chat;
 using osu.Game.Tournament.IO;
 using osu.Game.Tournament.IPC;
-using osu.Game.Tournament.IPC.MemoryIPC;
 using osu.Game.Tournament.Models;
 
 namespace osu.Game.Tournament.Tests
@@ -222,17 +219,8 @@ namespace osu.Game.Tournament.Tests
             }
         }
 
-        protected partial class TestMatchIPCInfo : MatchIPCInfo, IProvideAdditionalData
+        protected partial class TestMatchIPCInfo : MatchIPCInfo
         {
-            public SlotPlayerStatus[] SlotPlayers { get; } = Enumerable.Range(0, 8).Select(_ => new SlotPlayerStatus()).ToArray();
-
-            public Bindable<Channel> TourneyChatChannel { get; } = new Bindable<Channel>();
-
-            public BindableInt Team1Combo { get; } = new BindableInt();
-
-            public BindableInt Team2Combo { get; } = new BindableInt();
-
-            public int PlayTime => SlotPlayers.Max(s => s.PlayTime.Value);
         }
     }
 }

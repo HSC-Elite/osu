@@ -41,15 +41,15 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
         public void ApplySlotInfo(TournamentPlayerSlotInfo info)
         {
-            if (UserId != info.User?.UserID)
+            if (UserId != info.User?.UserId)
                 ResetToIdle();
 
-            UserId = info.User?.UserID;
+            UserId = info.User?.UserId;
         }
 
         public void SetSmallLogo(bool small) => idleScreen.SmallOsuLogo = small;
 
-        public void StartGameplay(Score score, SpectatorPlayerClock clock, MultiSpectatorLeaderboardProvider leaderboardProvider)
+        public void StartGameplay(Score score, SpectatorPlayerClock clock, TournamentLiveLeaderboardProvider leaderboardProvider)
         {
             if (HasGameplay)
                 return;

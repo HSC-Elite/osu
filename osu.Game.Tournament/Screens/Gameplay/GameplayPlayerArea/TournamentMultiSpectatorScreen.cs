@@ -10,7 +10,6 @@ using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Logging;
 using osu.Game.Graphics;
-using osu.Game.Online.Multiplayer;
 using osu.Game.Online.Spectator;
 using osu.Game.Screens.OnlinePlay.Multiplayer.Spectate;
 using osu.Game.Screens.Play;
@@ -49,22 +48,20 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         private OsuColour colours { get; set; } = null!;
 
         [Resolved]
-        private MultiplayerClient multiplayerClient { get; set; } = null!;
-
-        [Resolved]
         private LadderInfo ladderInfo { get; set; } = null!;
 
         [Resolved]
-        private LazerRoomMatchInfo lazerRoomInfo { get; set; } = null!;
+        private MatchIPCInfo ipc { get; set; } = null!;
 
         [Cached(typeof(IGameplayLeaderboardProvider))]
-        private MultiSpectatorLeaderboardProvider leaderboardProvider { get; set; }
+        private TournamentLiveLeaderboardProvider leaderboardProvider { get; set; } = null!;
 
         private readonly Bindable<TourneyState> tourneyState = new Bindable<TourneyState>();
 
         private IAggregateAudioAdjustment? boundAdjustments;
 
         private readonly List<PlayerArea> instances = new List<PlayerArea>();
+        private readonly int[] userIds;
         private MasterGameplayClockContainer masterClockContainer = null!;
         private SpectatorSyncManager syncManager = null!;
         private TournamentPlayerGrid grid = null!;
@@ -73,16 +70,22 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         /// <summary>
         /// Creates a new <see cref="MultiSpectatorScreen"/>.
         /// </summary>
-        /// <param name="users">The players to spectate.</param>
-        public TournamentMultiSpectatorScreen(MultiplayerRoomUser[] users)
-            : base(users.Select(u => u.UserID).ToArray())
+        /// <param name="userIds">The players to spectate.</param>
+        public TournamentMultiSpectatorScreen(int[] userIds)
+            : base(userIds)
         {
-            leaderboardProvider = new MultiSpectatorLeaderboardProvider(users);
+            this.userIds = userIds;
         }
 
         [BackgroundDependencyLoader]
         private void load()
         {
+            var players = userIds.Select(findRoomPlayer)
+                                 .Where(player => player != null)
+                                 .Select(player => player!.Value)
+                                 .ToArray();
+            leaderboardProvider = new TournamentLiveLeaderboardProvider(players);
+
             int playerPerTeam = ladderInfo.PlayersPerTeam.Value;
 
             InternalChildren = new Drawable[]
@@ -98,8 +101,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                 //new PlayerSettingsOverlay()
             };
 
-            int[] team1Users = Users.Where(u => lazerRoomInfo.RedTeamUser.Any(p => p.UserID == u)).Take(playerPerTeam).ToArray();
-            int[] team2Users = Users.Except(team1Users).Where(u => lazerRoomInfo.BlueTeamUser.Any(p => p.UserID == u)).Take(playerPerTeam).ToArray();
+            int[] team1Users = userIds.Where(u => ipc.RoomPlayers.Any(p => p.UserId == u && p.Team == TeamColour.Red)).Take(playerPerTeam).ToArray();
+            int[] team2Users = userIds.Except(team1Users).Where(u => ipc.RoomPlayers.Any(p => p.UserId == u && p.Team == TeamColour.Blue)).Take(playerPerTeam).ToArray();
 
             for (int i = 0; i < team1Users.Length; i++)
             {
@@ -121,7 +124,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                 }
             }
 
-            var usersToRemove = Users.Except(instances.Select(i => i.UserId));
+            var usersToRemove = userIds.Except(instances.Select(i => i.UserId));
 
             foreach (int user in usersToRemove)
             {
@@ -135,15 +138,20 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                     leaderboardProvider.AddClock(instance.UserId, instance.SpectatorPlayerClock);
             });
 
-            lazerRoomInfo.LeaderboardProvider = leaderboardProvider;
+            ipc.SetLiveLeaderboardProvider(leaderboardProvider);
 
-            tourneyState.BindTo(lazerRoomInfo.State);
+            tourneyState.BindTo(ipc.State);
 
             tourneyState.BindValueChanged(s =>
             {
                 if (s.OldValue == TourneyState.Playing && s.NewValue == TourneyState.Ranking)
                     onRanking();
             });
+        }
+
+        private MatchRoomPlayerInfo? findRoomPlayer(int userId)
+        {
+            return ipc.RoomPlayers.Where(p => p.UserId == userId).Select(p => (MatchRoomPlayerInfo?)p).FirstOrDefault();
         }
 
         private void onRanking()
@@ -178,8 +186,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
             checkAudioSource();
 
-            if (lazerRoomInfo.State.Value == TourneyState.WaitingForClients && AllPlayersLoaded)
-                lazerRoomInfo.State.Value = TourneyState.Playing;
+            if (ipc.State.Value == TourneyState.WaitingForClients && AllPlayersLoaded)
+                ipc.State.Value = TourneyState.Playing;
         }
 
         private void checkAudioSource()

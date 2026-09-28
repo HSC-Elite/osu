@@ -17,7 +17,6 @@ using osu.Game.Beatmaps;
 using osu.Game.Database;
 using osu.Game.Online.API.Requests.Responses;
 using osu.Game.Online.Metadata;
-using osu.Game.Online.Multiplayer;
 using osu.Game.Online.Spectator;
 using osu.Game.Replays;
 using osu.Game.Rulesets;
@@ -27,6 +26,7 @@ using osu.Game.Screens.Play;
 using osu.Game.Screens.Play.Leaderboards;
 using osu.Game.Screens.Spectate;
 using osu.Game.Tournament.IPC;
+using osu.Game.Tournament.Models;
 using Realms;
 
 namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
@@ -38,7 +38,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         public bool AllGameplaySlotsLoaded => slots.Where(s => s.HasGameplay).All(s => s.PlayerLoaded);
 
         [Resolved]
-        private SpectatorClient spectatorClient { get; set; } = null!;
+        private ISpectatorDataSource spectatorDataSource { get; set; } = null!;
 
         [Resolved]
         private MetadataClient metadataClient { get; set; } = null!;
@@ -58,9 +58,6 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         [Resolved]
         private MatchIPCInfo ipc { get; set; } = null!;
 
-        [Resolved]
-        private LazerRoomMatchInfo? lazerRoomInfo { get; set; }
-
         private readonly List<TournamentPlayerSlot> slots = new List<TournamentPlayerSlot>();
         private readonly Dictionary<int, TournamentPlayerSlot> slotsByUserId = new Dictionary<int, TournamentPlayerSlot>();
         private readonly Dictionary<int, APIUser> userMap = new Dictionary<int, APIUser>();
@@ -69,7 +66,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         private readonly HashSet<int> watchedUsers = new HashSet<int>();
         private readonly IBindableDictionary<int, SpectatorState> watchedUserStates = new BindableDictionary<int, SpectatorState>();
 
-        private MultiSpectatorLeaderboardProvider? leaderboardProvider;
+        private TournamentLiveLeaderboardProvider? leaderboardProvider;
 
         private MasterGameplayClockContainer? masterClockContainer;
         private SpectatorSyncManager? syncManager;
@@ -89,7 +86,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             base.LoadComplete();
 
             userWatchToken = metadataClient.BeginWatchingUserPresence();
-            watchedUserStates.BindTo(spectatorClient.WatchedUserStates);
+            watchedUserStates.BindTo(spectatorDataSource.WatchedUserStates);
             watchedUserStates.BindCollectionChanged(onUserStatesChanged, true);
             realmSubscription = realm.RegisterForNotifications(
                 realm => realm.All<BeatmapSetInfo>().Where(s => !s.DeletePending), beatmapsChanged);
@@ -176,8 +173,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
             foreach (int userId in watchedUsers.ToArray())
             {
-                spectatorClient.StopWatchingUser(userId);
-                spectatorClient.WatchUser(userId);
+                spectatorDataSource.StopWatchingUser(userId);
+                spectatorDataSource.WatchUser(userId);
 
                 if (watchedUserStates.TryGetValue(userId, out var state) && state.State == SpectatedUserState.Playing)
                     startGameplay(userId);
@@ -236,11 +233,11 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                 userMap[userId] = new APIUser
                 {
                     Id = userId,
-                    Username = findRoomUser(userId)?.User?.Username ?? $"User {userId}",
+                    Username = findRoomPlayer(userId)?.Username ?? $"User {userId}",
                 };
             }
 
-            spectatorClient.WatchUser(userId);
+            spectatorDataSource.WatchUser(userId);
 
             userLookupCache.GetUsersAsync(new[] { userId }).ContinueWith(task => Schedule(() =>
             {
@@ -267,26 +264,25 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             watchedUsers.Remove(userId);
 
             if (stopWatching)
-                spectatorClient.StopWatchingUser(userId);
+                spectatorDataSource.StopWatchingUser(userId);
         }
 
-        private MultiSpectatorLeaderboardProvider? ensureLeaderboardProvider()
+        private TournamentLiveLeaderboardProvider? ensureLeaderboardProvider()
         {
             if (leaderboardProvider != null)
                 return leaderboardProvider;
 
-            var users = slotsByUserId.Keys
-                                     .Select(id => findRoomUser(id) ?? new MultiplayerRoomUser(id))
-                                     .ToArray();
+            var players = slotsByUserId.Keys
+                                      .Select(id => findRoomPlayer(id) ?? new MatchRoomPlayerInfo(id, userMap.GetValueOrDefault(id)?.Username, null, null))
+                                      .ToArray();
 
-            if (users.Length == 0)
+            if (players.Length == 0)
                 return null;
 
-            var providerUserIds = users.Select(u => u.UserID).ToHashSet();
-            var provider = leaderboardProvider = new MultiSpectatorLeaderboardProvider(users);
+            var providerUserIds = players.Select(player => player.UserId).ToHashSet();
+            var provider = leaderboardProvider = new TournamentLiveLeaderboardProvider(players);
 
-            if (lazerRoomInfo != null)
-                lazerRoomInfo.LeaderboardProvider = provider;
+            ipc.SetLiveLeaderboardProvider(provider);
 
             LoadComponentAsync(provider, loadedProvider =>
             {
@@ -304,8 +300,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                         loadedProvider.AddClock(userId, clock);
                 }
 
-                if (lazerRoomInfo != null)
-                    lazerRoomInfo.LeaderboardProvider = loadedProvider;
+                ipc.SetLiveLeaderboardProvider(loadedProvider);
             });
 
             return provider;
@@ -313,15 +308,14 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
         private void disposeLeaderboardProvider()
         {
-            if (lazerRoomInfo != null)
-                lazerRoomInfo.LeaderboardProvider = null;
+            ipc.SetLiveLeaderboardProvider(null);
 
             leaderboardProvider?.Expire();
             leaderboardProvider = null;
         }
 
-        private MultiplayerRoomUser? findRoomUser(int userId)
-            => lazerRoomInfo?.RoomUser.FirstOrDefault(u => u.UserID == userId);
+        private MatchRoomPlayerInfo? findRoomPlayer(int userId)
+            => ipc.RoomPlayers.Where(p => p.UserId == userId).Select(p => (MatchRoomPlayerInfo?)p).FirstOrDefault();
 
         private void beatmapsChanged(IRealmCollection<BeatmapSetInfo> items, ChangeSet? changes)
         {
@@ -622,10 +616,10 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
             base.Dispose(isDisposing);
 
-            if (spectatorClient.IsNotNull())
+            if (spectatorDataSource.IsNotNull())
             {
                 foreach (int userId in watchedUsers)
-                    spectatorClient.StopWatchingUser(userId);
+                    spectatorDataSource.StopWatchingUser(userId);
             }
 
             realmSubscription?.Dispose();

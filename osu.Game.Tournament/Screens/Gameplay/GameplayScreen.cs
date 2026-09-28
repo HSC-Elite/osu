@@ -15,7 +15,6 @@ using osu.Game.Beatmaps;
 using osu.Game.Graphics;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Graphics.UserInterfaceV2;
-using osu.Game.Online.Multiplayer;
 using osu.Game.Overlays.Settings;
 using osu.Game.Screens.Play.PlayerSettings;
 using osu.Game.Tournament.Components;
@@ -54,16 +53,10 @@ namespace osu.Game.Tournament.Screens.Gameplay
         private TournamentMatchChatDisplay chat { get; set; } = null!;
 
         [Resolved]
-        private MultiplayerClient client { get; set; } = null!;
-
-        [Resolved]
         private AudioManager audio { get; set; } = null!;
 
         [Resolved]
         private Bindable<WorkingBeatmap> workingBeatmap { get; set; } = null!;
-
-        [Resolved(CanBeNull = true)]
-        private LazerRoomMatchInfo? lazerRoomInfo { get; set; }
 
         public bool Playing => spectatorManager?.HasActiveGameplay == true;
 
@@ -73,8 +66,6 @@ namespace osu.Game.Tournament.Screens.Gameplay
         private TournamentSpectatorManager spectatorManager = null!;
         private readonly List<TournamentPlayerSlot> playerSlots = new List<TournamentPlayerSlot>();
         private readonly Bindable<int> playerPerTeam = new Bindable<int>();
-        private readonly IBindableList<MultiplayerRoomUser> redTeamUsers = new BindableList<MultiplayerRoomUser>();
-        private readonly IBindableList<MultiplayerRoomUser> blueTeamUsers = new BindableList<MultiplayerRoomUser>();
 
         [Resolved]
         private TournamentMatchScoreProcessor? scoreProcessor { get; set; }
@@ -259,7 +250,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     {
                         IPC.State.Value = TourneyState.Idle;
                         spectatorManager.ForceSpectate();
-                        lazerRoomInfo?.ForceReSpectate();
+                        IPC.ForceReSpectate();
                     }
                 },
                 new TourneyButton
@@ -296,14 +287,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
             playerPerTeam.BindTo(LadderInfo.PlayersPerTeam);
             playerPerTeam.BindValueChanged(_ => rebuildPlayerSlots(), true);
 
-            if (lazerRoomInfo != null)
-            {
-                redTeamUsers.BindCollectionChanged((_, _) => refreshPlayerSlots());
-                redTeamUsers.BindTo(lazerRoomInfo.RedTeamUser);
-
-                blueTeamUsers.BindCollectionChanged((_, _) => refreshPlayerSlots());
-                blueTeamUsers.BindTo(lazerRoomInfo.BlueTeamUser);
-            }
+            IPC.RoomPlayers.BindCollectionChanged((_, _) => refreshPlayerSlots());
 
             chatBox.OnCommit += (_, _) =>
             {
@@ -506,8 +490,11 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
             foreach (var slot in playerSlots)
             {
-                var teamUsers = slot.TeamColour == TeamColour.Red ? redTeamUsers : blueTeamUsers;
-                var user = teamUsers.Take(playersPerTeam).ElementAtOrDefault(slot.Index);
+                MatchRoomPlayerInfo? user = IPC.RoomPlayers
+                                                  .Where(p => p.Team == slot.TeamColour && p.SlotIndex != null)
+                                                  .OrderBy(p => p.SlotIndex)
+                                                  .Select(p => (MatchRoomPlayerInfo?)p)
+                                                  .ElementAtOrDefault(slot.Index);
 
                 slot.ApplySlotInfo(new TournamentPlayerSlotInfo(slot.TeamColour, slot.Index, user));
             }
@@ -589,7 +576,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
                         break;
 
                     case TourneyState.WaitingForClients:
-                        if (client.Room == null)
+                        if (!IPC.HasActiveMatch.Value)
                             break;
 
                         spectatorManager.BeginSpectating(workingBeatmap.Value, playerSlots);

@@ -4,12 +4,8 @@
 using System;
 using System.Linq;
 using osu.Framework.Allocation;
-using osu.Framework.Bindables;
 using osu.Framework.Graphics;
-using osu.Framework.Logging;
-using osu.Game.Online.API;
 using osu.Game.Online.Chat;
-using osu.Game.Online.Rooms;
 using osu.Game.Overlays.Chat;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.Models;
@@ -18,18 +14,11 @@ namespace osu.Game.Tournament.Components
 {
     public partial class TournamentMatchChatDisplay : StandAloneChatDisplay
     {
-        private readonly IBindable<Room?> currentRoom = new Bindable<Room?>();
-
-        private ChannelManager manager = null!;
-
         [Resolved]
         private LadderInfo ladderInfo { get; set; } = null!;
 
         [Resolved]
-        private IAPIProvider api { get; set; } = null!;
-
-        [Resolved]
-        private LazerRoomMatchInfo ipc { get; set; } = null!;
+        private MatchIPCInfo ipc { get; set; } = null!;
 
         public TournamentMatchChatDisplay()
         {
@@ -41,37 +30,14 @@ namespace osu.Game.Tournament.Components
         [BackgroundDependencyLoader]
         private void load()
         {
-            AddInternal(manager = new ChannelManager(api));
-
-            currentRoom.BindTo(ipc.CurrentRoom);
-            currentRoom.BindValueChanged(c =>
-            {
-                if (c.OldValue != null)
-                {
-                    Logger.Log($"Leave Channel {Channel.Value}");
-                    manager.LeaveChannel(Channel.Value);
-                }
-
-                Scheduler.AddOnce(UpdateChat);
-            }, true);
+            Channel.BindTo(ipc.ChatChannel);
         }
 
-        public void UpdateChat()
-        {
-            if (currentRoom.Value?.RoomID == null || currentRoom.Value?.ChannelId == null)
-                return;
-
-            Channel.Value = manager.JoinChannel(new Channel { Id = currentRoom.Value.ChannelId, Type = ChannelType.Multiplayer, Name = $"#lazermp_{currentRoom.Value.RoomID.Value}" });
-            Logger.Log($"Join Channel {Channel.Value}");
-        }
+        public void UpdateChat() => ipc.RefreshChatChannel();
 
         public bool PostMessage(string message)
         {
-            if (Channel.Value == null || string.IsNullOrWhiteSpace(message))
-                return false;
-
-            manager.PostMessage(message.Trim(), target: Channel.Value);
-            return true;
+            return Channel.Value != null && !string.IsNullOrWhiteSpace(message) && ipc.PostChatMessage(message.Trim());
         }
 
         public void Expand() => this.FadeIn(300);

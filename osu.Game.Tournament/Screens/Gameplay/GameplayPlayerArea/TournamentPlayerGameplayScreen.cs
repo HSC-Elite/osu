@@ -14,14 +14,14 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
     public partial class TournamentPlayerGameplayScreen : OsuScreen
     {
         [Cached(typeof(IGameplayLeaderboardProvider))]
-        private readonly MultiSpectatorLeaderboardProvider leaderboardProvider;
+        private readonly TournamentLiveLeaderboardProvider leaderboardProvider;
 
         public PlayerArea PlayerArea { get; }
         private readonly Score score;
 
         protected override BackgroundScreen CreateBackground() => new BackgroundScreenDefault();
 
-        public TournamentPlayerGameplayScreen(PlayerArea playerArea, Score score, MultiSpectatorLeaderboardProvider leaderboardProvider)
+        internal TournamentPlayerGameplayScreen(PlayerArea playerArea, Score score, TournamentLiveLeaderboardProvider leaderboardProvider)
         {
             PlayerArea = playerArea;
             this.score = score;

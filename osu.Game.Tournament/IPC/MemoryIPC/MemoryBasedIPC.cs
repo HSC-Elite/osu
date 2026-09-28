@@ -3,34 +3,48 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Runtime.Versioning;
+using System.Threading.Tasks;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Logging;
+using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.Legacy;
 using osu.Game.Online.API;
 using osu.Game.Online.API.Requests;
 using osu.Game.Online.API.Requests.Responses;
 using osu.Game.Online.Chat;
+using osu.Game.Rulesets;
+using osu.Game.Rulesets.Difficulty;
+using osu.Game.Rulesets.Mods;
+using osu.Game.Scoring;
+using osu.Game.Scoring.Legacy;
+using osu.Game.Tournament.Components;
 using osu.Game.Tournament.Models;
 
 namespace osu.Game.Tournament.IPC.MemoryIPC
 {
     [SupportedOSPlatform("windows")]
-    public partial class MemoryBasedIPC : MatchIPCInfo, IProvideAdditionalData
+    public partial class MemoryBasedIPC : MatchIPCInfo
     {
         private const int chat_diagnostic_log_interval_ms = 30000;
 
         private int lastBeatmapId;
         private GetBeatmapRequest? beatmapLookupRequest;
+        private ChannelManager chatManager = null!;
+        private readonly Dictionary<DifficultyLookup, Task<DifficultyAttributes?>> difficultyTasks = new Dictionary<DifficultyLookup, Task<DifficultyAttributes?>>();
+        private readonly HashSet<Task<DifficultyAttributes?>> loggedDifficultyFailures = new HashSet<Task<DifficultyAttributes?>>();
+        private WorkingBeatmap? workingBeatmap;
+        private BeatmapLookup? workingBeatmapLookup;
 
         public IBindable<bool> Available => available;
 
         private readonly BindableBool available = new BindableBool();
 
         public SlotPlayerStatus[] SlotPlayers { get; } = Enumerable.Range(0, 8).Select(i => new SlotPlayerStatus()).ToArray();
-        public Bindable<Channel> TourneyChatChannel { get; } = new Bindable<Channel>();
+        private readonly BindableInt memoryChatChannel = new BindableInt();
         private int currentMemoryMessageCount = 0;
         private long nextChatDiagnosticLogAt;
 
@@ -39,6 +53,12 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
         [Resolved]
         protected IAPIProvider API { get; private set; } = null!;
+
+        [Resolved]
+        private TournamentBeatmapManager beatmapManager { get; set; } = null!;
+
+        [Resolved]
+        private TournamentBeatmapDifficultyCache difficultyCache { get; set; } = null!;
 
         public bool FetchDataFromMemory { get; set; }
 
@@ -58,7 +78,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
             readers = Enumerable.Range(0, 8).Select(i => new StableMemoryReader()).ToArray();
             tourneyManagerMemoryReader = new TourneyManagerMemoryReader();
 
-            ChatChannel.BindValueChanged(c =>
+            memoryChatChannel.BindValueChanged(c =>
             {
                 resetTourneyChatChannel(c.NewValue);
             }, true);
@@ -67,7 +87,69 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
         [BackgroundDependencyLoader]
         private void load()
         {
+            AddInternal(chatManager = new ChannelManager(API));
             playersPerTeam.BindTo(Ladder.PlayersPerTeam);
+            Ladder.CurrentMatch.BindValueChanged(_ => Schedule(updateMatchPlayers), true);
+            Beatmap.BindValueChanged(_ => resetDifficultyState());
+            Ladder.Ruleset.BindValueChanged(_ => resetDifficultyState());
+        }
+
+        public override bool PostChatMessage(string message)
+        {
+            var channel = ChatChannel.Value;
+
+            if (channel == null || string.IsNullOrWhiteSpace(message))
+                return false;
+
+            chatManager.PostMessage(message, target: channel);
+            return true;
+        }
+
+        public override void RefreshChatChannel()
+        {
+            if (tourneyManagerMemoryReader.Status != AttachStatus.Attached)
+                return;
+
+            try
+            {
+                updateTourneyChat(tourneyManagerMemoryReader);
+            }
+            catch (InvalidOperationException)
+            {
+                if (tourneyManagerMemoryReader.Status != AttachStatus.UnAttached)
+                    throw;
+            }
+        }
+
+        private void updateMatchPlayers()
+        {
+            var match = Ladder.CurrentMatch.Value;
+            HasActiveMatch.Value = match != null;
+
+            var players = new List<MatchRoomPlayerInfo>();
+
+            if (match != null)
+            {
+                foreach (TeamColour team in new[] { TeamColour.Red, TeamColour.Blue })
+                {
+                    var teamPlayers = match.GetTeamByColor(team)?.Players;
+
+                    if (teamPlayers == null)
+                        continue;
+
+                    for (int i = 0; i < teamPlayers.Count; i++)
+                    {
+                        var player = teamPlayers[i];
+                        players.Add(new MatchRoomPlayerInfo(player.OnlineID, player.Username, team, i));
+                    }
+                }
+            }
+
+            if (roomPlayers.SequenceEqual(players))
+                return;
+
+            roomPlayers.Clear();
+            roomPlayers.AddRange(players);
         }
 
         private const int update_hz = 5;
@@ -133,7 +215,7 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
                     }
                 }
 
-                ChatChannel.Value = (int)reader.GetChannelId();
+                memoryChatChannel.Value = (int)reader.GetChannelId();
                 updateTourneyChat(reader);
             }
             catch (InvalidOperationException)
@@ -150,12 +232,12 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
         private void resetTourneyChatChannel(int channelId)
         {
-            TourneyChatChannel.Value = new Channel
+            ChatChannel.Value = channelId > 0 ? new Channel
             {
                 Name = "mp",
                 Id = channelId,
                 Type = ChannelType.Private
-            };
+            } : null;
 
             currentMemoryMessageCount = 0;
         }
@@ -175,7 +257,10 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
             Message[] takenChat = tourneyChatItems.TakeLast(Channel.MAX_HISTORY).ToArray();
 
-            var channel = TourneyChatChannel.Value;
+            var channel = ChatChannel.Value;
+
+            if (channel == null)
+                return;
             int previousChannelCount = channel.Messages.Count;
 
             Message[] toAdd = takenChat.Except(channel.Messages).ToArray();
@@ -340,11 +425,149 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
         protected void UpdateScore()
         {
-            Score1.Value = GetTeamScore(TeamColour.Red).Sum(CalculateModMultiplier);
-            Score2.Value = GetTeamScore(TeamColour.Blue).Sum(CalculateModMultiplier);
-
             Team1Combo.Value = getCombo(TeamColour.Red);
             Team2Combo.Value = getCombo(TeamColour.Blue);
+
+            if (Ladder.ScoringMode.Value == TournamentScoringMode.PerformancePoint
+                && tryCalculatePerformanceScore(TeamColour.Red, out double performanceScore1)
+                && tryCalculatePerformanceScore(TeamColour.Blue, out double performanceScore2))
+            {
+                Score1.Value = (long)Math.Round(performanceScore1);
+                Score2.Value = (long)Math.Round(performanceScore2);
+                return;
+            }
+
+            Score1.Value = GetTeamScore(TeamColour.Red).Sum(CalculateModMultiplier);
+            Score2.Value = GetTeamScore(TeamColour.Blue).Sum(CalculateModMultiplier);
+        }
+
+        private void resetDifficultyState()
+        {
+            difficultyTasks.Clear();
+            loggedDifficultyFailures.Clear();
+            workingBeatmap = null;
+            workingBeatmapLookup = null;
+        }
+
+        private bool tryCalculatePerformanceScore(TeamColour colour, out double score)
+        {
+            score = 0;
+
+            TournamentBeatmap? beatmap = Beatmap.Value;
+            RulesetInfo? rulesetInfo = Ladder.Ruleset.Value;
+
+            if (beatmap == null || rulesetInfo == null)
+                return false;
+
+            foreach (SlotPlayerStatus player in getTeamPlayers(colour))
+            {
+                double? playerScore = calculatePerformanceScore(beatmap, rulesetInfo, player);
+
+                if (!playerScore.HasValue)
+                    return false;
+
+                score += playerScore.Value;
+            }
+
+            return true;
+        }
+
+        private double? calculatePerformanceScore(TournamentBeatmap beatmap, RulesetInfo rulesetInfo, SlotPlayerStatus player)
+        {
+            if (!beatmapManager.HasBeatmap(beatmap))
+                return null;
+
+            Ruleset ruleset = rulesetInfo.CreateInstance();
+            PerformanceCalculator? performanceCalculator = ruleset.CreatePerformanceCalculator();
+
+            if (performanceCalculator == null)
+                return null;
+
+            LegacyMods mods = normaliseMods(player.Mods.Value);
+            Task<DifficultyAttributes?> difficultyTask = getDifficultyTask(beatmap, rulesetInfo, mods);
+
+            if (!difficultyTask.IsCompletedSuccessfully)
+            {
+                if (difficultyTask.IsFaulted && loggedDifficultyFailures.Add(difficultyTask))
+                    Logger.Error(difficultyTask.Exception, "Difficulty task failed");
+
+                return null;
+            }
+
+            DifficultyAttributes? difficultyAttributes = difficultyTask.GetAwaiter().GetResult();
+
+            if (difficultyAttributes == null)
+                return null;
+
+            WorkingBeatmap? working = getWorkingBeatmap(beatmap);
+
+            if (working == null)
+                return null;
+
+            var score = new ScoreInfo(working.BeatmapInfo, rulesetInfo)
+            {
+                Accuracy = Math.Clamp(player.Accuracy.Value, 0, 1),
+                Combo = Math.Max(0, player.Combo.Value),
+                MaxCombo = Math.Max(0, player.MaxCombo.Value),
+                TotalScore = Math.Max(0, player.Score.Value),
+                IsLegacyScore = true,
+                LegacyTotalScore = Math.Max(0, player.Score.Value),
+                Mods = ruleset.ConvertFromLegacyMods(mods).ToArray(),
+            };
+
+            score.SetCount300(Math.Max(0, player.Hit300.Value));
+            score.SetCount100(Math.Max(0, player.Hit100.Value));
+            score.SetCount50(Math.Max(0, player.Hit50.Value));
+            score.SetCountGeki(Math.Max(0, player.HitGeki.Value));
+            score.SetCountKatu(Math.Max(0, player.HitKatu.Value));
+            score.SetCountMiss(Math.Max(0, player.HitMiss.Value));
+
+            return performanceCalculator.Calculate(score, difficultyAttributes).Total;
+        }
+
+        private Task<DifficultyAttributes?> getDifficultyTask(TournamentBeatmap beatmap, RulesetInfo rulesetInfo, LegacyMods mods)
+        {
+            var lookup = new DifficultyLookup(beatmap.OnlineID, beatmap.MD5Hash, rulesetInfo.ShortName, mods);
+
+            if (difficultyTasks.TryGetValue(lookup, out Task<DifficultyAttributes?>? task))
+                return task;
+
+            task = difficultyCache.GetDifficultyAsync(beatmap, rulesetInfo, mods, downloadIfMissing: false);
+            difficultyTasks.Add(lookup, task);
+            return task;
+        }
+
+        private WorkingBeatmap? getWorkingBeatmap(TournamentBeatmap beatmap)
+        {
+            var lookup = new BeatmapLookup(beatmap.OnlineID, beatmap.MD5Hash);
+
+            if (workingBeatmap != null && workingBeatmapLookup == lookup)
+                return workingBeatmap;
+
+            workingBeatmapLookup = lookup;
+
+            try
+            {
+                return workingBeatmap = beatmapManager.GetWorkingBeatmap(beatmap);
+            }
+            catch (FileNotFoundException)
+            {
+                workingBeatmap = null;
+                return null;
+            }
+        }
+
+        private IEnumerable<SlotPlayerStatus> getTeamPlayers(TeamColour colour)
+        {
+            int[] teamIds = GetTeamIds(colour);
+            return SlotPlayers.Where(player => teamIds.Contains(player.OnlineID.Value));
+        }
+
+        private static LegacyMods normaliseMods(LegacyMods mods)
+        {
+            mods &= ~LegacyMods.FreeMod;
+            mods &= ~LegacyMods.NoMod;
+            return mods;
         }
 
         protected long CalculateModMultiplier(PlayerScore s)
@@ -378,6 +601,10 @@ namespace osu.Game.Tournament.IPC.MemoryIPC
 
             return SlotPlayers.Where(s => teamIds.Any(t => t == s.OnlineID.Value)).Select(s => s.Combo.Value).Sum();
         }
+
+        private readonly record struct DifficultyLookup(int OnlineID, string MD5Hash, string RulesetShortName, LegacyMods Mods);
+
+        private readonly record struct BeatmapLookup(int OnlineID, string MD5Hash);
     }
 
     public struct PlayerScore

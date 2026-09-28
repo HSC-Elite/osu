@@ -1,12 +1,12 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
+using System.Linq;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Extensions.Color4Extensions;
 using osu.Framework.Graphics;
 using osu.Game.Graphics;
-using osu.Game.Online.Multiplayer;
 using osu.Game.Screens;
 using osu.Game.Screens.Backgrounds;
 using osu.Game.Screens.Menu;
@@ -24,10 +24,10 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
         protected override BackgroundScreen CreateBackground() => new BackgroundScreenDefault();
 
-        private readonly IBindableList<MultiplayerRoomUser> teamUser = new BindableList<MultiplayerRoomUser>();
+        private readonly IBindableList<MatchRoomPlayerInfo> teamUser = new BindableList<MatchRoomPlayerInfo>();
 
         [Resolved]
-        private LazerRoomMatchInfo? lazerRoomMatchInfo { get; set; }
+        private MatchIPCInfo ipc { get; set; } = null!;
 
         private readonly Bindable<float> usernameFontSize = new Bindable<float>();
 
@@ -91,13 +91,11 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             switch (colour)
             {
                 case TeamColour.Red:
-                    if (lazerRoomMatchInfo != null)
-                        teamUser.BindTo(lazerRoomMatchInfo.RedTeamUser);
+                    teamUser.BindTo(ipc.RoomPlayers);
                     break;
 
                 case TeamColour.Blue:
-                    if (lazerRoomMatchInfo != null)
-                        teamUser.BindTo(lazerRoomMatchInfo.BlueTeamUser);
+                    teamUser.BindTo(ipc.RoomPlayers);
                     break;
             }
         }
@@ -106,10 +104,10 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         {
             string username = string.Empty;
 
-            if (teamUser.Count > index)
-            {
-                username = teamUser[index].User?.Username ?? string.Empty;
-            }
+            var player = teamUser.FirstOrDefault(p => p.Team == colour && p.SlotIndex == index);
+
+            if (player.SlotIndex != null)
+                username = player.Username ?? string.Empty;
 
             userText.Text = username;
         }

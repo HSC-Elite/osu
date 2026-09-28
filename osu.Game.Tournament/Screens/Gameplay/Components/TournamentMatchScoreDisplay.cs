@@ -9,7 +9,6 @@ using osu.Game.Graphics.Sprites;
 using osu.Game.Screens.Play.HUD;
 using osu.Game.Tournament.Components;
 using osu.Game.Tournament.IPC;
-using osu.Game.Tournament.IPC.MemoryIPC;
 using osu.Game.Tournament.Models;
 
 namespace osu.Game.Tournament.Screens.Gameplay.Components
@@ -46,9 +45,6 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
             Team1Score.BindTo(scoreProcessor?.Score1 ?? ipc.Score1);
             Team2Score.BindTo(scoreProcessor?.Score2 ?? ipc.Score2);
 
-            if (ipc is not IProvideAdditionalData additionalData)
-                return;
-
             team1MaxCombo = new TournamentComboCounter();
             team2MaxCombo = new TournamentComboCounter();
 
@@ -60,8 +56,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
             Score2Text.CustomContent.Origin = Anchor.BottomLeft;
             Score2Text.CustomContent.Child = team2MaxCombo;
 
-            team1MaxCombo.Current.BindTo(additionalData.Team1Combo);
-            team2MaxCombo.Current.BindTo(additionalData.Team2Combo);
+            team1MaxCombo.Current.BindTo(ipc.Team1Combo);
+            team2MaxCombo.Current.BindTo(ipc.Team2Combo);
         }
 
         private void updateColor()
