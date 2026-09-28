@@ -220,6 +220,21 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 },
                 new TourneyButton
                 {
+                    Text = "红飞",
+                    Action = () => launchTeam(TeamColour.Red),
+                },
+                new TourneyButton
+                {
+                    Text = "蓝飞",
+                    Action = () => launchTeam(TeamColour.Blue),
+                },
+                new TourneyButton
+                {
+                    Text = "飞重置",
+                    Action = resetPlayerWindowTransforms,
+                },
+                new TourneyButton
+                {
                     RelativeSizeAxes = Axes.X,
                     Text = "Toggle map detail",
                     Action = () =>
@@ -297,6 +312,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
         }
 
         private bool roundPreviewShow;
+        private readonly List<ScheduledDelegate> scheduledWindowAnimations = new List<ScheduledDelegate>();
 
         public bool ShowRoundPreview()
         {
@@ -457,6 +473,8 @@ namespace osu.Game.Tournament.Screens.Gameplay
             if (playerGridContainer == null)
                 return;
 
+            cancelScheduledWindowAnimations();
+
             int playersPerTeam = playerPerTeam.Value;
             playerGridContainer.Child = playerGrid = new TournamentPlayerGrid(playersPerTeam)
             {
@@ -474,6 +492,46 @@ namespace osu.Game.Tournament.Screens.Gameplay
             refreshPlayerSlots();
         }
 
+        private void launchTeam(TeamColour team)
+        {
+            cancelScheduledWindowAnimations();
+
+            double delay = 0;
+            bool clockwise = true;
+
+            foreach (var slot in playerSlots.Where(slot => slot.TeamColour == team).OrderBy(slot => slot.Index))
+            {
+                bool launchClockwise = clockwise;
+                scheduledWindowAnimations.Add(Scheduler.AddDelayed(() => slot.FlyingLaunch(launchClockwise), delay));
+                delay += 300;
+                clockwise = !clockwise;
+            }
+        }
+
+        private void resetPlayerWindowTransforms()
+        {
+            cancelScheduledWindowAnimations();
+
+            double delay = 0;
+
+            foreach (TeamColour team in new[] { TeamColour.Red, TeamColour.Blue })
+            {
+                foreach (var slot in playerSlots.Where(slot => slot.TeamColour == team).OrderBy(slot => slot.Index))
+                {
+                    scheduledWindowAnimations.Add(Scheduler.AddDelayed(slot.ResetWindowTransform, delay));
+                    delay += 300;
+                }
+            }
+        }
+
+        private void cancelScheduledWindowAnimations()
+        {
+            foreach (var animation in scheduledWindowAnimations)
+                animation.Cancel();
+
+            scheduledWindowAnimations.Clear();
+        }
+
         private void addPlayerSlot(TournamentPlayerSlot slot, TeamColour colour, int index)
         {
             slot.SetSmallLogo(playerPerTeam.Value > 2);
@@ -485,6 +543,8 @@ namespace osu.Game.Tournament.Screens.Gameplay
         {
             if (playerGrid == null)
                 return;
+
+            cancelScheduledWindowAnimations();
 
             int playersPerTeam = playerPerTeam.Value;
 

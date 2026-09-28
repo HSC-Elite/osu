@@ -70,7 +70,6 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                         new Container
                         {
                             RelativeSizeAxes = Axes.Both,
-                            Masking = true
                         }
                     };
                     break;
@@ -83,16 +82,14 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                             RelativeSizeAxes = Axes.Both,
                             Height = 0.5f,
                             Anchor = Anchor.TopCentre,
-                            Origin = Anchor.TopCentre,
-                            Masking = true
+                            Origin = Anchor.TopCentre
                         },
                         new Container
                         {
                             RelativeSizeAxes = Axes.Both,
                             Height = 0.5f,
                             Anchor = Anchor.BottomCentre,
-                            Origin = Anchor.BottomCentre,
-                            Masking = true
+                            Origin = Anchor.BottomCentre
                         }
                     };
                     break;
@@ -106,8 +103,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                             Width = 0.5f,
                             Height = 0.5f,
                             Anchor = Anchor.TopCentre,
-                            Origin = Anchor.TopCentre,
-                            Masking = true
+                            Origin = Anchor.TopCentre
                         },
                         new Container
                         {
@@ -115,8 +111,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                             Width = 0.5f,
                             Height = 0.5f,
                             Anchor = Anchor.BottomLeft,
-                            Origin = Anchor.BottomLeft,
-                            Masking = true
+                            Origin = Anchor.BottomLeft
                         },
                         new Container
                         {
@@ -124,8 +119,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                             Width = 0.5f,
                             Height = 0.5f,
                             Anchor = Anchor.BottomRight,
-                            Origin = Anchor.BottomRight,
-                            Masking = true
+                            Origin = Anchor.BottomRight
                         },
                     };
                     break;
@@ -139,8 +133,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                             Width = 0.5f,
                             Height = 0.5f,
                             Anchor = Anchor.TopLeft,
-                            Origin = Anchor.TopLeft,
-                            Masking = true
+                            Origin = Anchor.TopLeft
                         },
                         new Container
                         {
@@ -148,8 +141,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                             Width = 0.5f,
                             Height = 0.5f,
                             Anchor = Anchor.TopRight,
-                            Origin = Anchor.TopRight,
-                            Masking = true
+                            Origin = Anchor.TopRight
                         },
                         new Container
                         {
@@ -157,8 +149,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                             Width = 0.5f,
                             Height = 0.5f,
                             Anchor = Anchor.BottomLeft,
-                            Origin = Anchor.BottomLeft,
-                            Masking = true
+                            Origin = Anchor.BottomLeft
                         },
                         new Container
                         {
@@ -166,8 +157,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                             Width = 0.5f,
                             Height = 0.5f,
                             Anchor = Anchor.BottomRight,
-                            Origin = Anchor.BottomRight,
-                            Masking = true
+                            Origin = Anchor.BottomRight
                         },
                     };
                     break;
@@ -177,37 +167,5 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             }
         }
 
-        private int redIndex = 0;
-        private int blueIndex = 0;
-
-        public bool AddRedPlayer(Drawable player)
-        {
-            if (redIndex >= redTeamContainer.Count)
-                return false;
-
-            var emptyContainer = redTeamContainer[redIndex] as Container;
-            if (emptyContainer == null)
-                return false;
-
-            emptyContainer.Add(player.With(p => p.RelativeSizeAxes = Axes.Both));
-
-            redIndex++;
-            return true;
-        }
-
-        public bool AddBluePlayer(Drawable player)
-        {
-            if (blueIndex >= blueTeamContainer.Count)
-                return false;
-
-            var emptyContainer = blueTeamContainer[blueIndex] as Container;
-            if (emptyContainer == null)
-                return false;
-
-            emptyContainer.Add(player.With(p => p.RelativeSizeAxes = Axes.Both));
-
-            blueIndex++;
-            return true;
-        }
     }
 }

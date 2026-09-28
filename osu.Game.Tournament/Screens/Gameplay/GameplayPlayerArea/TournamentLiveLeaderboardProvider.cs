@@ -12,6 +12,7 @@ using osu.Framework.Extensions;
 using osu.Framework.Extensions.Color4Extensions;
 using osu.Framework.Extensions.ObjectExtensions;
 using osu.Framework.Graphics.Containers;
+using osu.Framework.Timing;
 using osu.Game.Configuration;
 using osu.Game.Database;
 using osu.Game.Graphics;
@@ -23,6 +24,7 @@ using osu.Game.Rulesets.Scoring;
 using osu.Game.Screens.Play.Leaderboards;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.Models;
+using osu.Game.Users;
 using osuTK.Graphics;
 
 namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
@@ -32,7 +34,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         public IBindableList<GameplayLeaderboardScore> Scores => scores;
 
         private readonly BindableList<GameplayLeaderboardScore> scores = new BindableList<GameplayLeaderboardScore>();
-        private readonly MatchRoomPlayerInfo[] players;
+        private readonly Dictionary<int, MatchRoomPlayerInfo> players = new Dictionary<int, MatchRoomPlayerInfo>();
         private readonly Dictionary<int, SpectatorScoreProcessor> scoreProcessors = new Dictionary<int, SpectatorScoreProcessor>();
         private readonly HashSet<int> quitUsers = new HashSet<int>();
         private readonly IBindableDictionary<int, SpectatorState> watchedUserStates = new BindableDictionary<int, SpectatorState>();
@@ -48,50 +50,45 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         [Resolved]
         private OsuColour colours { get; set; } = null!;
 
+        [Resolved]
+        private IAPIProvider api { get; set; } = null!;
+
+        private CancellationToken cancellationToken;
+        private bool loadStarted;
+        private bool watchingUsers;
+
         public TournamentLiveLeaderboardProvider(MatchRoomPlayerInfo[] players)
         {
-            this.players = players;
+            foreach (var player in players)
+                AddPlayer(player);
         }
 
         [BackgroundDependencyLoader]
-        private void load(OsuConfigManager config, IAPIProvider api, CancellationToken cancellationToken)
+        private void load(OsuConfigManager config, CancellationToken cancellationToken)
         {
+            loadStarted = true;
+            this.cancellationToken = cancellationToken;
             config.BindWith(OsuSetting.ScoreDisplayMode, scoringMode);
 
-            foreach (var player in players)
-            {
-                var processor = new SpectatorScoreProcessor(player.UserId);
+            foreach (var processor in scoreProcessors.Values)
                 processor.Mode.BindTo(scoringMode);
-                processor.TotalScore.BindValueChanged(_ => sorting.Invalidate());
-                AddInternal(processor);
-                scoreProcessors[player.UserId] = processor;
-            }
 
-            userLookupCache.GetUsersAsync(players.Select(p => p.UserId).ToArray(), cancellationToken)
+            MatchRoomPlayerInfo[] playersToLookup = players.Values.ToArray();
+
+            if (playersToLookup.Length == 0)
+                return;
+
+            userLookupCache.GetUsersAsync(playersToLookup.Select(p => p.UserId).ToArray(), cancellationToken)
                            .ContinueWith(task => Schedule(() =>
                            {
                                var lookedUpUsers = task.GetResultSafely();
 
-                               for (int i = 0; i < players.Length; i++)
+                               for (int i = 0; i < playersToLookup.Length; i++)
                                {
-                                   var player = players[i];
-                                   var user = lookedUpUsers[i] ?? new APIUser
-                                   {
-                                       Id = player.UserId,
-                                       Username = player.Username ?? $"User {player.UserId}",
-                                   };
+                                   if (i >= lookedUpUsers.Length)
+                                       break;
 
-                                   var leaderboardScore = new GameplayLeaderboardScore(
-                                       user,
-                                       scoreProcessors[player.UserId],
-                                       user.Id == api.LocalUser.Value.Id,
-                                       GameplayLeaderboardScore.ComboDisplayMode.Current)
-                                   {
-                                       TeamColour = getTeamColour(player.Team),
-                                       HasQuit = { Value = quitUsers.Contains(player.UserId) },
-                                   };
-                                   leaderboardScore.DisplayOrder.BindValueChanged(_ => sorting.Invalidate(), true);
-                                   scores.Add(leaderboardScore);
+                                   addLeaderboardScore(playersToLookup[i], lookedUpUsers[i]);
                                }
                            }), cancellationToken);
         }
@@ -103,7 +100,9 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             watchedUserStates.BindTo(spectatorDataSource.WatchedUserStates);
             watchedUserStates.BindCollectionChanged(onWatchedUserStatesChanged, true);
 
-            foreach (var player in players)
+            watchingUsers = true;
+
+            foreach (var player in players.Values)
                 spectatorDataSource.WatchUser(player.UserId);
 
             Scheduler.AddDelayed(sort, 1000, true);
@@ -112,7 +111,66 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         public Mod[] GetPlayerMods(int userId)
             => scoreProcessors.TryGetValue(userId, out var processor) ? processor.Mods.ToArray() : Array.Empty<Mod>();
 
-        public void AddClock(int userId, osu.Framework.Timing.IClock clock)
+        public IBindable<int>? GetPlayerCombo(int userId)
+            => scoreProcessors.TryGetValue(userId, out var processor) ? processor.Combo : null;
+
+        public void AddPlayer(MatchRoomPlayerInfo player)
+        {
+            if (players.TryGetValue(player.UserId, out var previous))
+            {
+                players[player.UserId] = player;
+
+                if (previous.Team != player.Team && scores.FirstOrDefault(score => score.User.OnlineID == player.UserId) is { } existingScore)
+                {
+                    scores.Remove(existingScore);
+                    addLeaderboardScore(player, existingScore.User, existingScore.Tracked);
+                }
+
+                return;
+            }
+
+            players.Add(player.UserId, player);
+            createScoreProcessor(player.UserId);
+
+            if (!loadStarted)
+                return;
+
+            if (watchingUsers)
+                spectatorDataSource.WatchUser(player.UserId);
+
+            userLookupCache.GetUsersAsync(new[] { player.UserId }, cancellationToken)
+                           .ContinueWith(task => Schedule(() =>
+                           {
+                               if (!IsAlive || !players.TryGetValue(player.UserId, out var currentPlayer))
+                                   return;
+
+                               var users = task.GetResultSafely();
+                               addLeaderboardScore(currentPlayer, users.FirstOrDefault());
+                           }), cancellationToken);
+        }
+
+        public void RemovePlayer(int userId)
+        {
+            if (!players.Remove(userId))
+                return;
+
+            var existingScore = scores.FirstOrDefault(score => score.User.OnlineID == userId);
+
+            if (existingScore != null)
+                scores.Remove(existingScore);
+
+            if (scoreProcessors.Remove(userId, out var processor))
+                processor.Expire();
+
+            quitUsers.Remove(userId);
+
+            if (watchingUsers)
+                spectatorDataSource.StopWatchingUser(userId);
+
+            sorting.Invalidate();
+        }
+
+        public void AddClock(int userId, IClock clock)
         {
             if (!scoreProcessors.TryGetValue(userId, out var processor))
                 throw new ArgumentException("Provided user is not tracked by this leaderboard.", nameof(userId));
@@ -138,10 +196,52 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                 {
                     quitUsers.Add(userId);
                     var score = scores.FirstOrDefault(s => s.User.OnlineID == userId);
-                    if (score != null)
-                        score.HasQuit.Value = true;
+                    score?.HasQuit.Value = true;
                 }
             }
+        }
+
+        private SpectatorScoreProcessor createScoreProcessor(int userId)
+        {
+            var processor = new SpectatorScoreProcessor(userId);
+            processor.TotalScore.BindValueChanged(_ => sorting.Invalidate());
+
+            if (loadStarted)
+                processor.Mode.BindTo(scoringMode);
+
+            AddInternal(processor);
+            scoreProcessors[userId] = processor;
+            return processor;
+        }
+
+        private void addLeaderboardScore(MatchRoomPlayerInfo player, IUser? user = null, bool? tracked = null)
+        {
+            if (!players.TryGetValue(player.UserId, out var currentPlayer) || scores.Any(score => score.User.OnlineID == player.UserId))
+                return;
+
+            player = currentPlayer;
+
+            user ??= new APIUser
+            {
+                Id = player.UserId,
+                Username = player.Username ?? $"User {player.UserId}",
+            };
+
+            if (!scoreProcessors.TryGetValue(player.UserId, out var processor))
+                processor = createScoreProcessor(player.UserId);
+
+            var leaderboardScore = new GameplayLeaderboardScore(
+                user,
+                processor,
+                tracked ?? user.OnlineID == api.LocalUser.Value.Id,
+                GameplayLeaderboardScore.ComboDisplayMode.Current)
+            {
+                TeamColour = getTeamColour(player.Team),
+                HasQuit = { Value = quitUsers.Contains(player.UserId) },
+            };
+            leaderboardScore.DisplayOrder.BindValueChanged(_ => sorting.Invalidate(), true);
+            scores.Add(leaderboardScore);
+            sorting.Invalidate();
         }
 
         private Color4? getTeamColour(TeamColour? team)
@@ -178,8 +278,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
             if (spectatorDataSource.IsNotNull())
             {
-                foreach (var player in players)
-                    spectatorDataSource.StopWatchingUser(player.UserId);
+                foreach (int userId in players.Keys)
+                    spectatorDataSource.StopWatchingUser(userId);
             }
         }
     }

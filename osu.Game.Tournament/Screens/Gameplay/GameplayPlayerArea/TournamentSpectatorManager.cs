@@ -58,6 +58,9 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         [Resolved]
         private MatchIPCInfo ipc { get; set; } = null!;
 
+        [Resolved]
+        private ITournamentPlayerPresentationFactory playerPresentationFactory { get; set; } = null!;
+
         private readonly List<TournamentPlayerSlot> slots = new List<TournamentPlayerSlot>();
         private readonly Dictionary<int, TournamentPlayerSlot> slotsByUserId = new Dictionary<int, TournamentPlayerSlot>();
         private readonly Dictionary<int, APIUser> userMap = new Dictionary<int, APIUser>();
@@ -70,7 +73,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
         private MasterGameplayClockContainer? masterClockContainer;
         private SpectatorSyncManager? syncManager;
-        private PlayerArea? currentAudioSource;
+        private TournamentPlayerPresentation? currentAudioSource;
         private IAggregateAudioAdjustment? boundAdjustments;
         private IDisposable? realmSubscription;
         private IDisposable? userWatchToken;
@@ -150,6 +153,15 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                     cleanupGameplay(userId);
 
                 slotsByUserId[userId] = slot;
+            }
+
+            if (leaderboardProvider != null)
+            {
+                foreach (var slot in assignedSlots)
+                {
+                    int userId = slot.UserId!.Value;
+                    leaderboardProvider.AddPlayer(findRoomPlayer(userId) ?? new MatchRoomPlayerInfo(userId, userMap.GetValueOrDefault(userId)?.Username, slot.TeamColour, slot.Index));
+                }
             }
 
             foreach (int userId in desiredUserIds.Except(watchedUsers).ToArray())
@@ -241,6 +253,9 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
             userLookupCache.GetUsersAsync(new[] { userId }).ContinueWith(task => Schedule(() =>
             {
+                if (!watchedUsers.Contains(userId))
+                    return;
+
                 var users = task.GetResultSafely();
 
                 if (users.Length > 0 && users[0] != null)
@@ -262,6 +277,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
             userMap.Remove(userId);
             watchedUsers.Remove(userId);
+            leaderboardProvider?.RemovePlayer(userId);
 
             if (stopWatching)
                 spectatorDataSource.StopWatchingUser(userId);
@@ -279,7 +295,6 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             if (players.Length == 0)
                 return null;
 
-            var providerUserIds = players.Select(player => player.UserId).ToHashSet();
             var provider = leaderboardProvider = new TournamentLiveLeaderboardProvider(players);
 
             ipc.SetLiveLeaderboardProvider(provider);
@@ -296,7 +311,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
                 foreach ((int userId, var clock) in clocksByUserId)
                 {
-                    if (providerUserIds.Contains(userId))
+                    if (loadedProvider.GetPlayerCombo(userId) != null)
                         loadedProvider.AddClock(userId, clock);
                 }
 
@@ -447,7 +462,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                 clock.Seek(syncManager.CurrentMasterTime);
 
             clocksByUserId[userId] = clock;
-            slot.StartGameplay(gameplayState.Score, clock, provider);
+            slot.StartGameplay(playerPresentationFactory.Create(slot, gameplayState.Score, clock, provider));
 
             if (provider.IsLoaded)
                 provider.AddClock(userId, clock);
@@ -511,7 +526,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             gameplayStates.Clear();
             disposeLeaderboardProvider();
             currentAudioSource = null;
-            boundAdjustments = null;
+            bindAudioAdjustments(null);
         }
 
         private void cleanupGameplay(int userId)
@@ -528,29 +543,29 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             syncManager?.RemoveManagedClock(clock);
         }
 
-        private IEnumerable<PlayerArea> activePlayerAreas => slots.Select(s => s.PlayerArea).OfType<PlayerArea>();
+        private IEnumerable<TournamentPlayerPresentation> activePlayerPresentations
+            => slots.Select(s => s.GameplayPresentation).OfType<TournamentPlayerPresentation>();
 
         private void checkAudioSource()
         {
             if (syncManager == null || masterClockContainer == null)
                 return;
 
-            var candidate = activePlayerAreas.Where(i => isCandidateAudioSource(i.SpectatorPlayerClock))
-                                             .MinBy(i => Math.Abs(i.SpectatorPlayerClock.CurrentTime - syncManager.CurrentMasterTime));
+            var candidate = activePlayerPresentations.Where(i => i.IsAudioSourceCandidate)
+                                                      .MinBy(i => Math.Abs(i.CurrentTime - syncManager.CurrentMasterTime));
 
             if (candidate == currentAudioSource)
                 return;
 
             currentAudioSource = candidate;
 
-            if (currentAudioSource != null)
-                bindAudioAdjustments(currentAudioSource);
+            bindAudioAdjustments(currentAudioSource);
 
-            foreach (var instance in activePlayerAreas)
-                instance.Mute = instance != currentAudioSource;
+            foreach (var instance in activePlayerPresentations)
+                instance.SetMuted(instance != currentAudioSource);
         }
 
-        private void bindAudioAdjustments(PlayerArea first)
+        private void bindAudioAdjustments(TournamentPlayerPresentation? presentation)
         {
             if (masterClockContainer == null)
                 return;
@@ -558,12 +573,14 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             if (boundAdjustments != null)
                 masterClockContainer.AdjustmentsFromMods.UnbindAdjustments(boundAdjustments);
 
-            boundAdjustments = first.ClockAdjustmentsFromMods;
+            boundAdjustments = null;
+
+            if (presentation == null)
+                return;
+
+            boundAdjustments = presentation.ClockAdjustmentsFromMods;
             masterClockContainer.AdjustmentsFromMods.BindAdjustments(boundAdjustments);
         }
-
-        private bool isCandidateAudioSource(SpectatorPlayerClock? clock)
-            => clock?.IsRunning == true && !clock.IsCatchingUp && !clock.WaitingOnFrames;
 
         private void performInitialSeek()
         {
@@ -572,12 +589,12 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
             var minFrameTimes = new List<double>();
 
-            foreach (var instance in activePlayerAreas)
+            foreach (var instance in activePlayerPresentations)
             {
-                if (instance.Score == null)
+                if (instance.ReplayScore is not { } score)
                     continue;
 
-                minFrameTimes.Add(instance.Score.Replay.Frames.MinBy(f => f.Time)?.Time ?? 0);
+                minFrameTimes.Add(score.Replay.Frames.MinBy(f => f.Time)?.Time ?? 0);
             }
 
             if (minFrameTimes.Count == 0)
@@ -612,6 +629,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
         protected override void Dispose(bool isDisposing)
         {
+            bindAudioAdjustments(null);
             disposeLeaderboardProvider();
 
             base.Dispose(isDisposing);

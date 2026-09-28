@@ -136,6 +136,7 @@ namespace osu.Game.Tournament
             dependencies.CacheAs(storage);
             dependencies.Cache(beatmapManager = new TournamentBeatmapManager(storage));
             dependencies.Cache(new TournamentBeatmapDifficultyCache(beatmapManager, RulesetStore));
+            dependencies.CacheAs<ITournamentPlayerPresentationFactory>(new LazerTournamentPlayerPresentationFactory());
 
             dependencies.Cache(new TournamentVideoResourceStore(storage));
 
