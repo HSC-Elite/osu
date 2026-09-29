@@ -36,8 +36,6 @@ namespace osu.Game.Tournament.Screens.Gameplay
         public readonly Bindable<TourneyState> State = new Bindable<TourneyState>();
         private OsuButton warmupButton = null!;
         private Sprite slotSprite = null!;
-        private SettingsNumberBox matchID = null!;
-        private TourneyButton matchListenerButton = null!;
 
         private MatchHeader header = null!;
         private RoundInformationPreview roundPreview = null!;
@@ -187,16 +185,14 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     Current = LadderInfo.ChromaKeyWidth,
                     KeyboardStep = 1,
                 },
-                matchID = new SettingsNumberBox
-                {
-                    LabelText = "Mplink ID",
-                },
-                matchListenerButton = new TourneyButton
-                {
-                    RelativeSizeAxes = Axes.X,
-                    Text = "开始监听",
-                },
+
                 new TournamentMatchScoreProcessorDetail(),
+                new SettingsSlider<int>
+                {
+                    LabelText = "Players per team",
+                    Current = LadderInfo.PlayersPerTeam,
+                    KeyboardStep = 1,
+                },
                 new ControlPanel.Spacer(),
                 new SettingsSlider<double>
                 {
@@ -375,35 +371,16 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
                 scoreProcessor.CurrentlyListening.BindValueChanged(state =>
                 {
-                    updateMatchListenerButton(state);
                     updateScoreWarning();
                     updateResultLoading();
                 }, true);
             }
             else
             {
-                matchListenerButton.Enabled.Value = false;
                 updateResultLoading();
             }
 
             LadderInfo.InvertScoreColour.BindValueChanged(v => scoreDisplay.InvertTextColor = v.NewValue, true);
-        }
-
-        private void updateMatchListenerButton(ValueChangedEvent<bool> state)
-        {
-            if (scoreProcessor == null)
-            {
-                matchListenerButton.Enabled.Value = false;
-                return;
-            }
-
-            matchListenerButton.Enabled.Value = true;
-            matchListenerButton.Text = state.NewValue ? "停止监听" : "开始监听";
-
-            if (state.NewValue)
-                matchListenerButton.Action = scoreProcessor.StopListening;
-            else
-                matchListenerButton.Action = () => scoreProcessor.StartListening(matchID.Current.Value);
         }
 
         protected override void SetModAcronym(string acronym)
