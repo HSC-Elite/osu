@@ -24,9 +24,7 @@ using osu.Game.Rulesets;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Screens.OnlinePlay;
 using osu.Game.Screens.OnlinePlay.Multiplayer;
-using osu.Game.Screens.Play.Leaderboards;
 using osu.Game.Tournament.Models;
-using osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea;
 
 namespace osu.Game.Tournament.IPC
 {
@@ -39,21 +37,13 @@ namespace osu.Game.Tournament.IPC
         private RulesetStore rulesets { get; set; } = null!;
 
         [Resolved]
-        protected LadderInfo Ladder { get; private set; } = null!;
-
-        [Resolved]
         private BeatmapManager beatmapManager { get; set; } = null!;
-
-        [Resolved]
-        private BeatmapModelDownloader beatmapDownloader { get; set; } = null!;
 
         [Resolved]
         private BeatmapLookupCache beatmapLookupCache { get; set; } = null!;
 
         [Resolved]
         private Bindable<WorkingBeatmap> workingBeatmap { get; set; } = null!;
-
-        private TournamentLiveLeaderboardProvider? leaderboardProvider;
 
         private readonly OnlinePlayBeatmapAvailabilityTracker beatmapAvailabilityTracker = new MultiplayerBeatmapAvailabilityTracker();
 
@@ -133,7 +123,6 @@ namespace osu.Game.Tournament.IPC
 
             Ladder.CurrentMatch.BindValueChanged(_ =>
             {
-                teamIdsCache.Clear();
                 updateUsers();
             }, true);
 
@@ -191,8 +180,7 @@ namespace osu.Game.Tournament.IPC
 
         private void onLoadRequested()
         {
-            leaderboardProvider = null;
-            userMultiplierCache.Clear();
+            SetLiveLeaderboardProvider(null);
 
             Scheduler.AddOnce(() =>
             {
@@ -295,9 +283,7 @@ namespace osu.Game.Tournament.IPC
             }
         }
 
-        private CancellationTokenSource? downloadCheckCancellation;
         private CancellationTokenSource? beatmapLookUpCancellation;
-        private int lastAutoDownloadBeatmap;
 
         private void onBeatmapAvailabilityChanged(ValueChangedEvent<BeatmapAvailability> e)
         {
@@ -313,35 +299,6 @@ namespace osu.Game.Tournament.IPC
                 // Optimistically enter spectator if the match is in progress while spectating.
                 if (client.LocalUser.State == MultiplayerUserState.Spectating && (client.Room.State == MultiplayerRoomState.WaitingForLoad || client.Room.State == MultiplayerRoomState.Playing))
                     onLoadRequested();
-            }
-
-            if (e.NewValue.State == DownloadState.NotDownloaded)
-            {
-                MultiplayerPlaylistItem item = client.Room.CurrentPlaylistItem;
-
-                if (item.BeatmapID == lastAutoDownloadBeatmap)
-                    return;
-
-                lastAutoDownloadBeatmap = item.BeatmapID;
-
-                downloadCheckCancellation?.Cancel();
-
-                beatmapLookupCache
-                    .GetBeatmapAsync(item.BeatmapID, (downloadCheckCancellation = new CancellationTokenSource()).Token)
-                    .ContinueWith(resolved => Schedule(() =>
-                    {
-                        var map = resolved.GetResultSafely();
-
-                        var beatmapSet = map?.BeatmapSet;
-
-                        if (map == null || beatmapSet == null)
-                            return;
-
-                        if (beatmapManager.IsAvailableLocally(map))
-                            return;
-
-                        beatmapDownloader.Download(beatmapSet);
-                    }));
             }
         }
 
@@ -459,19 +416,9 @@ namespace osu.Game.Tournament.IPC
         private void updateRoomPlayers(IEnumerable<MatchRoomPlayerInfo> players)
             => SetRoomPlayers(players);
 
-        internal override void SetLiveLeaderboardProvider(TournamentLiveLeaderboardProvider? provider)
-        {
-            leaderboardProvider = provider;
-        }
-
         protected override void Update()
         {
             base.Update();
-
-            if (State.Value == TourneyState.Playing)
-            {
-                updateScore();
-            }
 
             if (State.Value == TourneyState.Ranking)
             {
@@ -492,67 +439,5 @@ namespace osu.Game.Tournament.IPC
             }
         }
 
-        private void updateScore()
-        {
-            if (leaderboardProvider == null)
-                return;
-
-            GameplayLeaderboardScore[] team1Score = GetTeamScore(TeamColour.Red).ToArray();
-            GameplayLeaderboardScore[] team2Score = GetTeamScore(TeamColour.Blue).ToArray();
-
-            Score1.Value = team1Score.Sum(CalculateModMultiplier);
-            Score2.Value = team2Score.Sum(CalculateModMultiplier);
-
-            Team1Combo.Value = team1Score.Sum(s => s.Combo.Value);
-            Team2Combo.Value = team2Score.Sum(s => s.Combo.Value);
-        }
-
-        protected virtual IEnumerable<GameplayLeaderboardScore> GetTeamScore(TeamColour colour)
-        {
-            int[] teamIds = GetTeamIds(colour);
-
-            return leaderboardProvider!.Scores.Where(u => teamIds.Any(t => t == u.User.OnlineID));
-        }
-
-        private readonly Dictionary<TeamColour, int[]> teamIdsCache = new Dictionary<TeamColour, int[]>();
-
-        protected int[] GetTeamIds(TeamColour colour)
-        {
-            if (teamIdsCache.TryGetValue(colour, out int[]? ids))
-            {
-                return ids;
-            }
-
-            return teamIdsCache[colour] = Ladder.CurrentMatch.Value?.GetTeamByColor(colour)?.Players.Select(p => p.OnlineID).ToArray() ??
-                                          Array.Empty<int>();
-        }
-
-        private readonly Dictionary<int, double> userMultiplierCache = new Dictionary<int, double>();
-
-        protected long CalculateModMultiplier(GameplayLeaderboardScore score)
-        {
-            double multiplier;
-
-            if (!userMultiplierCache.TryGetValue(score.User.OnlineID, out multiplier))
-            {
-                Mod[] mods = getUserMod(score.User.OnlineID);
-
-                multiplier = userMultiplierCache[score.User.OnlineID] = mods.Aggregate(
-                    1.0,
-                    (acc, mod) =>
-                        acc *
-                        (Ladder.ModMultiplierSettings
-                               .FirstOrDefault(s => s.ModAcronym.Value == mod.Acronym)
-                               ?.Multiplier.Value
-                         ?? 1.0));
-            }
-
-            return (long)(multiplier * score.TotalScore.Value);
-        }
-
-        private Mod[] getUserMod(int userId)
-        {
-            return leaderboardProvider?.GetPlayerMods(userId) ?? Array.Empty<Mod>();
-        }
     }
 }

@@ -75,8 +75,6 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
         private LabelledTextBox chatBox = null!;
 
-        protected override bool FetchDataFromMemoryThisScreen => true;
-
         private GameplaySongBar gameplaySongBar => (GameplaySongBar)SongBar;
 
         protected override bool ShowLogo => true;
