@@ -45,6 +45,9 @@ namespace osu.Game.Tournament.Screens.Showcase
         private LadderInfo ladder { get; set; } = null!;
 
         [Resolved]
+        private TournamentGameBase tournamentGame { get; set; } = null!;
+
+        [Resolved]
         private OsuConfigManager config { get; set; } = null!;
 
         private NestedOsuGame? nestedGame;
@@ -219,7 +222,10 @@ namespace osu.Game.Tournament.Screens.Showcase
         private void closeInnerLazer()
         {
             if (nestedGame != null)
+            {
                 showcaseContainer.Remove(nestedGame, true);
+                tournamentGame.ReconnectOnlineClients();
+            }
 
             if (flash != null)
                 RemoveInternal(flash, true);

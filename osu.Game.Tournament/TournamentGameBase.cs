@@ -25,6 +25,8 @@ using osu.Game.Graphics;
 using osu.Game.Online;
 using osu.Game.Online.API;
 using osu.Game.Online.API.Requests;
+using osu.Game.Online.Metadata;
+using osu.Game.Online.Multiplayer;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Screens.OnlinePlay;
 using osu.Game.Tournament.Components;
@@ -70,6 +72,15 @@ namespace osu.Game.Tournament
         protected override IReadOnlyDependencyContainer CreateChildDependencies(IReadOnlyDependencyContainer parent)
         {
             return dependencies = new DependencyContainer(base.CreateChildDependencies(parent));
+        }
+
+        internal void ReconnectOnlineClients()
+        {
+            Task.WhenAll(
+                MultiplayerClient.Reconnect(),
+                SpectatorClient.Reconnect(),
+                dependencies.Get<MetadataClient>().Reconnect())
+                .FireAndForget();
         }
 
         public override EndpointConfiguration CreateEndpoints()
