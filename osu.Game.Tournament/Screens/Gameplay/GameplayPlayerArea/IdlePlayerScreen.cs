@@ -59,7 +59,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                     Anchor = Anchor.Centre,
                     Origin = Anchor.Centre
                 },
-                new MenuSideFlashes(),
+                new IdleSideFlash(),
                 new KiaiMenuFountains(),
                 userText = new TournamentSpriteText
                 {
@@ -110,6 +110,13 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                 username = player.Username ?? string.Empty;
 
             userText.Text = username;
+        }
+
+        private partial class IdleSideFlash : MenuSideFlashes
+        {
+            protected override float Intensity => 2;
+
+            protected override bool OnlyKiai => false;
         }
     }
 }

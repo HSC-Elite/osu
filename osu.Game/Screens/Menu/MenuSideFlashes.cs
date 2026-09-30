@@ -44,7 +44,7 @@ namespace osu.Game.Screens.Menu
         private IBindable<APIUser> user;
         private Bindable<Skin> skin;
 
-        protected virtual bool OnlyKiai => true;
+        protected virtual bool OnlyKiai => false;
 
         [Resolved]
         private OsuColour colours { get; set; }
