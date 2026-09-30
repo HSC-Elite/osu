@@ -455,15 +455,7 @@ namespace osu.Game.Tournament.IPC
         });
 
         private void updateRoomPlayers(IEnumerable<MatchRoomPlayerInfo> players)
-        {
-            var playerArray = players.ToArray();
-
-            if (RoomPlayersInternal.SequenceEqual(playerArray))
-                return;
-
-            RoomPlayersInternal.Clear();
-            RoomPlayersInternal.AddRange(playerArray);
-        }
+            => SetRoomPlayers(players);
 
         internal override void SetLiveLeaderboardProvider(TournamentLiveLeaderboardProvider? provider)
         {
