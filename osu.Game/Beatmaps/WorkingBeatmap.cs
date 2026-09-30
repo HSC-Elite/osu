@@ -123,13 +123,20 @@ namespace osu.Game.Beatmaps
         public void PrepareTrackForPreview(bool looping, double? offsetFromPreviewPoint = null)
         {
             Track.Looping = looping;
-            Track.RestartPoint = Metadata.PreviewTime;
+
+            if (OsuGameBase.IsTournament)
+            {
+                Track.RestartPoint = 0;
+                return;
+            }
 
             if (!Track.IsLoaded)
             {
                 // force length to be populated (https://github.com/ppy/osu-framework/issues/4202)
                 Track.Seek(Track.CurrentTime);
             }
+
+            Track.RestartPoint = Metadata.PreviewTime;
 
             if (Track.RestartPoint < 0 || Track.RestartPoint > Track.Length)
                 Track.RestartPoint = 0.4f * Track.Length;

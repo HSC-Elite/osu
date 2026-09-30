@@ -131,6 +131,11 @@ namespace osu.Game.Tournament
 
         private readonly Bindable<string> configSkin = new Bindable<string>();
 
+        public TournamentGameBase()
+        {
+            IsTournament = true;
+        }
+
         [BackgroundDependencyLoader]
         private void load(Storage baseStorage)
         {
