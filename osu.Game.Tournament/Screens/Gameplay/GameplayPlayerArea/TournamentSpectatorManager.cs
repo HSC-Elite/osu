@@ -604,9 +604,9 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             double mean = minFrameTimes.Average();
             minFrameTimes.RemoveAll(t => mean - t > 1000);
 
-            double startTime = minFrameTimes.Min();
+            double startTime = minFrameTimes.Min() - 100;
 
-            if (startTime < 10000)
+            if (startTime < 1000 && startTime > 0)
                 startTime = 0;
 
             masterClockContainer.Reset(startTime, true);
