@@ -22,7 +22,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         private readonly TeamColour colour;
         private readonly TournamentSpriteText userText;
 
-        protected override BackgroundScreen CreateBackground() => new BackgroundScreenBeatmap();
+        protected override BackgroundScreen CreateBackground() => new BackgroundScreenDefault();
 
         private readonly IBindableList<MatchRoomPlayerInfo> teamUser = new BindableList<MatchRoomPlayerInfo>();
 
