@@ -3,9 +3,11 @@
 
 using System.Collections.Generic;
 using System.Linq;
+using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Logging;
+using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.Legacy;
 using osu.Game.Online.Chat;
 using osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea;
@@ -15,6 +17,9 @@ namespace osu.Game.Tournament.IPC
 {
     public partial class MatchIPCInfo : CompositeComponent
     {
+        [Resolved]
+        private IBindable<WorkingBeatmap> workingBeatmap { get; set; } = null!;
+
         public Bindable<TournamentBeatmap?> Beatmap { get; } = new Bindable<TournamentBeatmap?>();
         public Bindable<LegacyMods> Mods { get; } = new Bindable<LegacyMods>();
         public Bindable<TourneyState> State { get; } = new Bindable<TourneyState>();
@@ -35,6 +40,25 @@ namespace osu.Game.Tournament.IPC
         {
             State.BindValueChanged(s => Logger.Log($"Tourney State turn {s.OldValue} to {s.NewValue}"));
         }
+
+        protected override void LoadComplete()
+        {
+            base.LoadComplete();
+
+            State.BindValueChanged(_ => updateTrackLooping());
+            workingBeatmap.BindValueChanged(onWorkingBeatmapChanged, true);
+        }
+
+        protected override void Dispose(bool isDisposing)
+        {
+            workingBeatmap.ValueChanged -= onWorkingBeatmapChanged;
+
+            base.Dispose(isDisposing);
+        }
+
+        private void onWorkingBeatmapChanged(ValueChangedEvent<WorkingBeatmap> _) => updateTrackLooping();
+
+        private void updateTrackLooping() => workingBeatmap.Value.PrepareTrackForPreview(State.Value != TourneyState.Idle);
 
         protected void SetRoomPlayers(IEnumerable<MatchRoomPlayerInfo> players)
         {
@@ -59,7 +83,5 @@ namespace osu.Game.Tournament.IPC
         internal virtual void ForceReSpectate()
         {
         }
-
-        public virtual bool ReadScoreFromFile => true;
     }
 }
