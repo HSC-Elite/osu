@@ -117,7 +117,6 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             AddInternal(masterClockContainer);
             AddInternal(syncManager);
 
-            masterClockContainer.Reset();
             RefreshRoster(newSlotArray);
         }
 
