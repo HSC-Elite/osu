@@ -556,7 +556,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                 return;
 
             var candidate = activePlayerPresentations.Where(i => i.IsAudioSourceCandidate)
-                                                      .MinBy(i => Math.Abs(i.CurrentTime - syncManager.CurrentMasterTime));
+                                                     .MinBy(i => Math.Abs(i.CurrentTime - syncManager.CurrentMasterTime));
 
             if (candidate == currentAudioSource)
                 return;

@@ -330,12 +330,14 @@ namespace osu.Game.Tournament.IPC
                     .GetBeatmapAsync(item.BeatmapID, (downloadCheckCancellation = new CancellationTokenSource()).Token)
                     .ContinueWith(resolved => Schedule(() =>
                     {
-                        var beatmapSet = resolved.GetResultSafely()?.BeatmapSet;
+                        var map = resolved.GetResultSafely();
 
-                        if (beatmapSet == null)
+                        var beatmapSet = map?.BeatmapSet;
+
+                        if (map == null || beatmapSet == null)
                             return;
 
-                        if (beatmapManager.IsAvailableLocally(new BeatmapSetInfo { OnlineID = beatmapSet.OnlineID }))
+                        if (beatmapManager.IsAvailableLocally(map))
                             return;
 
                         beatmapDownloader.Download(beatmapSet);
@@ -432,11 +434,11 @@ namespace osu.Game.Tournament.IPC
             var slotByUserId = new Dictionary<int, (TeamColour Team, int SlotIndex)>();
 
             foreach ((TeamColour team, int slotIndex, MultiplayerRoomUser user) in activeUsers
-                         .Where(user => GetTeamIds(TeamColour.Red).Contains(user.UserID))
-                         .Select((user, index) => (TeamColour.Red, index, user))
-                         .Concat(activeUsers
-                                     .Where(user => GetTeamIds(TeamColour.Blue).Contains(user.UserID))
-                                     .Select((user, index) => (TeamColour.Blue, index, user))))
+                                                                                   .Where(user => GetTeamIds(TeamColour.Red).Contains(user.UserID))
+                                                                                   .Select((user, index) => (TeamColour.Red, index, user))
+                                                                                   .Concat(activeUsers
+                                                                                           .Where(user => GetTeamIds(TeamColour.Blue).Contains(user.UserID))
+                                                                                           .Select((user, index) => (TeamColour.Blue, index, user))))
             {
                 slotByUserId[user.UserID] = (team, slotIndex);
             }
