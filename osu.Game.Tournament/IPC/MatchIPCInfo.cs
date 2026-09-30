@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics.Containers;
+using osu.Framework.Logging;
 using osu.Game.Beatmaps.Legacy;
 using osu.Game.Online.Chat;
 using osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea;
@@ -29,6 +30,11 @@ namespace osu.Game.Tournament.IPC
         protected readonly BindableList<MatchRoomPlayerInfo> RoomPlayersInternal = new BindableList<MatchRoomPlayerInfo>();
 
         public IBindableList<MatchRoomPlayerInfo> RoomPlayers => RoomPlayersInternal;
+
+        public MatchIPCInfo()
+        {
+            State.BindValueChanged(s => Logger.Log($"Tourney State turn {s.OldValue} to {s.NewValue}"));
+        }
 
         protected void SetRoomPlayers(IEnumerable<MatchRoomPlayerInfo> players)
         {
