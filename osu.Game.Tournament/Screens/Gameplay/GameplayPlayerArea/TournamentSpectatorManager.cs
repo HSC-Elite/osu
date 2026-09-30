@@ -186,7 +186,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                 spectatorDataSource.WatchUser(userId);
 
                 if (watchedUserStates.TryGetValue(userId, out var state) && state.State == SpectatedUserState.Playing)
-                    startGameplay(userId);
+                    startGameplay(userId, allowWhileIdle: true);
             }
         }
 
@@ -393,8 +393,11 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             }
         }
 
-        private void startGameplay(int userId)
+        private void startGameplay(int userId, bool allowWhileIdle = false)
         {
+            if (!allowWhileIdle && ipc.State.Value is not (TourneyState.WaitingForClients or TourneyState.Playing))
+                return;
+
             if (syncManager == null)
                 return;
 
