@@ -459,7 +459,14 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                 clock.Seek(syncManager.CurrentMasterTime);
 
             clocksByUserId[userId] = clock;
-            slot.StartGameplay(playerPresentationFactory.Create(slot, gameplayState.Score, clock, provider));
+            var presentation = playerPresentationFactory.Create(slot, gameplayState.Score, clock, provider);
+            presentation.GameplayEnded += () => Schedule(() =>
+            {
+                if (slotsByUserId.TryGetValue(userId, out var currentSlot) && currentSlot.GameplayPresentation == presentation)
+                    removeManagedClock(userId);
+            });
+
+            slot.StartGameplay(presentation);
 
             if (provider.IsLoaded)
                 provider.AddClock(userId, clock);

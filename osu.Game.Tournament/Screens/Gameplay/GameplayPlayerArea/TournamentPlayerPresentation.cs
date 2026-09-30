@@ -12,6 +12,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 {
     internal abstract partial class TournamentPlayerPresentation : OsuScreen
     {
+        public event Action? GameplayEnded;
+
         public abstract bool PlayerLoaded { get; }
         public abstract IBindable<int>? Combo { get; }
         public abstract bool IsAudioSourceCandidate { get; }
@@ -22,6 +24,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         public abstract void MarkFailedOrQuit();
         public abstract void ForceToResult();
         public abstract void SetMuted(bool muted);
+
+        protected void NotifyGameplayEnded() => GameplayEnded?.Invoke();
     }
 
     internal interface ITournamentPlayerPresentationFactory

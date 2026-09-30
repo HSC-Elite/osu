@@ -9,6 +9,7 @@ using osu.Game.Scoring;
 using osu.Game.Screens;
 using osu.Game.Screens.Backgrounds;
 using osu.Game.Screens.OnlinePlay.Multiplayer.Spectate;
+using osu.Game.Screens.Play;
 using osu.Game.Screens.Play.Leaderboards;
 
 namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
@@ -36,12 +37,15 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
         protected override BackgroundScreen CreateBackground() => new BackgroundScreenDefault();
 
+        private Player? player;
+
         internal TournamentPlayerGameplayScreen(PlayerArea playerArea, Score score, TournamentLiveLeaderboardProvider leaderboardProvider)
         {
             PlayerArea = playerArea;
             this.score = score;
             this.leaderboardProvider = leaderboardProvider;
             InternalChild = playerArea.With(p => p.RelativeSizeAxes = Axes.Both);
+            PlayerArea.OnGameplayStarted += onGameplayStarted;
         }
 
         protected override void LoadComplete()
@@ -61,5 +65,31 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         }
 
         public override void SetMuted(bool muted) => PlayerArea.Mute = muted;
+
+        private void onGameplayStarted()
+        {
+            player = PlayerArea.Player;
+
+            if (player != null)
+                player.OnShowingResults += onShowingResults;
+        }
+
+        private void onShowingResults()
+        {
+            if (player != null)
+                player.OnShowingResults -= onShowingResults;
+
+            NotifyGameplayEnded();
+        }
+
+        protected override void Dispose(bool isDisposing)
+        {
+            PlayerArea.OnGameplayStarted -= onGameplayStarted;
+
+            if (player != null)
+                player.OnShowingResults -= onShowingResults;
+
+            base.Dispose(isDisposing);
+        }
     }
 }
