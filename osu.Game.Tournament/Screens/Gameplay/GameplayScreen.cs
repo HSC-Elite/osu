@@ -509,7 +509,6 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
         private void addPlayerSlot(TournamentPlayerSlot slot, TeamColour colour, int index)
         {
-            slot.SetSmallLogo(playerPerTeam.Value > 2);
             playerSlots.Add(slot);
             playerGrid!.SetSlot(colour, index, slot);
         }

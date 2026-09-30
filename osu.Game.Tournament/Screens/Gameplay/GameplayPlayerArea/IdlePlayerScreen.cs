@@ -1,6 +1,7 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
+using System;
 using System.Linq;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
@@ -33,18 +34,6 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
         private readonly OsuLogo logo;
 
-        private static readonly Vector2 small_logo_size = new Vector2(0.35f);
-        private static readonly Vector2 medium_logo_size = new Vector2(0.5f);
-
-        public bool SmallOsuLogo
-        {
-            get => logo.Scale == small_logo_size;
-            set => Scheduler.Add(() =>
-            {
-                logo.Scale = value ? small_logo_size : medium_logo_size;
-            });
-        }
-
         public IdlePlayerScreen(int index, TeamColour colour)
         {
             this.index = index;
@@ -55,7 +44,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             {
                 logo = new OsuLogo
                 {
-                    Scale = medium_logo_size,
+                    Scale = new Vector2(0.5f),
                     Anchor = Anchor.Centre,
                     Origin = Anchor.Centre
                 },
@@ -85,6 +74,10 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         protected override void LoadComplete()
         {
             base.LoadComplete();
+
+            float targetLogoWidth = MathF.Sqrt(DrawWidth * DrawHeight) * 0.5f;
+            float scale = Math.Min(0.5f, targetLogoWidth / logo.DrawWidth);
+            logo.Scale = new Vector2(scale);
 
             teamUser.BindCollectionChanged((_, _) => updateUsername());
 

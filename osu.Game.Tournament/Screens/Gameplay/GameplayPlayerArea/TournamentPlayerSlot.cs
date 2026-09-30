@@ -85,8 +85,6 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             UserId = info.User?.UserId;
         }
 
-        public void SetSmallLogo(bool small) => idleScreen.SmallOsuLogo = small;
-
         public void StartGameplay(TournamentPlayerPresentation presentation)
         {
             if (HasGameplay)
