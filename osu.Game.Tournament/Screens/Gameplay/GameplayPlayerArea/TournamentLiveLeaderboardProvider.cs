@@ -190,7 +190,10 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
         private void onWatchedUserStatesChanged(object? sender, NotifyDictionaryChangedEventArgs<int, SpectatorState> e)
         {
-            foreach ((int userId, SpectatorState state) in e.NewItems.AsNonNull())
+            if (e.Action is not (NotifyDictionaryChangedAction.Add or NotifyDictionaryChangedAction.Replace) || e.NewItems == null)
+                return;
+
+            foreach ((int userId, SpectatorState state) in e.NewItems)
             {
                 if (state.State == SpectatedUserState.Quit)
                 {
