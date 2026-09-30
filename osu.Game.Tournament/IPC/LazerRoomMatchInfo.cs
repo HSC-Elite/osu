@@ -21,7 +21,6 @@ using osu.Game.Online.Chat;
 using osu.Game.Online.Multiplayer;
 using osu.Game.Online.Rooms;
 using osu.Game.Rulesets;
-using osu.Game.Rulesets.Mods;
 using osu.Game.Screens.OnlinePlay;
 using osu.Game.Screens.OnlinePlay.Multiplayer;
 using osu.Game.Tournament.Models;
@@ -438,6 +437,5 @@ namespace osu.Game.Tournament.IPC
                 pendingBeatmapId = null;
             }
         }
-
     }
 }
