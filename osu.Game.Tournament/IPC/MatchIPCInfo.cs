@@ -157,6 +157,11 @@ namespace osu.Game.Tournament.IPC
                 userMultiplierCache.Clear();
         }
 
+        public virtual void RequestAuthoritativeScores(Action<IReadOnlyList<TournamentPlayerScoreResult>?> onComplete)
+        {
+            onComplete(null);
+        }
+
         private void updateScore()
         {
             if (leaderboardProvider == null)
@@ -165,8 +170,16 @@ namespace osu.Game.Tournament.IPC
             GameplayLeaderboardScore[] team1Score = GetTeamScore(TeamColour.Red).ToArray();
             GameplayLeaderboardScore[] team2Score = GetTeamScore(TeamColour.Blue).ToArray();
 
-            Score1.Value = team1Score.Sum(CalculateModMultiplier);
-            Score2.Value = team2Score.Sum(CalculateModMultiplier);
+            if (Ladder.ScoringMode.Value == TournamentScoringMode.PerformancePoint)
+            {
+                Score1.Value = team1Score.Sum(s => leaderboardProvider!.GetPlayerPerformancePoints((int)s.User.OnlineID));
+                Score2.Value = team2Score.Sum(s => leaderboardProvider!.GetPlayerPerformancePoints((int)s.User.OnlineID));
+            }
+            else
+            {
+                Score1.Value = team1Score.Sum(CalculateModMultiplier);
+                Score2.Value = team2Score.Sum(CalculateModMultiplier);
+            }
             Team1Combo.Value = team1Score.Sum(s => s.Combo.Value);
             Team2Combo.Value = team2Score.Sum(s => s.Combo.Value);
         }

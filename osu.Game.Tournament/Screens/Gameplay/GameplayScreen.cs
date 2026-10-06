@@ -183,8 +183,6 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     Current = LadderInfo.ChromaKeyWidth,
                     KeyboardStep = 1,
                 },
-
-                new TournamentMatchScoreProcessorDetail(),
                 new SettingsSlider<int>
                 {
                     LabelText = "Players per team",
@@ -270,7 +268,8 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 new VisualSettings
                 {
                     Scale = new Vector2(0.7f)
-                }
+                },
+                new TournamentMatchScoreProcessorDetail(),
             });
 
             LadderInfo.ChromaKeyWidth.BindValueChanged(width => playerAreaContainer.Width = width.NewValue, true);
@@ -367,7 +366,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     updateResultLoading();
                 });
 
-                scoreProcessor.CurrentlyListening.BindValueChanged(state =>
+                IPC.HasActiveMatch.BindValueChanged(state =>
                 {
                     updateScoreWarning();
                     updateResultLoading();
@@ -635,7 +634,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
         private void updateScoreWarning()
         {
-            if (scoreProcessor?.CurrentlyListening.Value == true && State.Value == TourneyState.Playing && !warmup.Value)
+            if (IPC.HasActiveMatch.Value && State.Value == TourneyState.Playing && !warmup.Value)
                 scoreWarningContainer.FadeIn(100);
             else
                 scoreWarningContainer.FadeOut(100);
@@ -643,8 +642,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
         private void updateResultLoading()
         {
-            gameplaySongBar.WaitForResult.Value = scoreProcessor != null
-                                                 && scoreProcessor.CurrentlyListening.Value
+            gameplaySongBar.WaitForResult.Value = scoreProcessor?.CurrentlyListening.Value == true
                                                  && scoreProcessor.WaitingForAuthoritativeResult.Value;
         }
 

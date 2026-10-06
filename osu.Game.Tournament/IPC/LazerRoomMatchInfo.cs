@@ -21,6 +21,7 @@ using osu.Game.Online.Chat;
 using osu.Game.Online.Multiplayer;
 using osu.Game.Online.Rooms;
 using osu.Game.Rulesets;
+using osu.Game.Scoring;
 using osu.Game.Screens.OnlinePlay;
 using osu.Game.Screens.OnlinePlay.Multiplayer;
 using osu.Game.Tournament.Models;
@@ -45,11 +46,14 @@ namespace osu.Game.Tournament.IPC
         private Bindable<WorkingBeatmap> workingBeatmap { get; set; } = null!;
 
         private readonly OnlinePlayBeatmapAvailabilityTracker beatmapAvailabilityTracker = new MultiplayerBeatmapAvailabilityTracker();
+        private IAPIProvider api = null!;
 
         private readonly Bindable<Room?> currentRoom = new Bindable<Room?>();
 
         private ChannelManager chatManager = null!;
         private Channel? joinedChatChannel;
+        private long? resultRoomId;
+        private long? resultPlaylistItemId;
 
         public IBindable<Room?> CurrentRoom => currentRoom;
 
@@ -63,7 +67,52 @@ namespace osu.Game.Tournament.IPC
         [BackgroundDependencyLoader]
         private void load(IAPIProvider api)
         {
+            this.api = api;
             AddInternal(chatManager = new ChannelManager(api));
+        }
+
+        public override void RequestAuthoritativeScores(Action<IReadOnlyList<TournamentPlayerScoreResult>?> onComplete)
+        {
+            MultiplayerRoom? room = client.Room;
+            long? roomId = resultRoomId ?? room?.RoomID;
+            long? playlistItemId = resultPlaylistItemId ?? room?.Settings.PlaylistItemId;
+
+            if (!api.IsLoggedIn || roomId is not > 0 || playlistItemId is not > 0)
+            {
+                onComplete(null);
+                return;
+            }
+
+            var request = new IndexPlaylistScoresRequest(roomId.Value, playlistItemId.Value);
+            request.Success += response =>
+            {
+                var results = response.Scores
+                                      .Where(score => score.User?.Id > 0)
+                                      .Select(score => new TournamentPlayerScoreResult(score.User.Id, createScoreInfo(score)))
+                                      .ToArray();
+
+                onComplete(results);
+            };
+            request.Failure += _ => onComplete(null);
+            api.Queue(request);
+        }
+
+        private ScoreInfo createScoreInfo(MultiplayerScore score)
+        {
+            RulesetInfo ruleset = rulesets.GetRuleset(score.RulesetId) ?? new RulesetInfo { OnlineID = score.RulesetId };
+            return new ScoreInfo(new BeatmapInfo { OnlineID = score.BeatmapId }, ruleset)
+            {
+                OnlineID = score.ID,
+                TotalScore = score.TotalScore,
+                TotalScoreWithoutMods = score.TotalScore,
+                Accuracy = score.Accuracy,
+                MaxCombo = score.MaxCombo,
+                Passed = score.Passed,
+                PP = score.PP,
+                Statistics = score.Statistics,
+                MaximumStatistics = score.MaximumStatistics,
+                APIMods = score.Mods ?? Array.Empty<APIMod>(),
+            };
         }
 
         public void Join(Room room, string? password, Action<Room>? onSuccess = null, Action<string, Exception?>? onFailure = null) => Schedule(() =>
@@ -125,6 +174,8 @@ namespace osu.Game.Tournament.IPC
                 updateUsers();
             }, true);
 
+            State.BindValueChanged(_ => captureResultContext(), true);
+
             client.RoomUpdated += onRoomUpdated;
             client.SettingsChanged += onSettingsChanged;
             client.ItemChanged += onItemChanged;
@@ -163,6 +214,15 @@ namespace osu.Game.Tournament.IPC
 
             Logger.Log($"Room status {client.Room?.State} {client.Room?.MatchState} {currentRoom.Value?.Status}");
         });
+
+        private void captureResultContext()
+        {
+            if (State.Value != TourneyState.Playing || client.Room == null)
+                return;
+
+            resultRoomId = client.Room.RoomID;
+            resultPlaylistItemId = client.Room.Settings.PlaylistItemId;
+        }
 
         private void onGameplayAborted(GameplayAbortReason reason)
         {

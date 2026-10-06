@@ -36,6 +36,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         private readonly BindableList<GameplayLeaderboardScore> scores = new BindableList<GameplayLeaderboardScore>();
         private readonly Dictionary<int, MatchRoomPlayerInfo> players = new Dictionary<int, MatchRoomPlayerInfo>();
         private readonly Dictionary<int, SpectatorScoreProcessor> scoreProcessors = new Dictionary<int, SpectatorScoreProcessor>();
+        private readonly Dictionary<int, TournamentLivePerformanceProcessor> performanceProcessors = new Dictionary<int, TournamentLivePerformanceProcessor>();
         private readonly HashSet<int> quitUsers = new HashSet<int>();
         private readonly IBindableDictionary<int, SpectatorState> watchedUserStates = new BindableDictionary<int, SpectatorState>();
         private readonly Bindable<ScoringMode> scoringMode = new Bindable<ScoringMode>();
@@ -111,6 +112,9 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         public Mod[] GetPlayerMods(int userId)
             => scoreProcessors.TryGetValue(userId, out var processor) ? processor.Mods.ToArray() : Array.Empty<Mod>();
 
+        public long GetPlayerPerformancePoints(int userId)
+            => performanceProcessors.TryGetValue(userId, out var processor) ? processor.PerformancePoints.Value : 0;
+
         public IBindable<int>? GetPlayerCombo(int userId)
             => scoreProcessors.TryGetValue(userId, out var processor) ? processor.Combo : null;
 
@@ -162,6 +166,9 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             if (scoreProcessors.Remove(userId, out var processor))
                 processor.Expire();
 
+            if (performanceProcessors.Remove(userId, out var performanceProcessor))
+                performanceProcessor.Expire();
+
             quitUsers.Remove(userId);
 
             if (watchingUsers)
@@ -176,6 +183,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                 throw new ArgumentException("Provided user is not tracked by this leaderboard.", nameof(userId));
 
             processor.ReferenceClock = clock;
+            performanceProcessors[userId].SetReferenceClock(clock);
         }
 
         protected override void Update()
@@ -214,6 +222,11 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
             AddInternal(processor);
             scoreProcessors[userId] = processor;
+
+            var performanceProcessor = new TournamentLivePerformanceProcessor(userId);
+            AddInternal(performanceProcessor);
+            performanceProcessors[userId] = performanceProcessor;
+
             return processor;
         }
 

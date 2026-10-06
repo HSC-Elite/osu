@@ -16,9 +16,6 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
         private readonly OsuSpriteText listeningText;
         private readonly OsuSpriteText stateText;
         private readonly OsuSpriteText waitingText;
-        private readonly OsuSpriteText matchText;
-        private readonly OsuSpriteText gameText;
-        private readonly OsuSpriteText eventText;
         private readonly OsuSpriteText requestText;
 
         [Resolved(canBeNull: true)]
@@ -41,9 +38,6 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
                     listeningText = createText(),
                     stateText = createText(),
                     waitingText = createText(),
-                    matchText = createText(),
-                    gameText = createText(),
-                    eventText = createText(),
                     requestText = createText(),
                 },
             };
@@ -60,23 +54,17 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
 
             if (scoreProcessor == null)
             {
-                listeningText.Text = "API 监听: 分数处理器不可用";
+                listeningText.Text = "权威结果源: 分数处理器不可用";
                 stateText.Text = $"客户端状态: {ipc.State.Value}";
-                waitingText.Text = "等待结算 API: 不可用";
-                matchText.Text = "Match ID: 无";
-                gameText.Text = "当前 Game ID: 无";
-                eventText.Text = "最新 Event ID: 0";
-                requestText.Text = "最近 API 请求: 不可用";
+                waitingText.Text = "等待结算结果: 不可用";
+                requestText.Text = "最近结果请求: 不可用";
                 return;
             }
 
-            listeningText.Text = $"API 监听: {(scoreProcessor.CurrentlyListening.Value ? "监听中" : "未监听")}";
+            listeningText.Text = $"权威结果源: {(ipc.HasActiveMatch.Value ? "可用" : "未连接")}";
             stateText.Text = $"客户端状态: {ipc.State.Value}";
-            waitingText.Text = $"等待结算 API: {(scoreProcessor.WaitingForAuthoritativeResult.Value ? "是" : "否")}";
-            matchText.Text = $"Match ID: {(scoreProcessor.CurrentMatchID > 0 ? scoreProcessor.CurrentMatchID.ToString() : "无")}";
-            gameText.Text = $"当前 Game ID: {(scoreProcessor.CurrentApiGameID > 0 ? scoreProcessor.CurrentApiGameID.ToString() : "无")}";
-            eventText.Text = $"最新 Event ID: {scoreProcessor.LatestMatchEventID}";
-            requestText.Text = $"最近 API 请求: {scoreProcessor.LastAPIRequestStatus.Value}";
+            waitingText.Text = $"等待结算结果: {(scoreProcessor.WaitingForAuthoritativeResult.Value ? "是" : "否")}";
+            requestText.Text = $"最近结果请求: {scoreProcessor.LastResultRequestStatus.Value}";
         }
     }
 }
