@@ -20,6 +20,7 @@ namespace osu.Game.Tournament.Screens.TeamIntro
     public partial class SeedingScreen : TournamentScreen
     {
         private Container mainContainer = null!;
+        private Container stageContent = null!;
 
         private readonly Bindable<TournamentTeam?> currentTeam = new Bindable<TournamentTeam?>();
 
@@ -28,17 +29,27 @@ namespace osu.Game.Tournament.Screens.TeamIntro
         {
             RelativeSizeAxes = Axes.Both;
 
+            var seedingVideo = new TourneyVideo("seeding")
+            {
+                RelativeSizeAxes = Axes.Both,
+                Loop = true,
+            };
+
+            stageContent = new Container
+            {
+                RelativeSizeAxes = Axes.Both,
+                Children = new Drawable[]
+                {
+                    seedingVideo,
+                    mainContainer = new Container
+                    {
+                        RelativeSizeAxes = Axes.Both,
+                    },
+                }
+            };
+
             InternalChildren = new Drawable[]
             {
-                new TourneyVideo("seeding")
-                {
-                    RelativeSizeAxes = Axes.Both,
-                    Loop = true,
-                },
-                mainContainer = new Container
-                {
-                    RelativeSizeAxes = Axes.Both,
-                },
                 new ControlPanel
                 {
                     Children = new Drawable[]
@@ -65,6 +76,8 @@ namespace osu.Game.Tournament.Screens.TeamIntro
             };
 
             currentTeam.BindValueChanged(teamChanged, true);
+            SetStageVideo(seedingVideo);
+            SetStageContent(stageContent);
         }
 
         private enum Direction
@@ -109,6 +122,7 @@ namespace osu.Game.Tournament.Screens.TeamIntro
 
         public override void Show()
         {
+            ShowStageContent();
             base.Show();
 
             // Changes could have been made on editor screen.

@@ -58,6 +58,9 @@ namespace osu.Game.Tournament
         [Resolved]
         private LadderInfo ladderInfo { get; set; } = null!;
 
+        [Cached]
+        private StageContainer stageContainer { get; set; } = new StageContainer();
+
         public TournamentSceneManager()
         {
             RelativeSizeAxes = Axes.Both;
@@ -73,14 +76,10 @@ namespace osu.Game.Tournament
                 {
                     new Container
                     {
-                        RelativeSizeAxes = Axes.Y,
-                        X = CONTROL_AREA_WIDTH,
-                        FillMode = FillMode.Fit,
-                        FillAspectRatio = ASPECT_RATIO,
+                        RelativeSizeAxes = Axes.Both,
+                        Padding = new MarginPadding { Left = CONTROL_AREA_WIDTH },
                         Anchor = Anchor.TopLeft,
                         Origin = Anchor.TopLeft,
-                        Width = STREAM_AREA_WIDTH,
-                        //Masking = true,
                         Children = new Drawable[]
                         {
                             new Box
@@ -118,14 +117,6 @@ namespace osu.Game.Tournament
                                     new TeamWinScreen(),
                                     new OsuGameScreen()
                                 }
-                            },
-                            chatContainer = new Container
-                            {
-                                Position = new Vector2(332, -142),
-                                Width = 700,
-                                Anchor = Anchor.BottomLeft,
-                                Origin = Anchor.TopLeft,
-                                Child = chat
                             },
                         }
                     },
@@ -182,6 +173,22 @@ namespace osu.Game.Tournament
                             },
                         },
                     },
+                    new ExternalWindowContainer
+                    {
+                        AutoSizeAxes = Axes.Both,
+                        Children = new Drawable[]
+                        {
+                            chatContainer = new Container
+                            {
+                                Position = new Vector2(332, -142),
+                                Width = 700,
+                                Anchor = Anchor.BottomLeft,
+                                Origin = Anchor.TopLeft,
+                                Child = chat
+                            },
+                            stageContainer
+                        }
+                    }
                 }
             };
 
@@ -231,7 +238,10 @@ namespace osu.Game.Tournament
             var lastScreen = currentScreen;
             currentScreen = target;
 
-            if (currentScreen.ChildrenOfType<TourneyVideo>().FirstOrDefault()?.VideoAvailable == true)
+            bool hasVideo = currentScreen.ChildrenOfType<TourneyVideo>().FirstOrDefault()?.VideoAvailable == true
+                            || currentScreen is TournamentScreen tournamentScreen && tournamentScreen.StageVideoAvailable;
+
+            if (hasVideo)
             {
                 video.FadeOut(200);
 

@@ -1,10 +1,13 @@
 ﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
+using System.Collections.Generic;
+using System.Linq;
 using osu.Framework.Allocation;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Game.Overlays;
+using osu.Game.Tournament.Components;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.Models;
 
@@ -23,12 +26,41 @@ namespace osu.Game.Tournament.Screens
         [Resolved]
         protected MatchIPCInfo IPC { get; private set; } = null!;
 
+        [Resolved]
+        protected StageContainer? StageContainer { get; private set; }
+
+        private readonly List<TourneyVideo> stageVideos = new List<TourneyVideo>();
+
+        protected Container? StageContent { get; private set; }
+
+        internal bool StageVideoAvailable => stageVideos.Any(video => video.VideoAvailable);
+
         protected TournamentScreen()
         {
             RelativeSizeAxes = Axes.Both;
 
             FillMode = FillMode.Fit;
             FillAspectRatio = 16 / 9f;
+        }
+
+        protected void SetStageContent(Container content)
+        {
+            LoadComponents(content);
+
+            StageContent = content;
+        }
+
+        protected void SetStageVideo(TourneyVideo video) => stageVideos.Add(video);
+
+        protected void ShowStageContent()
+        {
+            if (StageContainer == null || StageContent == null)
+                return;
+
+            if (StageContent.Parent == this)
+                RemoveInternal(StageContent, false);
+
+            StageContainer.ShowStage(StageContent);
         }
 
         public override void Hide() => this.FadeOut(FADE_DELAY);

@@ -81,16 +81,29 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
         private bool switchFromMappool;
 
+        private TournamentStageContentContainer stageContent = null!;
+
+        public GameplayScreen()
+        {
+            stageContent = new TournamentStageContentContainer(ColourProvider);
+        }
+
         [BackgroundDependencyLoader]
         private void load(TextureStore store)
         {
-            AddRangeInternal(new Drawable[]
+            RemoveInternal(SongBar, false);
+
+            var gameplayVideo = new TourneyVideo("gameplay")
             {
-                new TourneyVideo("gameplay")
-                {
-                    Loop = true,
-                    RelativeSizeAxes = Axes.Both,
-                },
+                Loop = true,
+                RelativeSizeAxes = Axes.Both,
+            };
+            SetStageVideo(gameplayVideo);
+
+            stageContent.AddRange(new Drawable[]
+            {
+                SongBar,
+                gameplayVideo,
                 new Sprite
                 {
                     RelativeSizeAxes = Axes.Both,
@@ -302,6 +315,8 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 chat.PostMessage(chatBox.Text);
                 chatBox.Text = string.Empty;
             };
+
+            SetStageContent(stageContent);
         }
 
         private bool roundPreviewShow;
@@ -660,6 +675,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
         public override void Show()
         {
+            ShowStageContent();
             updateState();
 
             if (switchFromMappool)

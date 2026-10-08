@@ -15,6 +15,7 @@ namespace osu.Game.Tournament.Screens.TeamWin
     public partial class TeamWinScreen : TournamentMatchScreen
     {
         private Container mainContainer = null!;
+        private Container stageContent = null!;
 
         private readonly Bindable<bool> currentCompleted = new Bindable<bool>();
 
@@ -26,27 +27,44 @@ namespace osu.Game.Tournament.Screens.TeamWin
         {
             RelativeSizeAxes = Axes.Both;
 
-            InternalChildren = new Drawable[]
+            blueWinVideo = new TourneyVideo("teamwin-blue")
             {
-                blueWinVideo = new TourneyVideo("teamwin-blue")
+                Alpha = 1,
+                RelativeSizeAxes = Axes.Both,
+                Loop = true,
+            };
+            redWinVideo = new TourneyVideo("teamwin-red")
+            {
+                Alpha = 0,
+                RelativeSizeAxes = Axes.Both,
+                Loop = true,
+            };
+
+            stageContent = new Container
+            {
+                RelativeSizeAxes = Axes.Both,
+                Children = new Drawable[]
                 {
-                    Alpha = 1,
-                    RelativeSizeAxes = Axes.Both,
-                    Loop = true,
-                },
-                redWinVideo = new TourneyVideo("teamwin-red")
-                {
-                    Alpha = 0,
-                    RelativeSizeAxes = Axes.Both,
-                    Loop = true,
-                },
-                mainContainer = new Container
-                {
-                    RelativeSizeAxes = Axes.Both,
+                    blueWinVideo,
+                    redWinVideo,
+                    mainContainer = new Container
+                    {
+                        RelativeSizeAxes = Axes.Both,
+                    }
                 }
             };
 
+            SetStageVideo(blueWinVideo);
+            SetStageVideo(redWinVideo);
+            SetStageContent(stageContent);
+
             currentCompleted.BindValueChanged(_ => update());
+        }
+
+        public override void Show()
+        {
+            ShowStageContent();
+            base.Show();
         }
 
         protected override void CurrentMatchChanged(ValueChangedEvent<TournamentMatch?> match)

@@ -69,20 +69,31 @@ namespace osu.Game.Tournament.Screens.Showcase
         private readonly Bindable<IReadOnlyList<Mod>> mods = new Bindable<IReadOnlyList<Mod>>();
         private readonly Bindable<LegacyMods> legacyMods = new Bindable<LegacyMods>();
         private Container showcaseContainer = null!;
+        private Container stageContent = null!;
 
         private readonly BindableBool useOsuLazer = new BindableBool();
 
         [BackgroundDependencyLoader]
         private void load()
         {
-            AddRangeInternal(new Drawable[]
+            RemoveInternal(SongBar, false);
+
+            var showcaseVideo = new TourneyVideo("showcase")
             {
+                Loop = true,
+                RelativeSizeAxes = Axes.Both,
+            };
+            SetStageVideo(showcaseVideo);
+
+            stageContent = new Container
+            {
+                RelativeSizeAxes = Axes.Both,
+            };
+            stageContent.AddRange(new Drawable[]
+            {
+                SongBar,
                 new TournamentLogo(),
-                new TourneyVideo("showcase")
-                {
-                    Loop = true,
-                    RelativeSizeAxes = Axes.Both,
-                },
+                showcaseVideo,
                 showcaseContainer = new Container
                 {
                     Padding = new MarginPadding { Bottom = SongBar.HEIGHT + 14f },
@@ -179,10 +190,13 @@ namespace osu.Game.Tournament.Screens.Showcase
                     });
                 }
             }, true);
+
+            SetStageContent(stageContent);
         }
 
         public override void Show()
         {
+            ShowStageContent();
             base.Show();
 
             if (useOsuLazer.Value)
@@ -213,7 +227,7 @@ namespace osu.Game.Tournament.Screens.Showcase
                 mods.BindTarget = nestedGame.Dependencies.Get<Bindable<IReadOnlyList<Mod>>>();
             };
 
-            AddInternal(flash = new ShowCaseSideFlash());
+            StageContent!.Add(flash = new ShowCaseSideFlash());
             flash.FlashIntensity.BindTo(flashIntensity);
             flash.FlashColor.BindTo(flashColor);
             flash.FlashKiaiOnly.BindTo(flashKiaiOnly);
@@ -228,7 +242,7 @@ namespace osu.Game.Tournament.Screens.Showcase
             }
 
             if (flash != null)
-                RemoveInternal(flash, true);
+                StageContent?.Remove(flash, true);
 
             musicController = null;
             nestedGame = null;
