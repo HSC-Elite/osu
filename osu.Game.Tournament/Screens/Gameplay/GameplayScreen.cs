@@ -100,6 +100,10 @@ namespace osu.Game.Tournament.Screens.Gameplay
             };
             SetStageVideo(gameplayVideo);
 
+            ControlPanel.Anchor = Anchor.TopLeft;
+            ControlPanel.RelativeSizeAxes = Axes.Both;
+            ControlPanel.Width = 1;
+
             stageContent.AddRange(new Drawable[]
             {
                 SongBar,

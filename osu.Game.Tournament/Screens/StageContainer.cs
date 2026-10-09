@@ -11,38 +11,34 @@ namespace osu.Game.Tournament.Screens
 {
     public partial class StageContainer : Container
     {
-        private Drawable? displayedStage;
+        public Drawable? DisplayedStage { get; private set; }
 
         public StageContainer()
         {
             Size = new Vector2(1366, 768);
         }
 
-        public void ShowStage(Drawable stage)
+        public void AddStage(Drawable stage)
         {
-            if (displayedStage == stage)
+            if (stage.Parent == this)
                 return;
 
-            var previousStage = displayedStage;
+            stage.Alpha = 0;
+            AddInternal(stage);
+        }
 
-            if (stage.Parent != this)
-            {
-                stage.Alpha = 0;
-                AddInternal(stage);
-            }
+        public void ShowStage(Drawable stage)
+        {
+            if (DisplayedStage == stage)
+                return;
 
-            displayedStage = stage;
+            var previousStage = DisplayedStage;
+
+            AddStage(stage);
+
+            DisplayedStage = stage;
             stage.FadeIn(TournamentScreen.FADE_DELAY);
-
-            if (previousStage != null)
-            {
-                previousStage.FadeOut(TournamentScreen.FADE_DELAY);
-                Scheduler.AddDelayed(() =>
-                {
-                    if (displayedStage != previousStage && previousStage.Parent == this)
-                        RemoveInternal(previousStage, false);
-                }, TournamentScreen.FADE_DELAY);
-            }
+            previousStage?.FadeOut(TournamentScreen.FADE_DELAY);
         }
     }
 
@@ -56,5 +52,20 @@ namespace osu.Game.Tournament.Screens
             this.colourProvider = colourProvider;
             RelativeSizeAxes = Axes.Both;
         }
+    }
+
+    internal partial class TournamentStageDependencyContainer : Container
+    {
+        private readonly IReadOnlyDependencyContainer dependencies;
+
+        public TournamentStageDependencyContainer(Container content, IReadOnlyDependencyContainer dependencies)
+        {
+            this.dependencies = dependencies;
+            RelativeSizeAxes = Axes.Both;
+            Child = content;
+        }
+
+        protected override IReadOnlyDependencyContainer CreateChildDependencies(IReadOnlyDependencyContainer parent)
+            => base.CreateChildDependencies(dependencies);
     }
 }

@@ -35,7 +35,7 @@ namespace osu.Game.Tournament.Screens
             AddRangeInternal(
             [
                 SongBar = CreateSongBar(),
-                ControlPanel = new ControlPanel
+                ControlPanel = new ControlPanel(true)
                 {
                     /*Children = new Drawable[]
                     {
@@ -105,10 +105,7 @@ namespace osu.Game.Tournament.Screens
                     },
                 ];
 
-                if (StageContent != null)
-                    StageContent.AddRange(logoContents);
-                else
-                    AddRangeInternal(logoContents);
+                AddStageContentRange(logoContents);
 
                 LoadComponentsAsync(logoContents, _ =>
                 {

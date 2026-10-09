@@ -153,6 +153,13 @@ namespace osu.Game.Tournament.Screens.Showcase
                 }
             });
 
+            SetStageContent(stageContent);
+        }
+
+        protected override void LoadComplete()
+        {
+            base.LoadComplete();
+
             flashColorString.BindValueChanged(c =>
             {
                 if (Colour4.TryParseHex(c.NewValue, out var colour))
@@ -161,17 +168,19 @@ namespace osu.Game.Tournament.Screens.Showcase
                 }
             });
 
+            nestedLazerSettingContainer.AutoSizeDuration = 400;
+            nestedLazerSettingContainer.AutoSizeEasing = Easing.OutQuint;
+
             useOsuLazer.BindValueChanged(u =>
             {
                 nestedLazerSettingContainer.ClearTransforms();
-                nestedLazerSettingContainer.AutoSizeDuration = 400;
-                nestedLazerSettingContainer.AutoSizeEasing = Easing.OutQuint;
 
                 if (u.NewValue)
                 {
                     nestedLazerSettingContainer.AutoSizeAxes = Axes.Y;
                     showcaseContainer.Clear(true);
-                    startInnerLazer();
+                    if (StageShowing)
+                        startInnerLazer();
                 }
                 else
                 {
@@ -190,8 +199,6 @@ namespace osu.Game.Tournament.Screens.Showcase
                     });
                 }
             }, true);
-
-            SetStageContent(stageContent);
         }
 
         public override void Show()

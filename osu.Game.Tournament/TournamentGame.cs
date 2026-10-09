@@ -36,11 +36,9 @@ namespace osu.Game.Tournament
         public const string TOURNAMENT_CLIENT_NAME = " Tournament Client ";
 
         public static readonly Color4 TEXT_COLOUR = Color4Extensions.FromHex("#fff");
-        private Drawable heightWarning = null!;
         private TournamentCompanionManager? companionManager;
 
         private Bindable<WindowMode> windowMode = null!;
-        private readonly BindableSize windowSize = new BindableSize();
 
         private LoadingSpinner loadingSpinner = null!;
 
@@ -63,8 +61,6 @@ namespace osu.Game.Tournament
         [BackgroundDependencyLoader]
         private void load(FrameworkConfigManager frameworkConfig, GameHost host)
         {
-            frameworkConfig.BindWith(FrameworkSetting.WindowedSize, windowSize);
-
             windowMode = frameworkConfig.GetBindable<WindowMode>(FrameworkSetting.WindowMode);
 
             Add(loadingSpinner = new LoadingSpinner(true, true)
@@ -96,17 +92,11 @@ namespace osu.Game.Tournament
                 }
 
                 Drawable sceneManager;
-                var components = new[]
+                var components = new Drawable[]
                 {
                     new SaveChangesOverlay
                     {
                         Depth = float.MinValue,
-                    },
-                    heightWarning = new WarningBox("Please make the window wider")
-                    {
-                        Anchor = Anchor.BottomCentre,
-                        Origin = Anchor.BottomCentre,
-                        Margin = new MarginPadding(20),
                     },
                     new OsuContextMenuContainer
                     {
@@ -130,12 +120,6 @@ namespace osu.Game.Tournament
                     loadingSpinner.Hide();
                     loadingSpinner.Expire();
                     AddRange(drawables);
-
-                    windowSize.BindValueChanged(size => ScheduleAfterChildren(() =>
-                    {
-                        int minWidth = (int)(size.NewValue.Height / 768f * TournamentSceneManager.REQUIRED_WIDTH) - 1;
-                        heightWarning.Alpha = size.NewValue.Width < minWidth ? 1 : 0;
-                    }), true);
 
                     windowMode.BindValueChanged(_ => ScheduleAfterChildren(() =>
                     {

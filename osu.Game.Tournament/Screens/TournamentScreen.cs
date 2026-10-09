@@ -30,10 +30,13 @@ namespace osu.Game.Tournament.Screens
         protected StageContainer? StageContainer { get; private set; }
 
         private readonly List<TourneyVideo> stageVideos = new List<TourneyVideo>();
+        private readonly List<Drawable> pendingStageContent = new List<Drawable>();
 
         protected Container? StageContent { get; private set; }
 
         internal bool StageVideoAvailable => stageVideos.Any(video => video.VideoAvailable);
+
+        public bool StageShowing => StageContainer?.DisplayedStage == StageContent;
 
         protected TournamentScreen()
         {
@@ -43,11 +46,30 @@ namespace osu.Game.Tournament.Screens
             FillAspectRatio = 16 / 9f;
         }
 
-        protected void SetStageContent(Container content)
+        protected void SetStageContent(Container content, IReadOnlyDependencyContainer? dependencies = null)
         {
-            LoadComponents(content);
+            var stageContent = new TournamentStageDependencyContainer(content, dependencies ?? Dependencies);
 
-            StageContent = content;
+            foreach (var drawable in pendingStageContent)
+                stageContent.Add(drawable);
+
+            pendingStageContent.Clear();
+            StageContent = stageContent;
+            StageContainer?.AddStage(stageContent);
+        }
+
+        protected void AddStageContent(Drawable drawable)
+        {
+            if (StageContent == null)
+                pendingStageContent.Add(drawable);
+            else
+                StageContent.Add(drawable);
+        }
+
+        protected void AddStageContentRange(IEnumerable<Drawable> drawables)
+        {
+            foreach (var drawable in drawables)
+                AddStageContent(drawable);
         }
 
         protected void SetStageVideo(TourneyVideo video) => stageVideos.Add(video);
@@ -56,9 +78,6 @@ namespace osu.Game.Tournament.Screens
         {
             if (StageContainer == null || StageContent == null)
                 return;
-
-            if (StageContent.Parent == this)
-                RemoveInternal(StageContent, false);
 
             StageContainer.ShowStage(StageContent);
         }
