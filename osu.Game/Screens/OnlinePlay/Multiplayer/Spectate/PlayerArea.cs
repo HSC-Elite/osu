@@ -122,7 +122,7 @@ namespace osu.Game.Screens.OnlinePlay.Multiplayer.Spectate
             {
                 stack.Push(new MultiSpectatorPlayerLoader(Score, () =>
                 {
-                    var player = new MultiSpectatorPlayer(Score, SpectatorPlayerClock);
+                    var player = CreatePlayer(Score, SpectatorPlayerClock);
                     player.OnGameplayStarted += () => OnGameplayStarted?.Invoke();
 
                     clockAdjustmentsFromMods.BindAdjustments(player.ClockAdjustmentsFromMods);
@@ -143,6 +143,12 @@ namespace osu.Game.Screens.OnlinePlay.Multiplayer.Spectate
 
             loadingLayer.Hide();
         }
+
+        /// <summary>
+        /// Creates the spectator player hosted by this area.
+        /// </summary>
+        protected virtual MultiSpectatorPlayer CreatePlayer(Score score, SpectatorPlayerClock clock)
+            => new MultiSpectatorPlayer(score, clock);
 
         private bool mute = true;
 
