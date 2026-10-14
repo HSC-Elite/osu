@@ -27,6 +27,8 @@ namespace osu.Game.Tournament.StableClient
         private readonly StableSpectatorHandler handler;
         private readonly Action exitToSpectator;
         private readonly Protocol.ReplayAction? initialReplayAction;
+        private FrameHeader? pendingScoreHeader;
+        private bool replayEndReceived;
         private bool exitScheduled;
 
         [Cached(typeof(IGameplayLeaderboardProvider))]
@@ -73,6 +75,20 @@ namespace osu.Game.Tournament.StableClient
 
             Schedule(() =>
             {
+                if (bundle.Frames.Count == 0)
+                {
+                    ReplayFrame? replayTail = score.Replay.Frames.LastOrDefault();
+
+                    if (replayTail == null)
+                    {
+                        pendingScoreHeader = bundle.Header;
+                        return;
+                    }
+
+                    applyScoreHeader(replayTail, bundle.Header);
+                    return;
+                }
+
                 bool isFirstBundle = score.Replay.Frames.Count == 0;
                 ReplayFrame? lastFrame = score.Replay.Frames.LastOrDefault();
                 int frameCountBefore = score.Replay.Frames.Count;
@@ -130,7 +146,45 @@ namespace osu.Game.Tournament.StableClient
                     SetGameplayStartTime(score.Replay.Frames[0].Time);
                     Logger.Log($"StableSoloSpectatorPlayer: gameplay start time set to {score.Replay.Frames[0].Time} from live bundle");
                 }
+
+                if (pendingScoreHeader != null && score.Replay.Frames.LastOrDefault() is ReplayFrame tail)
+                {
+                    if (tail.Header == null)
+                        applyScoreHeader(tail, pendingScoreHeader);
+
+                    pendingScoreHeader = null;
+                }
             });
+        }
+
+        private void applyScoreHeader(ReplayFrame replayFrame, FrameHeader header)
+        {
+            replayFrame.Header = header;
+
+            // A score-only packet may update a replay frame that has already passed the
+            // playback clock. Reapply it directly so the live HUD and result stay current.
+            if (DrawableRuleset.FrameStableClock.CurrentTime >= replayFrame.Time)
+                ScoreProcessor.ResetFromReplayFrame(replayFrame);
+        }
+
+        protected override void UpdateAfterChildren()
+        {
+            base.UpdateAfterChildren();
+            tryExitAfterReplayTail();
+        }
+
+        private void tryExitAfterReplayTail()
+        {
+            if (!replayEndReceived || exitScheduled)
+                return;
+
+            ReplayFrame? replayTail = score.Replay.Frames.LastOrDefault();
+
+            if (replayTail != null && (!LoadedBeatmapSuccessfully || DrawableRuleset.FrameStableClock.CurrentTime < replayTail.Time))
+                return;
+
+            exitScheduled = true;
+            Schedule(exitToSpectator);
         }
 
         protected override Score CreateScore(IBeatmap beatmap) => score;
@@ -149,8 +203,11 @@ namespace osu.Game.Tournament.StableClient
             {
                 case Protocol.ReplayAction.Completion:
                 case Protocol.ReplayAction.Fail:
-                    exitScheduled = true;
-                    Schedule(() => Schedule(exitToSpectator));
+                    replayEndReceived = true;
+                    score.Replay.HasReceivedAllFrames = true;
+                    // The handler emits this action after the packet's frame callback. Keep
+                    // the check scheduled so those frame appends run before we inspect the tail.
+                    Schedule(tryExitAfterReplayTail);
                     break;
 
                 case Protocol.ReplayAction.NewSong:

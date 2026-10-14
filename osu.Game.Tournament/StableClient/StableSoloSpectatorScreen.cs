@@ -78,6 +78,7 @@ namespace osu.Game.Tournament.StableClient
         private bool awaitingNextSong;
         private Score? score;
         private bool playerPushed;
+        private int sessionGeneration;
         private ScheduledDelegate? beatmapFetchCallback;
         private APIBeatmap? currentBeatmap;
         private APIBeatmapSet? beatmapSet;
@@ -287,15 +288,32 @@ namespace osu.Game.Tournament.StableClient
 
         private void onFramesReceived(FrameDataBundle bundle)
         {
+            if (bundle.Frames.Count == 0)
+            {
+                // The player may still be loading when a score-only terminal packet arrives.
+                // Preserve the snapshot on the buffered replay tail so it is applied on start.
+                Score? currentScore = score;
+                Schedule(() =>
+                {
+                    if (score == currentScore && currentScore?.Replay.Frames.LastOrDefault() is Rulesets.Replays.ReplayFrame replayTail)
+                        replayTail.Header = bundle.Header;
+                });
+            }
+
             if (pendingReplayAction != null || awaitingNextSong)
                 return;
 
+            int bundleGeneration = sessionGeneration;
             Schedule(() =>
             {
-                if (pendingReplayAction != null || awaitingNextSong)
+                if (bundleGeneration != sessionGeneration)
                     return;
 
-                pendingBundles.Add(bundle);
+                if (score == null)
+                    pendingBundles.Add(bundle);
+                else if (activePlayer?.IsLoaded != true && handler?.Beatmap.Value != null && handler.Ruleset.Value != null)
+                    appendBundle(score, handler.Beatmap.Value, handler.Ruleset.Value.CreateInstance(), bundle);
+
                 Logger.Log(
                     $"StableSoloSpectatorScreen: received bundle #{pendingBundles.Count}, frames={bundle.Frames.Count}, " +
                     $"score={bundle.Header.TotalScore}, acc={bundle.Header.Accuracy:P2}, " +
@@ -307,6 +325,13 @@ namespace osu.Game.Tournament.StableClient
         }
 
         private void onReplayActionReceived(Protocol.ReplayAction action, int extra)
+        {
+            // Replay packets arrive on the poll thread. Queue action handling after the
+            // corresponding frame callback, which is emitted first for terminal packets.
+            Schedule(() => handleReplayAction(action, extra));
+        }
+
+        private void handleReplayAction(Protocol.ReplayAction action, int extra)
         {
             if (action == Protocol.ReplayAction.NewSong)
                 awaitingNextSong = false;
@@ -356,7 +381,7 @@ namespace osu.Game.Tournament.StableClient
 
         private void tryStartGameplay()
         {
-            if (handler?.Beatmap.Value == null || handler.Ruleset.Value == null || pendingBundles.Count == 0)
+            if (handler?.Beatmap.Value == null || handler.Ruleset.Value == null || !pendingBundles.Any(bundle => bundle.Frames.Count > 0))
                 return;
 
             if (score == null)
@@ -377,7 +402,7 @@ namespace osu.Game.Tournament.StableClient
                         Ruleset = handler.Ruleset.Value,
                         Mods = mods,
                     },
-                    Replay = new Replay(),
+                    Replay = new Replay { HasReceivedAllFrames = false },
                 };
 
                 foreach (var bundle in pendingBundles)
@@ -495,6 +520,14 @@ namespace osu.Game.Tournament.StableClient
         {
             Rulesets.Replays.ReplayFrame? lastFrame = score.Replay.Frames.LastOrDefault();
 
+            if (bundle.Frames.Count == 0)
+            {
+                if (lastFrame != null)
+                    lastFrame.Header = bundle.Header;
+
+                return;
+            }
+
             foreach (var frame in bundle.Frames)
             {
                 var convertibleFrame = ruleset.CreateConvertibleReplayFrame()!;
@@ -558,6 +591,7 @@ namespace osu.Game.Tournament.StableClient
 
         private void resetGameplayState(string status, bool clearBeatmapPanel = false, bool exitChildScreen = true)
         {
+            sessionGeneration++;
             pendingBundles.Clear();
             score = null;
             playerPushed = false;

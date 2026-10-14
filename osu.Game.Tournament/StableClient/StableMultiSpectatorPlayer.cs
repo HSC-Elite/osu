@@ -31,6 +31,7 @@ namespace osu.Game.Tournament.StableClient
         private readonly Score score;
         private readonly SpectatorPlayerClock spectatorPlayerClock;
         private readonly StableSpectatorHandler handler;
+        private FrameHeader? pendingScoreHeader;
 
         // 屏蔽局部排行榜，因为锦标赛界面有全局排行榜
         [Cached(typeof(IGameplayLeaderboardProvider))]
@@ -83,6 +84,20 @@ namespace osu.Game.Tournament.StableClient
 
             Schedule(() =>
             {
+                if (bundle.Frames.Count == 0)
+                {
+                    ReplayFrame? replayTail = score.Replay.Frames.LastOrDefault();
+
+                    if (replayTail == null)
+                    {
+                        pendingScoreHeader = bundle.Header;
+                        return;
+                    }
+
+                    applyScoreHeader(replayTail, bundle.Header);
+                    return;
+                }
+
                 bool isFirstBundle = score.Replay.Frames.Count == 0;
                 ReplayFrame? lastFrame = score.Replay.Frames.LastOrDefault();
                 int frameCountBefore = score.Replay.Frames.Count;
@@ -119,7 +134,23 @@ namespace osu.Game.Tournament.StableClient
                     SetGameplayStartTime(score.Replay.Frames[0].Time);
                     Logger.Log($"StableMultiSpectatorPlayer: gameplay start time set to {score.Replay.Frames[0].Time} for user {handler.UserId}");
                 }
+
+                if (pendingScoreHeader != null && score.Replay.Frames.LastOrDefault() is ReplayFrame tail)
+                {
+                    if (tail.Header == null)
+                        applyScoreHeader(tail, pendingScoreHeader);
+
+                    pendingScoreHeader = null;
+                }
             });
+        }
+
+        private void applyScoreHeader(ReplayFrame replayFrame, FrameHeader header)
+        {
+            replayFrame.Header = header;
+
+            if (DrawableRuleset.FrameStableClock.CurrentTime >= replayFrame.Time)
+                ScoreProcessor.ResetFromReplayFrame(replayFrame);
         }
 
         protected override void Update()

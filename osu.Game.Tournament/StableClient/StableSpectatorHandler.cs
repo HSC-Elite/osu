@@ -78,6 +78,7 @@ namespace osu.Game.Tournament.StableClient
         private string? currentBeatmapHash;
         private LegacyMods currentLegacyMods;
         private bool currentScoreV2;
+        private FrameHeader? lastScoreHeader;
         private byte currentStatus;
         private GetBeatmapRequest? beatmapLookupRequest;
         private LegacyReplayFrame? lastReplayFrame;
@@ -192,7 +193,11 @@ namespace osu.Game.Tournament.StableClient
             //    $"StableSpectatorHandler: action={bundle.Action}, extra={bundle.Extra}, frames={bundle.Frames.Count}, " +
             //    $"scoreTime={bundle.ScoreFrame.Time}, score={bundle.ScoreFrame.TotalScore}, combo={bundle.ScoreFrame.CurrentCombo}, passed={bundle.ScoreFrame.Pass}");
 
-            if (bundle.Action != ReplayAction.Standard)
+            bool isTerminalAction = bundle.Action is ReplayAction.Completion or ReplayAction.Fail;
+
+            // End actions are delivered after their packet's frames and score. This lets
+            // players append the final buffered data before deciding when playback ends.
+            if (bundle.Action != ReplayAction.Standard && !isTerminalAction)
                 OnReplayActionReceived?.Invoke(bundle.Action, bundle.Extra);
 
             if (bundle.Action == ReplayAction.WatchingOther)
@@ -201,9 +206,11 @@ namespace osu.Game.Tournament.StableClient
             if (bundle.Action == ReplayAction.NewSong)
             {
                 lastReplayFrame = null;
+                lastScoreHeader = null;
             }
 
-            currentScoreV2 = bundle.ScoreFrame.ScoreV2;
+            if (bundle.HasScoreFrame)
+                currentScoreV2 = bundle.ScoreFrame.ScoreV2;
 
             var convertedFrames = new List<LegacyReplayFrame>();
 
@@ -224,10 +231,13 @@ namespace osu.Game.Tournament.StableClient
                 //    $"last=({last.Time}, {last.MouseX}, {last.MouseY}, {last.ButtonState})");
             }
 
-            if (convertedFrames.Count == 0)
+            if (convertedFrames.Count == 0 && !bundle.HasScoreFrame)
             {
                 if (bundle.Action == ReplayAction.Standard)
                     Logger.Log("StableSpectatorHandler: Received standard replay bundle without frames.");
+
+                if (isTerminalAction)
+                    OnReplayActionReceived?.Invoke(bundle.Action, bundle.Extra);
 
                 return;
             }
@@ -238,49 +248,71 @@ namespace osu.Game.Tournament.StableClient
             {
                 Logger.Log($"StableSpectatorHandler: Received replay frames before ruleset was known. BeatmapHash={currentBeatmapHash ?? "<null>"}");
 
+                if (isTerminalAction)
+                    OnReplayActionReceived?.Invoke(bundle.Action, bundle.Extra);
+
                 return;
             }
 
-            var rulesetInstance = rulesetInfo.CreateInstance();
-            var scoreState = computeScoreState(bundle.ScoreFrame, rulesetInfo.OnlineID);
+            FrameHeader? header = lastScoreHeader;
 
-            var scoreInfo = new ScoreInfo
+            if (bundle.HasScoreFrame)
             {
-                User = new APIUser { Id = UserId, Username = Username ?? UserId.ToString() },
-                Ruleset = rulesetInfo,
-                BeatmapInfo = Beatmap.Value?.BeatmapInfo,
-                BeatmapHash = currentBeatmapHash ?? string.Empty,
-                TotalScore = bundle.ScoreFrame.TotalScore,
-                TotalScoreWithoutMods = bundle.ScoreFrame.TotalScore,
-                MaxCombo = bundle.ScoreFrame.MaxCombo,
-                Accuracy = scoreState.accuracy,
-                Combo = bundle.ScoreFrame.CurrentCombo,
-                Passed = bundle.ScoreFrame.Pass,
-                Mods = CreateMods(rulesetInstance)
-            };
+                var rulesetInstance = rulesetInfo.CreateInstance();
+                var scoreState = computeScoreState(bundle.ScoreFrame, rulesetInfo.OnlineID);
 
-            scoreInfo.SetCount300(bundle.ScoreFrame.Count300);
-            scoreInfo.SetCount100(bundle.ScoreFrame.Count100);
-            scoreInfo.SetCount50(bundle.ScoreFrame.Count50);
-            scoreInfo.SetCountGeki(bundle.ScoreFrame.CountGeki);
-            scoreInfo.SetCountKatu(bundle.ScoreFrame.CountKatu);
-            scoreInfo.SetCountMiss(bundle.ScoreFrame.CountMiss);
+                var scoreInfo = new ScoreInfo
+                {
+                    User = new APIUser { Id = UserId, Username = Username ?? UserId.ToString() },
+                    Ruleset = rulesetInfo,
+                    BeatmapInfo = Beatmap.Value?.BeatmapInfo,
+                    BeatmapHash = currentBeatmapHash ?? string.Empty,
+                    TotalScore = bundle.ScoreFrame.TotalScore,
+                    TotalScoreWithoutMods = bundle.ScoreFrame.TotalScore,
+                    MaxCombo = bundle.ScoreFrame.MaxCombo,
+                    Accuracy = scoreState.accuracy,
+                    Combo = bundle.ScoreFrame.CurrentCombo,
+                    Passed = bundle.ScoreFrame.Pass,
+                    Mods = CreateMods(rulesetInstance)
+                };
 
-            var header = new FrameHeader(scoreInfo, scoreState.statistics)
-            {
-                ScoreSource = FrameScoreSource.StableRaw,
-                Passed = bundle.ScoreFrame.Pass
-            };
+                scoreInfo.SetCount300(bundle.ScoreFrame.Count300);
+                scoreInfo.SetCount100(bundle.ScoreFrame.Count100);
+                scoreInfo.SetCount50(bundle.ScoreFrame.Count50);
+                scoreInfo.SetCountGeki(bundle.ScoreFrame.CountGeki);
+                scoreInfo.SetCountKatu(bundle.ScoreFrame.CountKatu);
+                scoreInfo.SetCountMiss(bundle.ScoreFrame.CountMiss);
+
+                header = new FrameHeader(scoreInfo, scoreState.statistics)
+                {
+                    ScoreSource = FrameScoreSource.StableRaw,
+                    Passed = bundle.ScoreFrame.Pass
+                };
+                lastScoreHeader = header;
+            }
 
             //Logger.Log(
             //    $"StableSpectatorHandler: emitting bundle for ruleset={rulesetInfo.ShortName}, " +
             //    $"headerScore={header.TotalScore}, headerAcc={header.Accuracy:P2}, headerCombo={header.Combo}, frameCount={convertedFrames.Count}");
 
-            convertedFrames[^1].Header = header;
+            if (convertedFrames.Count > 0 && header != null)
+                convertedFrames[^1].Header = header;
 
-            var lazerBundle = new FrameDataBundle(header, convertedFrames);
+            // A score frame is a standalone synchronization point in the stable protocol.
+            // FrameDataBundle requires a header even for frame-only packets that have not
+            // carried a score yet; in that case keep the placeholder off the replay frames.
+            var bundleHeader = header ?? createEmptyHeader();
+            var lazerBundle = new FrameDataBundle(bundleHeader, convertedFrames);
             OnFramesReceived?.Invoke(lazerBundle);
+
+            if (isTerminalAction)
+                OnReplayActionReceived?.Invoke(bundle.Action, bundle.Extra);
         }
+
+        private static FrameHeader createEmptyHeader() => new FrameHeader(new ScoreInfo(), new ScoreProcessorStatistics())
+        {
+            ScoreSource = FrameScoreSource.StableRaw
+        };
 
         protected override void Update()
         {

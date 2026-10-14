@@ -232,7 +232,16 @@ namespace osu.Game.Tournament.StableClient
                 int length = reader.ReadInt32();
                 byte[] payload = reader.ReadBytes(length);
 
-                handlePacket((PacketType)packetId, payload);
+                try
+                {
+                    handlePacket((PacketType)packetId, payload);
+                }
+                catch (EndOfStreamException e)
+                {
+                    // Each packet has already been isolated from the response stream above,
+                    // so a truncated/older packet must not prevent later packets being handled.
+                    Logger.Error(e, $"Stable Bancho packet {packetId} ended before its payload was fully read.");
+                }
             }
         }
 

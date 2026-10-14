@@ -24,7 +24,8 @@ namespace osu.Game.Tournament.StableClient.Protocol
         public int Extra;
         public List<bReplayFrame> Frames = new List<bReplayFrame>();
         public ReplayAction Action;
-        public bScoreFrame ScoreFrame;
+        public bScoreFrame ScoreFrame = new bScoreFrame();
+        public bool HasScoreFrame { get; private set; }
         public ushort Sequence;
 
         public bReplayFrameBundle(BinaryReader sr)
@@ -38,8 +39,19 @@ namespace osu.Game.Tournament.StableClient.Protocol
             }
 
             Action = (ReplayAction)sr.ReadByte();
-            ScoreFrame = new bScoreFrame(sr);
-            Sequence = sr.ReadUInt16();
+
+            long remaining = sr.BaseStream.Length - sr.BaseStream.Position;
+
+            // Stable bundles may omit the score segment entirely. A sequence number is
+            // also optional (the stable client does not request one when parsing).
+            if (remaining >= bScoreFrame.BaseFrameLength)
+            {
+                ScoreFrame = new bScoreFrame(sr);
+                HasScoreFrame = true;
+            }
+
+            if (sr.BaseStream.Length - sr.BaseStream.Position >= sizeof(ushort))
+                Sequence = sr.ReadUInt16();
         }
     }
 
@@ -63,6 +75,9 @@ namespace osu.Game.Tournament.StableClient.Protocol
 
     public class bScoreFrame
     {
+        // Time + id + six judgements + score + max/current combo + perfect + hp + tag + score-v2.
+        internal const int BaseFrameLength = sizeof(int) + sizeof(byte) + 6 * sizeof(ushort) + sizeof(int) + 2 * sizeof(ushort) + 4 * sizeof(byte);
+
         public int Time;
         public byte Id;
         public ushort Count300;
@@ -81,6 +96,10 @@ namespace osu.Game.Tournament.StableClient.Protocol
         public bool ScoreV2;
         public double ComboPortion;
         public double BonusPortion;
+
+        public bScoreFrame()
+        {
+        }
 
         public bScoreFrame(BinaryReader sr)
         {
