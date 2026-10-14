@@ -188,7 +188,7 @@ namespace osu.Game.Tests.Resources
             BeatmapInfo = beatmap,
             BeatmapHash = beatmap.Hash,
             Ruleset = beatmap.Ruleset,
-            Mods = new Mod[] { new TestModHardRock(), new TestModDoubleTime() },
+            Mods = new Mod[] { new TestModHardRock(), new TestModDoubleTime(), new TestModClassic() },
             TotalScore = 284537,
             Accuracy = 0.95,
             MaxCombo = 999,
@@ -225,6 +225,10 @@ namespace osu.Game.Tests.Resources
         }
 
         private class TestModDoubleTime : ModDoubleTime
+        {
+        }
+
+        private class TestModClassic : ModClassic
         {
         }
     }

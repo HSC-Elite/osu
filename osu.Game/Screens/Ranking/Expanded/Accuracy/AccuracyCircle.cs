@@ -116,14 +116,18 @@ namespace osu.Game.Screens.Ranking.Expanded.Accuracy
         private readonly double accuracyC;
         private readonly double accuracyD;
         private readonly bool withFlair;
+        private readonly bool showRankBadges;
+        private readonly float rankTextScale;
 
         private readonly bool isFailedSDueToMisses;
         private RankText failedSRankText = null!;
 
-        public AccuracyCircle(ScoreInfo score, bool withFlair = false)
+        public AccuracyCircle(ScoreInfo score, bool withFlair = false, bool showRankBadges = true, float rankTextScale = 1)
         {
             this.score = score;
             this.withFlair = withFlair;
+            this.showRankBadges = showRankBadges;
+            this.rankTextScale = rankTextScale;
 
             ScoreProcessor scoreProcessor = score.Ruleset.CreateInstance().CreateScoreProcessor();
             accuracyX = scoreProcessor.AccuracyCutoffFromRank(ScoreRank.X);
@@ -179,22 +183,24 @@ namespace osu.Game.Screens.Ranking.Expanded.Accuracy
                     Name = "Rank badges",
                     RelativeSizeAxes = Axes.Both,
                     Padding = new MarginPadding { Vertical = -15, Horizontal = -20 },
-                    Children = new[]
-                    {
-                        new RankBadge(accuracyD, Interpolation.Lerp(accuracyD, accuracyC, 0.5), getRank(ScoreRank.D)),
-                        new RankBadge(accuracyC, Interpolation.Lerp(accuracyC, accuracyB, 0.5), getRank(ScoreRank.C)),
-                        new RankBadge(accuracyB, Interpolation.Lerp(accuracyB, accuracyA, 0.5), getRank(ScoreRank.B)),
-                        // The S and A badges are moved down slightly to prevent collision with the SS badge.
-                        new RankBadge(accuracyA, Interpolation.Lerp(accuracyA, accuracyS, 0.25), getRank(ScoreRank.A)),
-                        new RankBadge(accuracyS, Interpolation.Lerp(accuracyS, (accuracyX - VIRTUAL_SS_PERCENTAGE), 0.25), getRank(ScoreRank.S)),
-                        new RankBadge(accuracyX, accuracyX, getRank(ScoreRank.X)),
-                    }
+                    Children = showRankBadges
+                        ? new[]
+                        {
+                            new RankBadge(accuracyD, Interpolation.Lerp(accuracyD, accuracyC, 0.5), getRank(ScoreRank.D)),
+                            new RankBadge(accuracyC, Interpolation.Lerp(accuracyC, accuracyB, 0.5), getRank(ScoreRank.C)),
+                            new RankBadge(accuracyB, Interpolation.Lerp(accuracyB, accuracyA, 0.5), getRank(ScoreRank.B)),
+                            // The S and A badges are moved down slightly to prevent collision with the SS badge.
+                            new RankBadge(accuracyA, Interpolation.Lerp(accuracyA, accuracyS, 0.25), getRank(ScoreRank.A)),
+                            new RankBadge(accuracyS, Interpolation.Lerp(accuracyS, (accuracyX - VIRTUAL_SS_PERCENTAGE), 0.25), getRank(ScoreRank.S)),
+                            new RankBadge(accuracyX, accuracyX, getRank(ScoreRank.X)),
+                        }
+                        : Array.Empty<RankBadge>()
                 },
-                rankText = new RankText(score.Rank)
+                createRankTextContainer(rankText = new RankText(score.Rank))
             };
 
             if (isFailedSDueToMisses)
-                AddInternal(failedSRankText = new RankText(ScoreRank.S));
+                AddInternal(createRankTextContainer(failedSRankText = new RankText(ScoreRank.S)));
 
             if (withFlair)
             {
@@ -208,6 +214,16 @@ namespace osu.Game.Screens.Ranking.Expanded.Accuracy
                 });
             }
         }
+
+        // Scale a parent rather than RankText itself, whose appearance animation owns its scale.
+        private Container createRankTextContainer(RankText text) => new Container
+        {
+            Anchor = Anchor.Centre,
+            Origin = Anchor.Centre,
+            RelativeSizeAxes = Axes.Both,
+            Scale = new Vector2(rankTextScale),
+            Child = text,
+        };
 
         protected override void LoadComplete()
         {
@@ -353,8 +369,9 @@ namespace osu.Game.Screens.Ranking.Expanded.Accuracy
                             accuracyCircle
                                 .ProgressTo(accuracyS - GRADE_SPACING_PERCENTAGE / 2 - visual_alignment_offset, 70, Easing.OutQuint);
 
-                            badges.Single(b => b.Rank == getRank(ScoreRank.S))
-                                  .FadeOut(70, Easing.OutQuint);
+                            if (showRankBadges)
+                                badges.Single(b => b.Rank == getRank(ScoreRank.S))
+                                      .FadeOut(70, Easing.OutQuint);
                         }
                     }
                 }

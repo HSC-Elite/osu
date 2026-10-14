@@ -84,6 +84,14 @@ namespace osu.Game.Screens.Ranking
         /// </summary>
         public bool IsLocalPlay { get; init; }
 
+        /// <summary>
+        /// Whether the default results screen layout should be created.
+        ///
+        /// This allows specialised results screens to reuse the score lifecycle and
+        /// beatmap background without also displaying the standard leaderboard layout.
+        /// </summary>
+        protected virtual bool UseDefaultResultsLayout => true;
+
         private Sample? popInSample;
 
         [Cached]
@@ -99,6 +107,9 @@ namespace osu.Game.Screens.Ranking
         [BackgroundDependencyLoader]
         private void load(AudioManager audio)
         {
+            if (!UseDefaultResultsLayout)
+                return;
+
             FillFlowContainer buttons;
 
             popInSample = audio.Samples.Get(@"UI/overlay-pop-in");
@@ -239,6 +250,9 @@ namespace osu.Game.Screens.Ranking
         {
             base.LoadComplete();
 
+            if (!UseDefaultResultsLayout)
+                return;
+
             StatisticsPanel.State.BindValueChanged(onStatisticsStateChanged, true);
 
             fetchScores(null);
@@ -247,6 +261,9 @@ namespace osu.Game.Screens.Ranking
         protected override void Update()
         {
             base.Update();
+
+            if (!UseDefaultResultsLayout)
+                return;
 
             if (ScorePanelList.IsScrolledToStart)
                 fetchScores(-1);
@@ -402,7 +419,8 @@ namespace osu.Game.Screens.Ranking
                 b.FadeColour(OsuColour.Gray(0.5f), 250);
             });
 
-            bottomPanel.FadeTo(1, 250);
+            if (UseDefaultResultsLayout)
+                bottomPanel.FadeTo(1, 250);
 
             popInSample?.Play();
         }
@@ -426,6 +444,9 @@ namespace osu.Game.Screens.Ranking
 
         public override bool OnBackButton()
         {
+            if (!UseDefaultResultsLayout)
+                return false;
+
             if (StatisticsPanel.State.Value == Visibility.Visible)
             {
                 StatisticsPanel.Hide();
@@ -509,6 +530,9 @@ namespace osu.Game.Screens.Ranking
                     break;
 
                 case GlobalAction.Select:
+                    if (!UseDefaultResultsLayout)
+                        return false;
+
                     if (SelectedScore.Value != null)
                         StatisticsPanel.ToggleVisibility();
                     return true;

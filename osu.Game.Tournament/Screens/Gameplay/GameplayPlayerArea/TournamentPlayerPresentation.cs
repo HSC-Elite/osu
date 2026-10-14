@@ -7,6 +7,7 @@ using osu.Framework.Bindables;
 using osu.Game.Scoring;
 using osu.Game.Screens;
 using osu.Game.Screens.OnlinePlay.Multiplayer.Spectate;
+using osu.Game.Tournament.Models;
 
 namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 {
@@ -40,7 +41,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             if (!slot.UserId.HasValue)
                 throw new ArgumentException("A presentation cannot be created for an unassigned slot.", nameof(slot));
 
-            var playerArea = new PlayerArea(slot.UserId.Value, clock);
+            var playerArea = new TournamentPlayerArea(slot.UserId.Value, clock, leaderboardProvider, mirrored: slot.TeamColour == TeamColour.Red);
             return new TournamentPlayerGameplayScreen(playerArea, score, leaderboardProvider);
         }
     }
