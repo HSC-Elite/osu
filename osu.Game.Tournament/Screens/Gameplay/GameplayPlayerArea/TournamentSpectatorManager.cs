@@ -16,7 +16,6 @@ using osu.Framework.Logging;
 using osu.Game.Beatmaps;
 using osu.Game.Database;
 using osu.Game.Online.API.Requests.Responses;
-using osu.Game.Online.Metadata;
 using osu.Game.Online.Spectator;
 using osu.Game.Replays;
 using osu.Game.Rulesets;
@@ -37,9 +36,6 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
         [Resolved]
         private ISpectatorDataSource spectatorDataSource { get; set; } = null!;
-
-        [Resolved]
-        private MetadataClient metadataClient { get; set; } = null!;
 
         [Resolved]
         private UserLookupCache userLookupCache { get; set; } = null!;
@@ -74,7 +70,6 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         private TournamentPlayerPresentation? currentAudioSource;
         private IAggregateAudioAdjustment? boundAdjustments;
         private IDisposable? realmSubscription;
-        private IDisposable? userWatchToken;
         private bool readyForSpectatorStateUpdates;
 
         public TournamentSpectatorManager()
@@ -86,7 +81,6 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         {
             base.LoadComplete();
 
-            userWatchToken = metadataClient.BeginWatchingUserPresence();
             watchedUserStates.BindTo(spectatorDataSource.WatchedUserStates);
             watchedUserStates.BindCollectionChanged(onUserStatesChanged, true);
             realmSubscription = realm.RegisterForNotifications(
@@ -648,7 +642,6 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             }
 
             realmSubscription?.Dispose();
-            userWatchToken?.Dispose();
         }
     }
 }

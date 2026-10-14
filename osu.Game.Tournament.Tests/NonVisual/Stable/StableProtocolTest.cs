@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using NUnit.Framework;
 using osu.Game.Tournament.IPC;
+using osu.Game.Tournament.Models;
 using osu.Game.Tournament.StableClient;
 using osu.Game.Tournament.StableClient.IPC;
 using osu.Game.Tournament.StableClient.Protocol;
@@ -119,6 +120,13 @@ namespace osu.Game.Tournament.Tests.NonVisual.Stable
                 seed: 987654321));
 
             var match = new MultiplayerMatch(reader);
+            var players = StableMatchIPCInfo.CreateRoomPlayers(match, id => $"Player {id}");
+            Assert.That(players, Is.EqualTo(new[]
+            {
+                new MatchRoomPlayerInfo(1001, "Player 1001", TeamColour.Blue, 0),
+                new MatchRoomPlayerInfo(1002, "Player 1002", TeamColour.Red, 0),
+                new MatchRoomPlayerInfo(1010, "Player 1010", TeamColour.Blue, 1),
+            }));
 
             Assert.That(match.Id, Is.EqualTo(60000));
             Assert.That(match.InProgress, Is.True);
@@ -263,9 +271,9 @@ namespace osu.Game.Tournament.Tests.NonVisual.Stable
             Assert.That((byte)ReplayAction.WatchingOther, Is.EqualTo(8));
         }
 
-        [TestCase(true, false, true, TourneyState.Playing)]
+        [TestCase(true, false, true, TourneyState.WaitingForClients)]
         [TestCase(true, false, false, TourneyState.Idle)]
-        [TestCase(true, true, true, TourneyState.Playing)]
+        [TestCase(true, true, true, TourneyState.WaitingForClients)]
         [TestCase(false, true, false, TourneyState.Ranking)]
         [TestCase(false, false, true, TourneyState.Idle)]
         public void TestLiveMatchStateSelection(bool inProgress, bool wasInProgress, bool beatmapAvailableLocally, TourneyState expected)

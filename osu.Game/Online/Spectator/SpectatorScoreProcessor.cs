@@ -68,7 +68,7 @@ namespace osu.Game.Online.Spectator
         }
 
         [Resolved]
-        private SpectatorClient spectatorClient { get; set; } = null!;
+        private ISpectatorDataSource spectatorClient { get; set; } = null!;
 
         [Resolved]
         private RulesetStore rulesetStore { get; set; } = null!;

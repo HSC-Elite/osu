@@ -54,6 +54,7 @@ namespace osu.Game.Tests.Visual.Multiplayer
         {
             Dependencies.Cache(config = new OsuConfigManager(LocalStorage));
             Dependencies.CacheAs(spectatorClient.Object);
+            Dependencies.CacheAs<ISpectatorDataSource>(spectatorClient.Object);
             Dependencies.CacheAs(multiplayerClient.Object);
 
             // To emulate `MultiplayerClient.CurrentMatchPlayingUserIds` we need a bindable list of *only IDs*.

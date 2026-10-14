@@ -18,7 +18,7 @@ namespace osu.Game.Screens.Play
         }
 
         [Resolved]
-        private SpectatorClient spectatorClient { get; set; } = null!;
+        private ISpectatorDataSource spectatorClient { get; set; } = null!;
 
         [BackgroundDependencyLoader]
         private void load()

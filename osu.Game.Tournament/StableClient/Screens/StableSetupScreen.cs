@@ -45,8 +45,8 @@ namespace osu.Game.Tournament.StableClient.Screens
         [BackgroundDependencyLoader]
         private void load(OsuColour colours)
         {
-            savedUsername = config.GetBindable<string>(TournamentConfig.StableUsername);
-            savedPasswordHash = config.GetBindable<string>(TournamentConfig.StablePasswordHash);
+            savedUsername = config.GetBindable<string>(StorageConfig.StableUsername);
+            savedPasswordHash = config.GetBindable<string>(StorageConfig.StablePasswordHash);
 
             InternalChildren = new Drawable[]
             {

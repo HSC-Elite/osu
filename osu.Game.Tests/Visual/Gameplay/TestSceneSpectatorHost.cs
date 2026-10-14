@@ -17,6 +17,7 @@ namespace osu.Game.Tests.Visual.Gameplay
     {
         protected override Ruleset CreatePlayerRuleset() => new ManiaRuleset();
 
+        [Cached(typeof(ISpectatorDataSource))]
         [Cached(typeof(SpectatorClient))]
         private TestSpectatorClient spectatorClient { get; } = new TestSpectatorClient();
 

@@ -424,6 +424,7 @@ namespace osu.Game.Tests.Visual.Gameplay
         /// </summary>
         private partial class DependenciesScreen : OsuScreen
         {
+            [Cached(typeof(ISpectatorDataSource))]
             [Cached(typeof(SpectatorClient))]
             public readonly TestSpectatorClient SpectatorClient = new TestSpectatorClient();
 

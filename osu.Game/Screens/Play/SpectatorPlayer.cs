@@ -16,7 +16,7 @@ namespace osu.Game.Screens.Play
     public abstract partial class SpectatorPlayer : Player
     {
         [Resolved]
-        protected SpectatorClient SpectatorClient { get; private set; } = null!;
+        protected ISpectatorDataSource SpectatorClient { get; private set; } = null!;
 
         private readonly Score score;
 
@@ -65,16 +65,22 @@ namespace osu.Game.Screens.Play
 
             bool isFirstBundle = score.Replay.Frames.Count == 0;
 
+            ReplayFrame? lastFrame = score.Replay.Frames.Count > 0 ? score.Replay.Frames[^1] : null;
+
             foreach (var frame in bundle.Frames)
             {
+                if (lastFrame != null && frame.Time < lastFrame.Time)
+                    continue;
+
                 IConvertibleReplayFrame convertibleFrame = GameplayState.Ruleset.CreateConvertibleReplayFrame()!;
-                convertibleFrame.FromLegacy(frame, GameplayState.Beatmap);
+                convertibleFrame.FromLegacy(frame, GameplayState.Beatmap, lastFrame);
 
                 var convertedFrame = (ReplayFrame)convertibleFrame;
                 convertedFrame.Time = frame.Time;
                 convertedFrame.Header = frame.Header;
 
                 score.Replay.Frames.Add(convertedFrame);
+                lastFrame = convertedFrame;
             }
 
             if (isFirstBundle && score.Replay.Frames.Count > 0)

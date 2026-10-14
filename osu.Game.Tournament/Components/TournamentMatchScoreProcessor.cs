@@ -74,6 +74,12 @@ namespace osu.Game.Tournament.Components
             if (!ipc.HasActiveMatch.Value || WaitingForAuthoritativeResult.Value)
                 return;
 
+            if (!ipc.SupportsAuthoritativeScores)
+            {
+                LastResultRequestStatus.Value = "使用 stable 实时成绩";
+                return;
+            }
+
             requestGeneration++;
             int generation = requestGeneration;
             WaitingForAuthoritativeResult.Value = true;
