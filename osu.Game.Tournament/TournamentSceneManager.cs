@@ -15,6 +15,7 @@ using osu.Game.Graphics;
 using osu.Game.Graphics.Containers;
 using osu.Game.Graphics.Sprites;
 using osu.Game.Tournament.Components;
+using osu.Game.Tournament.Configuration;
 using osu.Game.Tournament.Models;
 using osu.Game.Tournament.Screens;
 using osu.Game.Tournament.Screens.Drawings;
@@ -61,14 +62,20 @@ namespace osu.Game.Tournament
         [Cached]
         private StageContainer stageContainer { get; set; } = new StageContainer();
 
+        private Container? stageSizeControlContainer;
+
+        private Bindable<int> stageHeight = new Bindable<int>();
+
         public TournamentSceneManager()
         {
             RelativeSizeAxes = Axes.Both;
         }
 
         [BackgroundDependencyLoader]
-        private void load()
+        private void load(TournamentConfigManager config)
         {
+            config.BindWith(StorageConfig.StageHeight, stageHeight);
+
             InternalChild = new RefCountedBackbufferProvider
             {
                 RelativeSizeAxes = Axes.Both,
@@ -177,9 +184,8 @@ namespace osu.Game.Tournament
                     {
                         AutoSizeAxes = Axes.Both,
                         Depth = float.MaxValue,
-                        Child = new Container
+                        Child = stageSizeControlContainer = new Container
                         {
-                            Size = new Vector2(1920, 1080),
                             Child = new DrawSizePreservingFillContainer
                             {
                                 Children = new Drawable[]
@@ -204,6 +210,11 @@ namespace osu.Game.Tournament
                 drawable.Hide();
 
             SetScreen(typeof(SetupScreen));
+
+            stageHeight.BindValueChanged(h =>
+            {
+                stageSizeControlContainer.Size = new Vector2((int)(h.NewValue * ASPECT_RATIO), h.NewValue);
+            });
         }
 
         private float depth;

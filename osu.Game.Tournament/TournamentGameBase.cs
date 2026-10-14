@@ -30,6 +30,7 @@ using osu.Game.Online.Multiplayer;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Screens.OnlinePlay;
 using osu.Game.Tournament.Components;
+using osu.Game.Tournament.Configuration;
 using osu.Game.Tournament.IO;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.MultiWindow;
@@ -131,6 +132,8 @@ namespace osu.Game.Tournament
 
         private readonly Bindable<string> configSkin = new Bindable<string>();
 
+        private TournamentConfigManager tournamentConfigManager = null!;
+
         public TournamentGameBase()
         {
             IsTournament = true;
@@ -148,8 +151,11 @@ namespace osu.Game.Tournament
 
             Resources.AddStore(new DllResourceStore(typeof(TournamentGameBase).Assembly));
 
-            dependencies.CacheAs<Storage>(storage = new TournamentStorage(baseStorage));
+            dependencies.Cache(tournamentConfigManager = new TournamentConfigManager(baseStorage));
+
+            dependencies.CacheAs<Storage>(storage = new TournamentStorage(baseStorage, tournamentConfigManager));
             dependencies.CacheAs(storage);
+
             dependencies.Cache(beatmapManager = new TournamentBeatmapManager(storage));
             dependencies.Cache(new TournamentBeatmapDifficultyCache(beatmapManager, RulesetStore));
             dependencies.CacheAs<ITournamentPlayerPresentationFactory>(new LazerTournamentPlayerPresentationFactory());

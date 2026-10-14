@@ -22,11 +22,13 @@ namespace osu.Game.Tournament.Configuration
             base.InitialiseDefaults();
 
             SetDefault(StorageConfig.CurrentTournament, default_tournament);
+            SetDefault(StorageConfig.StageHeight, 900, 480, 2160);
         }
     }
 
     public enum StorageConfig
     {
         CurrentTournament,
+        StageHeight,
     }
 }

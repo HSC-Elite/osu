@@ -1,10 +1,8 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
-using System.Drawing;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
-using osu.Framework.Configuration;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
@@ -13,6 +11,7 @@ using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Online.API;
 using osu.Game.Overlays;
 using osu.Game.Rulesets;
+using osu.Game.Tournament.Configuration;
 using osu.Game.Tournament.Models;
 using osuTK;
 
@@ -34,12 +33,12 @@ namespace osu.Game.Tournament.Screens.Setup
         [Resolved]
         private TournamentSceneManager? sceneManager { get; set; }
 
-        private Bindable<Size> windowSize = null!;
+        private Bindable<int> stageSize = null!;
 
         [BackgroundDependencyLoader]
-        private void load(FrameworkConfigManager frameworkConfig)
+        private void load(TournamentConfigManager config)
         {
-            windowSize = frameworkConfig.GetBindable<Size>(FrameworkSetting.WindowedSize);
+            stageSize = config.GetBindable<int>(StorageConfig.StageHeight);
 
             InternalChildren = new Drawable[]
             {
@@ -121,7 +120,7 @@ namespace osu.Game.Tournament.Screens.Setup
                     ButtonText = "Set height",
                     Action = height =>
                     {
-                        windowSize.Value = new Size((int)(height * aspect_ratio / TournamentSceneManager.STREAM_AREA_WIDTH * TournamentSceneManager.REQUIRED_WIDTH), height);
+                        stageSize.Value = height;
                     }
                 },
                 new LabelledSwitchButton
@@ -158,8 +157,6 @@ namespace osu.Game.Tournament.Screens.Setup
                 }
             };
         }
-
-        private const float aspect_ratio = 16f / 9f;
 
         protected override void Update()
         {

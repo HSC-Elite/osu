@@ -23,12 +23,12 @@ namespace osu.Game.Tournament.IO
 
         protected TournamentConfigManager TournamentConfigManager { get; }
 
-        public TournamentStorage(Storage storage)
+        public TournamentStorage(Storage storage, TournamentConfigManager? config)
             : base(storage.GetStorageForDirectory("tournaments"), string.Empty)
         {
             AllTournaments = UnderlyingStorage;
 
-            TournamentConfigManager = new TournamentConfigManager(storage);
+            TournamentConfigManager = config ?? new TournamentConfigManager(storage);
 
             CurrentTournament = TournamentConfigManager.GetBindable<string>(StorageConfig.CurrentTournament);
 
