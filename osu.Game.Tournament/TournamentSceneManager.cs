@@ -176,17 +176,25 @@ namespace osu.Game.Tournament
                     new ExternalWindowContainer
                     {
                         AutoSizeAxes = Axes.Both,
-                        Children = new Drawable[]
+                        Depth = float.MaxValue,
+                        Child = new Container
                         {
-                            chatContainer = new Container
+                            Size = new Vector2(1920, 1080),
+                            Child = new DrawSizePreservingFillContainer
                             {
-                                Position = new Vector2(332, -142),
-                                Width = 700,
-                                Anchor = Anchor.BottomLeft,
-                                Origin = Anchor.TopLeft,
-                                Child = chat
-                            },
-                            stageContainer
+                                Children = new Drawable[]
+                                {
+                                    chatContainer = new Container
+                                    {
+                                        Position = new Vector2(332, -142),
+                                        Width = 700,
+                                        Anchor = Anchor.BottomLeft,
+                                        Origin = Anchor.TopLeft,
+                                        Child = chat
+                                    },
+                                    stageContainer
+                                }
+                            }
                         }
                     }
                 }

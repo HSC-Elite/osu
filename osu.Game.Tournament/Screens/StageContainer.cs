@@ -1,6 +1,7 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
+using System;
 using osu.Framework.Allocation;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
@@ -15,7 +16,11 @@ namespace osu.Game.Tournament.Screens
 
         public StageContainer()
         {
-            Size = new Vector2(1366, 768);
+            RelativeSizeAxes = Axes.Both;
+            FillMode = FillMode.Fit;
+            FillAspectRatio = 16 / 9f;
+            Anchor = Anchor.TopLeft;
+            Origin = Anchor.TopLeft;
         }
 
         public void AddStage(Drawable stage)
@@ -66,6 +71,32 @@ namespace osu.Game.Tournament.Screens
         }
 
         protected override IReadOnlyDependencyContainer CreateChildDependencies(IReadOnlyDependencyContainer parent)
-            => base.CreateChildDependencies(dependencies);
+        {
+            return new StageDependencyContainer(base.CreateChildDependencies(parent), dependencies);
+        }
+
+        private sealed class StageDependencyContainer : IReadOnlyDependencyContainer
+        {
+            private readonly IReadOnlyDependencyContainer stageDependencies;
+            private readonly IReadOnlyDependencyContainer screenDependencies;
+            private readonly DependencyContainer injectionContainer;
+
+            public StageDependencyContainer(IReadOnlyDependencyContainer stageDependencies, IReadOnlyDependencyContainer screenDependencies)
+            {
+                this.stageDependencies = stageDependencies;
+                this.screenDependencies = screenDependencies;
+                injectionContainer = new DependencyContainer(this);
+            }
+
+            public object Get(Type type)
+                => stageDependencies.Get(type) ?? screenDependencies.Get(type);
+
+            public object Get(Type type, CacheInfo info)
+                => stageDependencies.Get(type, info) ?? screenDependencies.Get(type, info);
+
+            public void Inject<T>(T instance)
+                where T : class, IDependencyInjectionCandidate
+                => injectionContainer.Inject(instance);
+        }
     }
 }
