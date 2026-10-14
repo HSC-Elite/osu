@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 using System.Linq;
+using osu.Framework.Bindables;
 using osu.Framework.Allocation;
 using osu.Framework.Extensions;
 using osu.Framework.Graphics;
@@ -15,6 +16,7 @@ using osu.Game.Graphics;
 using osu.Game.Graphics.Containers;
 using osu.Game.Graphics.Sprites;
 using osu.Game.Graphics.UserInterface;
+using osu.Game.Rulesets.Mods;
 using osu.Game.Rulesets.Scoring;
 using osu.Game.Scoring;
 using osu.Game.Screens.Play.HUD;
@@ -40,6 +42,9 @@ namespace osu.Game.Screens.Ranking.Expanded
 
         [Resolved]
         private ScoreManager scoreManager { get; set; } = null!;
+
+        [Resolved]
+        private IModMultiplierProvider? modMultiplierProvider { get; set; }
 
         /// <summary>
         /// Creates a new <see cref="ExpandedPanelMiddleContent"/>.
@@ -236,6 +241,8 @@ namespace osu.Game.Screens.Ranking.Expanded
                 AddInternal(new PlayedOnText(score.Date, true));
         }
 
+        private Bindable<long>? originalScore;
+
         protected override void LoadComplete()
         {
             base.LoadComplete();
@@ -246,7 +253,17 @@ namespace osu.Game.Screens.Ranking.Expanded
                 using (BeginDelayedSequence(AccuracyCircle.ACCURACY_TRANSFORM_DELAY))
                 {
                     scoreCounter.FadeIn();
-                    scoreCounter.Current = scoreManager.GetBindableTotalScore(score);
+                    originalScore = scoreManager.GetBindableTotalScore(score);
+                    originalScore.BindValueChanged(s =>
+                    {
+                        if (modMultiplierProvider == null)
+                        {
+                            scoreCounter.Current.Value = s.NewValue;
+                            return;
+                        }
+
+                        scoreCounter.Current.Value = (long)(s.NewValue * score.Mods.Aggregate(1.0, (acc, mod) => acc * (modMultiplierProvider.GetModMultiplierFromMod(mod) ?? 1.0)));
+                    }, true);
 
                     double delay = 0;
 

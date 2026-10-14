@@ -14,6 +14,7 @@ using osu.Framework.Graphics.Effects;
 using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Sprites;
 using osu.Framework.Graphics.Textures;
+using osu.Framework.Input.Events;
 using osu.Framework.Localisation;
 using osu.Framework.Threading;
 using osu.Framework.Utils;
@@ -24,12 +25,14 @@ using osu.Game.Overlays;
 using osu.Game.Tournament.Models;
 using osuTK;
 using osuTK.Graphics;
+using osuTK.Input;
 
 namespace osu.Game.Tournament.Components
 {
     public partial class TournamentBeatmapPanel : CompositeDrawable
     {
         public readonly IBeatmapInfo? Beatmap;
+        public Action<MouseButton>? OnMouseDownAction { get; set; }
 
         private readonly string mod;
 
@@ -99,6 +102,15 @@ namespace osu.Game.Tournament.Components
 
             Width = mod == "TB" && isMappool ? 600 : 400;
             Height = HEIGHT;
+        }
+
+        protected override bool OnMouseDown(MouseDownEvent e)
+        {
+            if (OnMouseDownAction == null)
+                return false;
+
+            OnMouseDownAction(e.Button);
+            return true;
         }
 
         [BackgroundDependencyLoader]
@@ -304,16 +316,12 @@ namespace osu.Game.Tournament.Components
         private bool centerText = false;
         private FillFlowContainer information = null!;
 
-        private bool boarderRainbow;
-
         protected virtual void UpdateState()
         {
             if (currentMatch.Value == null)
             {
                 return;
             }
-
-            boarderRainbow = false;
 
             var found = currentMatch.Value.PicksBans.Where(p => p.BeatmapID == Beatmap?.OnlineID).ToList();
             var foundProtected = isMappool ? found.FirstOrDefault(s => s.Type == ChoiceType.Protected) : null;

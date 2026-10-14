@@ -32,6 +32,9 @@ namespace osu.Game.Tournament.Screens
         [Resolved]
         private OsuConfigManager config { get; set; } = null!;
 
+        [Resolved]
+        private TournamentGameBase tournamentGame { get; set; } = null!;
+
         private NestedOsuGame? nestedGame;
 
         public OsuGameScreen()
@@ -64,7 +67,11 @@ namespace osu.Game.Tournament.Screens
         public override void Hide()
         {
             if (nestedGame != null)
+            {
                 RemoveInternal(nestedGame, true);
+                nestedGame = null;
+                tournamentGame.ReconnectOnlineClients();
+            }
 
             base.Hide();
         }

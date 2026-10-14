@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using Newtonsoft.Json;
 using osu.Game.Beatmaps;
 using osu.Game.Extensions;
 using osu.Game.Online.API.Requests.Responses;
@@ -34,7 +35,15 @@ namespace osu.Game.Tournament.Models
 
         public BeatmapSetOnlineCovers Covers { get; set; }
 
-        public Dictionary<string, double> StarRatingWithAdditionalMods { get; set; } = new Dictionary<string, double>();
+        // Retain the on-disk property name used by existing bracket files.
+        public Dictionary<string, double> StarRatingWithMods { get; set; } = new Dictionary<string, double>();
+
+        [JsonIgnore]
+        public Dictionary<string, double> StarRatingWithAdditionalMods
+        {
+            get => StarRatingWithMods;
+            set => StarRatingWithMods = value;
+        }
 
         public TournamentBeatmap()
         {

@@ -35,7 +35,7 @@ namespace osu.Game.Tournament.Screens
             AddRangeInternal(
             [
                 SongBar = CreateSongBar(),
-                ControlPanel = new ControlPanel
+                ControlPanel = new ControlPanel(true)
                 {
                     /*Children = new Drawable[]
                     {
@@ -86,7 +86,8 @@ namespace osu.Game.Tournament.Screens
 
             if (ShowLogo)
             {
-                AddRangeInternal([
+                Drawable[] logoContents =
+                [
                     supporterSprite = new Sprite
                     {
                         RelativeSizeAxes = Axes.Both,
@@ -102,10 +103,15 @@ namespace osu.Game.Tournament.Screens
                         Alpha = 0,
                         Depth = float.MinValue,
                     },
-                ]);
+                ];
 
-                supporterSprite.FadeIn(200).Then(10000).FadeOut(200).Then(10000).Loop();
-                logoSprite.FadeOut(200).Then(10000).FadeIn(200).Then(10000).Loop();
+                AddStageContentRange(logoContents);
+
+                LoadComponentsAsync(logoContents, _ =>
+                {
+                    supporterSprite.FadeIn(200).Then(10000).FadeOut(200).Then(10000).Loop();
+                    logoSprite.FadeOut(200).Then(10000).FadeIn(200).Then(10000).Loop();
+                });
             }
         }
 

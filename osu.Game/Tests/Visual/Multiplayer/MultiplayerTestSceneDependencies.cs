@@ -26,6 +26,7 @@ namespace osu.Game.Tests.Visual.Multiplayer
 
             CacheAs<MultiplayerClient>(MultiplayerClient);
             CacheAs<SpectatorClient>(SpectatorClient);
+            CacheAs<ISpectatorDataSource>(SpectatorClient);
             CacheAs(QueueController);
         }
 

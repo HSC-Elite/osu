@@ -37,6 +37,8 @@ namespace osu.Game.Screens.OnlinePlay.Multiplayer.Spectate
 
         public double CurrentMasterTime => masterClock.CurrentTime;
 
+        public bool HasStarted => hasStarted;
+
         /// <summary>
         /// The master clock which is used to control the timing of all player clocks clocks.
         /// </summary>

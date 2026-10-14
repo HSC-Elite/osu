@@ -123,9 +123,6 @@ namespace osu.Game.Screens
         {
             if (screenDependencies == null)
             {
-                if (DisallowExternalBeatmapRulesetChanges)
-                    throw new InvalidOperationException($"Screens that specify {nameof(DisallowExternalBeatmapRulesetChanges)} must be pushed immediately.");
-
                 createDependencies(parent);
             }
 

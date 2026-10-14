@@ -11,7 +11,7 @@ namespace osu.Game.Tournament.Screens.Editors.Components
     {
         public DeleteModColorDialog(ModColor color, Action action)
         {
-            HeaderText = color.ModName.Length > 0 ? $@"Delete mod ""{color.ModName.Length}"" color?" : @"Delete unnamed mod color?";
+            HeaderText = color.ModName.Length > 0 ? $@"Delete mod ""{color.ModName}"" color?" : @"Delete unnamed mod color?";
             DangerousAction = action;
         }
     }

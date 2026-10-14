@@ -30,6 +30,7 @@ namespace osu.Game.Tournament.Screens.Drawings
         private ScrollingTeamContainer teamsContainer = null!;
         private GroupContainer groupsContainer = null!;
         private TournamentSpriteText fullTeamNameText = null!;
+        private Container stageContent = null!;
 
         private readonly List<TournamentTeam> allTeams = new List<TournamentTeam>();
 
@@ -55,45 +56,50 @@ namespace osu.Game.Tournament.Screens.Drawings
             {
                 LinkFlowContainer links;
 
-                InternalChildren = new Drawable[]
+                stageContent = new Container
                 {
-                    new Box
+                    RelativeSizeAxes = Axes.Both,
+                    Children = new Drawable[]
                     {
-                        Colour = Color4.Black,
-                        RelativeSizeAxes = Axes.Both,
-                        Anchor = Anchor.Centre,
-                        Origin = Anchor.Centre,
-                        Height = 0.3f,
-                    },
-                    new WarningBox("No drawings.txt file found. Please create one and restart the client."),
-                    links = new LinkFlowContainer
-                    {
-                        Anchor = Anchor.Centre,
-                        Origin = Anchor.Centre,
-                        Y = 60,
-                        AutoSizeAxes = Axes.Both
+                        new Box
+                        {
+                            Colour = Color4.Black,
+                            RelativeSizeAxes = Axes.Both,
+                            Anchor = Anchor.Centre,
+                            Origin = Anchor.Centre,
+                            Height = 0.3f,
+                        },
+                        new WarningBox("No drawings.txt file found. Please create one and restart the client."),
+                        links = new LinkFlowContainer
+                        {
+                            Anchor = Anchor.Centre,
+                            Origin = Anchor.Centre,
+                            Y = 60,
+                            AutoSizeAxes = Axes.Both
+                        }
                     }
                 };
 
                 links.AddLink("Click for details on the file format", "https://osu.ppy.sh/wiki/en/Tournament_Drawings", t => t.Colour = Color4.White);
+                SetStageContent(stageContent);
                 return;
             }
 
             drawingsConfig = new DrawingsConfigManager(storage);
 
-            InternalChildren = new Drawable[]
+            var drawingsVideo = new TourneyVideo("drawings")
             {
-                // Main container
-                new Container
+                Loop = true,
+                RelativeSizeAxes = Axes.Both,
+            };
+            SetStageVideo(drawingsVideo);
+
+            stageContent = new Container
+            {
+                RelativeSizeAxes = Axes.Both,
+                Children = new Drawable[]
                 {
-                    RelativeSizeAxes = Axes.Both,
-                    Children = new Drawable[]
-                    {
-                        new TourneyVideo("drawings")
-                        {
-                            Loop = true,
-                            RelativeSizeAxes = Axes.Both,
-                        },
+                        drawingsVideo,
                         // Visualiser
                         new VisualiserContainer
                         {
@@ -144,8 +150,11 @@ namespace osu.Game.Tournament.Screens.Drawings
 
                             Font = OsuFont.Torus.With(weight: FontWeight.Light, size: 42),
                         }
-                    }
-                },
+                }
+            };
+
+            InternalChildren = new Drawable[]
+            {
                 // Control panel container
                 new ControlPanel
                 {
@@ -185,6 +194,13 @@ namespace osu.Game.Tournament.Screens.Drawings
             teamsContainer.OnScrollStarted += () => fullTeamNameText.FadeOut(200);
 
             reset(true);
+            SetStageContent(stageContent);
+        }
+
+        public override void Show()
+        {
+            ShowStageContent();
+            base.Show();
         }
 
         private void onTeamSelected(TournamentTeam team)

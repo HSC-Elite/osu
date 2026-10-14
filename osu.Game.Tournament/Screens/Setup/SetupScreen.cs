@@ -1,10 +1,8 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
-using System.Drawing;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
-using osu.Framework.Configuration;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
@@ -13,7 +11,7 @@ using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Online.API;
 using osu.Game.Overlays;
 using osu.Game.Rulesets;
-using osu.Game.Tournament.IPC.MemoryIPC;
+using osu.Game.Tournament.Configuration;
 using osu.Game.Tournament.Models;
 using osuTK;
 
@@ -35,12 +33,12 @@ namespace osu.Game.Tournament.Screens.Setup
         [Resolved]
         private TournamentSceneManager? sceneManager { get; set; }
 
-        private Bindable<Size> windowSize = null!;
+        private Bindable<int> stageSize = null!;
 
         [BackgroundDependencyLoader]
-        private void load(FrameworkConfigManager frameworkConfig)
+        private void load(TournamentConfigManager config)
         {
-            windowSize = frameworkConfig.GetBindable<Size>(FrameworkSetting.WindowedSize);
+            stageSize = config.GetBindable<int>(StorageConfig.StageHeight);
 
             InternalChildren = new Drawable[]
             {
@@ -64,27 +62,13 @@ namespace osu.Game.Tournament.Screens.Setup
             };
 
             api.LocalUser.BindValueChanged(_ => Schedule(reload));
-            var memoryBasedIPC = IPC as MemoryBasedIPC;
-            memoryBasedIPC?.Available.BindValueChanged(_ => Schedule(reload));
             reload();
         }
 
         private void reload()
         {
-            var memoryBasedIPC = IPC as MemoryBasedIPC;
             fillFlow.Children = new Drawable[]
             {
-                new ActionableInfo
-                {
-                    Label = "内存读取状态",
-                    Value = memoryBasedIPC?.Available.Value == true ? "已连接，如果你确信数据有误可以点击重置刷新" : "未启动tourney或正在初始化",
-                    Failing = memoryBasedIPC?.Available.Value != true,
-                    ButtonText = "重置",
-                    Action = () =>
-                    {
-                        memoryBasedIPC?.Reset();
-                    }
-                },
                 new UpdateCheckAction(),
                 new ActionableInfo
                 {
@@ -136,7 +120,7 @@ namespace osu.Game.Tournament.Screens.Setup
                     ButtonText = "Set height",
                     Action = height =>
                     {
-                        windowSize.Value = new Size((int)(height * aspect_ratio / TournamentSceneManager.STREAM_AREA_WIDTH * TournamentSceneManager.REQUIRED_WIDTH), height);
+                        stageSize.Value = height;
                     }
                 },
                 new LabelledSwitchButton
@@ -166,10 +150,13 @@ namespace osu.Game.Tournament.Screens.Setup
                     Label = "启用回合预览",
                     Current = LadderInfo.EnableRoundPreview,
                 },
+                new LabelledSliderBar<float>
+                {
+                    Label = "Idle player username font size",
+                    Current = LadderInfo.IdleScreenUsernameFontSize,
+                }
             };
         }
-
-        private const float aspect_ratio = 16f / 9f;
 
         protected override void Update()
         {

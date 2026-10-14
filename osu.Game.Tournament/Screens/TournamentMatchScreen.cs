@@ -23,12 +23,20 @@ namespace osu.Game.Tournament.Screens
         {
             if (match.NewValue == null)
             {
-                AddInternal(noMatchWarning = new WarningBox("Choose a match first from the brackets screen"));
+                AddMatchWarning(noMatchWarning = new WarningBox("Choose a match first from the brackets screen"));
                 return;
             }
 
             noMatchWarning?.Expire();
             noMatchWarning = null;
+        }
+
+        private protected virtual void AddMatchWarning(WarningBox warning)
+        {
+            if (StageContent == null)
+                AddInternal(warning);
+            else
+                StageContent.Add(warning);
         }
     }
 }

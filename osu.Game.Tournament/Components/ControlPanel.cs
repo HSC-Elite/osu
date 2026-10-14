@@ -24,12 +24,12 @@ namespace osu.Game.Tournament.Components
 
         public IEnumerable<Drawable> PanelItems => buttons.Children;
 
-        public ControlPanel()
+        public ControlPanel(bool stageScreen = false)
         {
-            RelativeSizeAxes = Axes.Y;
+            RelativeSizeAxes = stageScreen ? Axes.Both : Axes.Y;
             AlwaysPresent = true;
-            Width = TournamentSceneManager.CONTROL_AREA_WIDTH;
-            Anchor = Anchor.TopRight;
+            Width = stageScreen ? 1 : TournamentSceneManager.CONTROL_AREA_WIDTH;
+            Anchor = stageScreen ? Anchor.TopLeft : Anchor.TopRight;
 
             InternalChildren = new Drawable[]
             {
@@ -49,10 +49,10 @@ namespace osu.Game.Tournament.Components
                 {
                     Anchor = Anchor.TopCentre,
                     Origin = Anchor.TopCentre,
-                    RelativeSizeAxes = Axes.X,
+                    RelativeSizeAxes = stageScreen ? Axes.Both : Axes.X,
                     Position = new Vector2(0, 35f),
                     Padding = new MarginPadding(5),
-                    Height = TournamentSceneManager.STREAM_AREA_HEIGHT - 35 - 100,
+                    Height = stageScreen ? 1 : TournamentSceneManager.STREAM_AREA_HEIGHT - 35 - 100,
                     ScrollbarVisible = false,
                     Child = buttons = new FillFlowContainer
                     {

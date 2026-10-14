@@ -45,6 +45,9 @@ namespace osu.Game.Tournament.Screens.Showcase
         private LadderInfo ladder { get; set; } = null!;
 
         [Resolved]
+        private TournamentGameBase tournamentGame { get; set; } = null!;
+
+        [Resolved]
         private OsuConfigManager config { get; set; } = null!;
 
         private NestedOsuGame? nestedGame;
@@ -66,20 +69,31 @@ namespace osu.Game.Tournament.Screens.Showcase
         private readonly Bindable<IReadOnlyList<Mod>> mods = new Bindable<IReadOnlyList<Mod>>();
         private readonly Bindable<LegacyMods> legacyMods = new Bindable<LegacyMods>();
         private Container showcaseContainer = null!;
+        private Container stageContent = null!;
 
         private readonly BindableBool useOsuLazer = new BindableBool();
 
         [BackgroundDependencyLoader]
         private void load()
         {
-            AddRangeInternal(new Drawable[]
+            RemoveInternal(SongBar, false);
+
+            var showcaseVideo = new TourneyVideo("showcase")
             {
+                Loop = true,
+                RelativeSizeAxes = Axes.Both,
+            };
+            SetStageVideo(showcaseVideo);
+
+            stageContent = new Container
+            {
+                RelativeSizeAxes = Axes.Both,
+            };
+            stageContent.AddRange(new Drawable[]
+            {
+                SongBar,
                 new TournamentLogo(),
-                new TourneyVideo("showcase")
-                {
-                    Loop = true,
-                    RelativeSizeAxes = Axes.Both,
-                },
+                showcaseVideo,
                 showcaseContainer = new Container
                 {
                     Padding = new MarginPadding { Bottom = SongBar.HEIGHT + 14f },
@@ -139,6 +153,13 @@ namespace osu.Game.Tournament.Screens.Showcase
                 }
             });
 
+            SetStageContent(stageContent);
+        }
+
+        protected override void LoadComplete()
+        {
+            base.LoadComplete();
+
             flashColorString.BindValueChanged(c =>
             {
                 if (Colour4.TryParseHex(c.NewValue, out var colour))
@@ -147,17 +168,19 @@ namespace osu.Game.Tournament.Screens.Showcase
                 }
             });
 
+            nestedLazerSettingContainer.AutoSizeDuration = 400;
+            nestedLazerSettingContainer.AutoSizeEasing = Easing.OutQuint;
+
             useOsuLazer.BindValueChanged(u =>
             {
                 nestedLazerSettingContainer.ClearTransforms();
-                nestedLazerSettingContainer.AutoSizeDuration = 400;
-                nestedLazerSettingContainer.AutoSizeEasing = Easing.OutQuint;
 
                 if (u.NewValue)
                 {
                     nestedLazerSettingContainer.AutoSizeAxes = Axes.Y;
                     showcaseContainer.Clear(true);
-                    startInnerLazer();
+                    if (StageShowing)
+                        startInnerLazer();
                 }
                 else
                 {
@@ -180,6 +203,7 @@ namespace osu.Game.Tournament.Screens.Showcase
 
         public override void Show()
         {
+            ShowStageContent();
             base.Show();
 
             if (useOsuLazer.Value)
@@ -210,7 +234,7 @@ namespace osu.Game.Tournament.Screens.Showcase
                 mods.BindTarget = nestedGame.Dependencies.Get<Bindable<IReadOnlyList<Mod>>>();
             };
 
-            AddInternal(flash = new ShowCaseSideFlash());
+            StageContent!.Add(flash = new ShowCaseSideFlash());
             flash.FlashIntensity.BindTo(flashIntensity);
             flash.FlashColor.BindTo(flashColor);
             flash.FlashKiaiOnly.BindTo(flashKiaiOnly);
@@ -219,10 +243,13 @@ namespace osu.Game.Tournament.Screens.Showcase
         private void closeInnerLazer()
         {
             if (nestedGame != null)
+            {
                 showcaseContainer.Remove(nestedGame, true);
+                tournamentGame.ReconnectOnlineClients();
+            }
 
             if (flash != null)
-                RemoveInternal(flash, true);
+                StageContent?.Remove(flash, true);
 
             musicController = null;
             nestedGame = null;

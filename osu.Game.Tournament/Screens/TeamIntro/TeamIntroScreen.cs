@@ -16,30 +16,46 @@ namespace osu.Game.Tournament.Screens.TeamIntro
     public partial class TeamIntroScreen : TournamentMatchScreen
     {
         private Container mainContainer = null!;
+        private Container stageContent = null!;
 
         [BackgroundDependencyLoader]
         private void load(TextureStore store)
         {
             RelativeSizeAxes = Axes.Both;
 
-            InternalChildren = new Drawable[]
+            var teamIntroVideo = new TourneyVideo("teamintro")
             {
-                new TourneyVideo("teamintro")
+                RelativeSizeAxes = Axes.Both,
+                Loop = true,
+            };
+
+            stageContent = new Container
+            {
+                RelativeSizeAxes = Axes.Both,
+                Children = new Drawable[]
                 {
-                    RelativeSizeAxes = Axes.Both,
-                    Loop = true,
-                },
-                new Sprite
-                {
-                    RelativeSizeAxes = Axes.Both,
-                    Texture = store.Get("Videos/teamintro"),
-                    FillMode = FillMode.Fit,
-                },
-                mainContainer = new Container
-                {
-                    RelativeSizeAxes = Axes.Both,
+                    teamIntroVideo,
+                    new Sprite
+                    {
+                        RelativeSizeAxes = Axes.Both,
+                        Texture = store.Get("Videos/teamintro"),
+                        FillMode = FillMode.Fit,
+                    },
+                    mainContainer = new Container
+                    {
+                        RelativeSizeAxes = Axes.Both,
+                    }
                 }
             };
+
+            SetStageVideo(teamIntroVideo);
+            SetStageContent(stageContent);
+        }
+
+        public override void Show()
+        {
+            ShowStageContent();
+            base.Show();
         }
 
         protected override void CurrentMatchChanged(ValueChangedEvent<TournamentMatch?> match)

@@ -12,7 +12,6 @@ using osu.Framework.Bindables;
 using osu.Framework.Extensions;
 using osu.Framework.Extensions.ObjectExtensions;
 using osu.Framework.Graphics;
-using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Textures;
 using osu.Framework.Input;
 using osu.Framework.IO.Stores;
@@ -26,14 +25,20 @@ using osu.Game.Graphics;
 using osu.Game.Online;
 using osu.Game.Online.API;
 using osu.Game.Online.API.Requests;
+using osu.Game.Online.Metadata;
+using osu.Game.Online.Spectator;
+using osu.Game.Tournament.StableClient;
+using osu.Game.Tournament.StableClient.IPC;
+using osu.Game.Online.Multiplayer;
+using osu.Game.Rulesets.Mods;
+using osu.Game.Screens.OnlinePlay;
 using osu.Game.Tournament.Components;
 using osu.Game.Tournament.Configuration;
 using osu.Game.Tournament.IO;
 using osu.Game.Tournament.IPC;
-using osu.Game.Tournament.Models;
 using osu.Game.Tournament.MultiWindow;
-using osu.Game.Tournament.StableClient;
-using osu.Game.Tournament.StableClient.IPC;
+using osu.Game.Tournament.Models;
+using osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea;
 using osu.Game.Users;
 using osuTK.Input;
 
@@ -51,13 +56,6 @@ namespace osu.Game.Tournament
         private TournamentMatchScoreProcessor scoreProcessor = null!;
         private BeatmapLookupCache beatmapCache = null!;
 
-        protected override Container<Drawable> Content => content;
-
-        private readonly RefCountedBackbufferProvider content = new RefCountedBackbufferProvider
-        {
-            RelativeSizeAxes = Axes.Both
-        };
-
         [Cached]
         protected readonly TournamentStageState StageState = new TournamentStageState();
 
@@ -66,17 +64,34 @@ namespace osu.Game.Tournament
         [Resolved]
         private GameHost host { get; set; } = null!;
 
+        [Cached]
+        private readonly OngoingOperationTracker ongoingOperationTracker = new OngoingOperationTracker();
+
         protected Task BracketLoadTask => bracketLoadTaskCompletionSource.Task;
 
         private readonly TaskCompletionSource<bool> bracketLoadTaskCompletionSource = new TaskCompletionSource<bool>();
+
+        private ModMultiplierProvider modMultiplierProvider = null!;
 
         protected override IReadOnlyDependencyContainer CreateChildDependencies(IReadOnlyDependencyContainer parent)
         {
             return dependencies = new DependencyContainer(base.CreateChildDependencies(parent));
         }
 
+        internal void ReconnectOnlineClients()
+        {
+            Task.WhenAll(
+                MultiplayerClient.Reconnect(),
+                SpectatorClient.Reconnect(),
+                dependencies.Get<MetadataClient>().Reconnect())
+                .FireAndForget();
+        }
+
         public override EndpointConfiguration CreateEndpoints()
         {
+            if (UseDevelopmentServer)
+                return base.CreateEndpoints();
+
             return new ProductionEndpointConfiguration();
         }
 
@@ -97,7 +112,7 @@ namespace osu.Game.Tournament
             if (host.Window != null)
             {
                 string suffix = WindowRole == TournamentWindowRole.Control ? " [Control]" : string.Empty;
-                host.Window.Title = $"HSC - Tournamnet 20w14∞ [{randomTitle}] {versionSniffer} 版本:{Version}{suffix}";
+                host.Window.Title = $"HSC - Tournamnet 20w14∞ [{randomTitle}] {versionSniffer} 版本:{Version} [stable 比赛用] {suffix}";
             }
         }
 
@@ -117,16 +132,19 @@ namespace osu.Game.Tournament
         private string versionSniffer => ReleaseStream.General.GetDescription();
 
         private TournamentSpriteText initialisationText = null!;
+
+        private readonly Bindable<string> configSkin = new Bindable<string>();
+
         private TournamentConfigManager tournamentConfigManager = null!;
 
-        private readonly BindableInt frameRate = new BindableInt();
+        public TournamentGameBase()
+        {
+            IsTournament = true;
+        }
 
         [BackgroundDependencyLoader]
         private void load(Storage baseStorage)
         {
-            base.Content.Add(content);
-            dependencies.CacheAs<IBackbufferProvider>(content);
-
             Add(initialisationText = new TournamentSpriteText
             {
                 Anchor = Anchor.Centre,
@@ -136,12 +154,14 @@ namespace osu.Game.Tournament
 
             Resources.AddStore(new DllResourceStore(typeof(TournamentGameBase).Assembly));
 
-            dependencies.CacheAs<Storage>(storage = new TournamentStorage(baseStorage));
+            dependencies.Cache(tournamentConfigManager = new TournamentConfigManager(baseStorage));
+
+            dependencies.CacheAs<Storage>(storage = new TournamentStorage(baseStorage, tournamentConfigManager));
             dependencies.CacheAs(storage);
+
             dependencies.Cache(beatmapManager = new TournamentBeatmapManager(storage));
             dependencies.Cache(new TournamentBeatmapDifficultyCache(beatmapManager, RulesetStore));
-
-            dependencies.Cache(tournamentConfigManager = new TournamentConfigManager(baseStorage));
+            dependencies.CacheAs<ITournamentPlayerPresentationFactory>(new LazerTournamentPlayerPresentationFactory());
 
             dependencies.Cache(new TournamentVideoResourceStore(storage));
 
@@ -149,8 +169,15 @@ namespace osu.Game.Tournament
 
             beatmapCache = dependencies.Get<BeatmapLookupCache>();
 
-            tournamentConfigManager.BindWith(TournamentConfig.CaptureFrameRate, frameRate);
-            frameRate.BindValueChanged(f => host.MaximumInactiveHz = Math.Max(f.NewValue, 60), true);
+            Add(ongoingOperationTracker);
+
+            LocalConfig.BindWith(OsuSetting.Skin, configSkin);
+
+            // Transfer skin from config to realm instance once on startup.
+            SkinManager.SetSkinFromConfiguration(configSkin.Value);
+
+            // Transfer any runtime changes back to configuration file.
+            SkinManager.CurrentSkinInfo.ValueChanged += skin => configSkin.Value = skin.NewValue.ID.ToString();
         }
 
         protected override void LoadComplete()
@@ -239,6 +266,7 @@ namespace osu.Game.Tournament
                 addedInfo |= addPlayers();
                 addedInfo |= await addRoundBeatmaps().ConfigureAwait(false);
                 addedInfo |= await addSeedingBeatmaps().ConfigureAwait(false);
+                addedInfo |= addFmBeatmapStar();
 
                 if (addedInfo)
                     saveChanges();
@@ -257,6 +285,7 @@ namespace osu.Game.Tournament
                     SaveChanges();
                 });
 
+                ladder.FrameRate.BindValueChanged(f => host.MaximumInactiveHz = Math.Max(f.NewValue, 60), true);
             }
             catch (Exception e)
             {
@@ -269,16 +298,20 @@ namespace osu.Game.Tournament
                 Ruleset.BindTo(ladder.Ruleset);
 
                 dependencies.Cache(ladder);
-
-                StableBanchoClient banchoClient;
-                dependencies.Cache(banchoClient = new StableBanchoClient("", ""));
+                var banchoClient = new StableBanchoClient();
+                dependencies.Cache(banchoClient);
                 Add(banchoClient);
-
-                dependencies.CacheAs(ipc = new StableMatchIPCInfo());
+                ipc = new StableMatchIPCInfo();
                 dependencies.CacheAs((StableMatchIPCInfo)ipc);
+                dependencies.CacheAs<ISpectatorDataSource>(((StableMatchIPCInfo)ipc).SpectatorDataSource);
+                dependencies.CacheAs(ipc);
                 dependencies.Cache(scoreProcessor = new TournamentMatchScoreProcessor());
                 Add(ipc);
                 Add(scoreProcessor);
+
+                modMultiplierProvider = new ModMultiplierProvider();
+                dependencies.CacheAs<IModMultiplierProvider>(modMultiplierProvider);
+                Add(modMultiplierProvider);
 
                 bracketLoadTaskCompletionSource.SetResult(true);
 
@@ -363,6 +396,24 @@ namespace osu.Game.Tournament
             return true;
         }
 
+        private bool addFmBeatmapStar()
+        {
+            var beatmapsRequiringPopulation = ladder.Rounds
+                                                    .SelectMany(r => r.Beatmaps)
+                                                    .Where(b => b.Mods == "FM" && b.Beatmap != null && b.Beatmap.OnlineID != 0 && b.Beatmap.StarRatingWithMods.Count != Freemods.Length)
+                                                    .ToList();
+
+            if (beatmapsRequiringPopulation.Count == 0)
+                return false;
+
+            foreach (var t in beatmapsRequiringPopulation)
+            {
+                PopulateFmBeatmapStarRating(t.Beatmap!);
+            }
+
+            return true;
+        }
+
         private void updateLoadProgressMessage(string s) => Schedule(() => initialisationText.Text = s);
 
         public void PopulatePlayer(TournamentUser user, Action? success = null, Action? failure = null, bool immediate = false)
@@ -402,6 +453,23 @@ namespace osu.Game.Tournament
                 user.PP = res.Statistics?.PP;
 
                 success?.Invoke();
+            }
+        }
+
+        public void PopulateFmBeatmapStarRating(TournamentBeatmap beatmap, string? baseMod = null)
+        {
+            foreach (string mod in FreeModAcronyms)
+            {
+                var request = new GetBeatmapAttributesRequest(beatmap.OnlineID,
+                    ((int)ConvertFromAcronym(mod) | (int)ConvertFromAcronym(baseMod)).ToString(),
+                    ladder.Ruleset.Value?.OnlineID);
+
+                API.Perform(request);
+
+                if (request.Response == null)
+                    return;
+
+                beatmap.StarRatingWithAdditionalMods[mod] = request.Response.Attributes.StarRating;
             }
         }
 
@@ -445,11 +513,7 @@ namespace osu.Game.Tournament
                 });
         }
 
-        public readonly record struct BeatmapDownloadProgress(
-            int Completed,
-            int Failed,
-            int Total,
-            int BeatmapId)
+        public readonly record struct BeatmapDownloadProgress(int Completed, int Failed, int Total, int BeatmapId)
         {
             public float Ratio => Total == 0 ? 1 : (float)Completed / Total;
         }
@@ -508,33 +572,25 @@ namespace osu.Game.Tournament
             }
         }
 
+        public static string[] FreeModAcronyms => new[] { "NM", "HR", "HD", "EZ" };
+
+        // Keep the previous name for existing Lazer-specific call sites.
+        public static string[] Freemods => FreeModAcronyms;
+
         public static LegacyMods AllowFreeMods => LegacyMods.Easy | LegacyMods.HardRock | LegacyMods.Hidden | LegacyMods.NoMod;
 
         public static LegacyMods ConvertFromAcronym(string? acronym)
         {
-            switch (acronym)
+            return acronym switch
             {
-                case "NM":
-                    return LegacyMods.None;
-
-                case "HR":
-                    return LegacyMods.HardRock;
-
-                case "DT":
-                    return LegacyMods.DoubleTime;
-
-                case "EZ":
-                    return LegacyMods.Easy;
-
-                case "HD":
-                    return LegacyMods.Hidden;
-
-                case "FL":
-                    return LegacyMods.Flashlight;
-
-                default:
-                    return LegacyMods.None;
-            }
+                "NM" => LegacyMods.None,
+                "HR" => LegacyMods.HardRock,
+                "DT" => LegacyMods.DoubleTime,
+                "EZ" => LegacyMods.Easy,
+                "HD" => LegacyMods.Hidden,
+                "FL" => LegacyMods.Flashlight,
+                _ => LegacyMods.None,
+            };
         }
 
         public static string ConvertToAcronym(LegacyMods mods)
@@ -548,8 +604,7 @@ namespace osu.Game.Tournament
                 LegacyMods.Easy => "EZ",
                 LegacyMods.Hidden => "HD",
                 LegacyMods.Flashlight => "FL",
-
-                _ => throw new ArgumentOutOfRangeException(nameof(mods), mods, "Unsupported legacy mod.")
+                _ => throw new ArgumentOutOfRangeException(nameof(mods), mods, "Unsupported legacy mod."),
             };
         }
     }

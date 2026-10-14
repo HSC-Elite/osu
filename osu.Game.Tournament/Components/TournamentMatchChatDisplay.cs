@@ -4,37 +4,21 @@
 using System;
 using System.Linq;
 using osu.Framework.Allocation;
-using osu.Framework.Bindables;
 using osu.Framework.Graphics;
-using osu.Framework.Logging;
-using osu.Game.Online.API;
 using osu.Game.Online.Chat;
 using osu.Game.Overlays.Chat;
 using osu.Game.Tournament.IPC;
-using osu.Game.Tournament.IPC.MemoryIPC;
 using osu.Game.Tournament.Models;
 
 namespace osu.Game.Tournament.Components
 {
     public partial class TournamentMatchChatDisplay : StandAloneChatDisplay
     {
-        private readonly Bindable<int> chatChannel = new Bindable<int>();
-        private readonly BindableBool useAlternateChat = new BindableBool();
-
-        private ChannelManager manager = null!;
-        private int oldChannelId;
-        private int channelId;
-
         [Resolved]
         private LadderInfo ladderInfo { get; set; } = null!;
 
         [Resolved]
-        private IAPIProvider api { get; set; } = null!;
-
-        [Resolved]
         private MatchIPCInfo ipc { get; set; } = null!;
-
-        private IProvideAdditionalData? additionalData => ipc as IProvideAdditionalData;
 
         public TournamentMatchChatDisplay()
         {
@@ -46,60 +30,14 @@ namespace osu.Game.Tournament.Components
         [BackgroundDependencyLoader]
         private void load()
         {
-            AddInternal(manager = new ChannelManager(api));
-
-            useAlternateChat.BindTo(ladderInfo.UseAlternateChatSource);
-            useAlternateChat.BindValueChanged(_ => UpdateChat(true), true);
-
-            chatChannel.BindTo(ipc.ChatChannel);
-            chatChannel.BindValueChanged(c =>
-            {
-                oldChannelId = c.OldValue;
-                channelId = c.NewValue;
-
-                if (channelId <= 0) return;
-
-                UpdateChat(false);
-                Logger.Log($"Switch channel to {channelId}");
-            }, true);
+            Channel.BindTo(ipc.ChatChannel);
         }
 
-        public void UpdateChat(bool sourceChanged)
+        public void UpdateChat() => ipc.RefreshChatChannel();
+
+        public bool PostMessage(string message)
         {
-            Logger.Log($"Update channel {channelId}, {nameof(sourceChanged)}: {sourceChanged}, {nameof(ladderInfo.UseAlternateChatSource)}: {ladderInfo.UseAlternateChatSource.Value}");
-
-            if (!ladderInfo.UseAlternateChatSource.Value)
-            {
-                var joinedChannel = manager.JoinedChannels.SingleOrDefault(ch => ch.Id == oldChannelId);
-                if (joinedChannel != null)
-                    manager.LeaveChannel(joinedChannel);
-
-                var channel = new Channel
-                {
-                    Id = channelId,
-                    Type = ChannelType.Public
-                };
-
-                if (sourceChanged && additionalData != null)
-                {
-                    Channel.UnbindFrom(additionalData.TourneyChatChannel);
-                    Channel.BindTo(manager.CurrentChannel);
-                }
-
-                // 退出频道可能有延迟 因为退出频道使用了 Scheduler
-                Scheduler.AddDelayed(() =>
-                {
-                    manager.JoinChannel(channel);
-                    manager.CurrentChannel.Value = channel;
-                }, 5);
-                return;
-            }
-
-            if (sourceChanged && additionalData != null)
-            {
-                Channel.UnbindFrom(manager.CurrentChannel);
-                Channel.BindTo(additionalData.TourneyChatChannel!);
-            }
+            return Channel.Value != null && !string.IsNullOrWhiteSpace(message) && ipc.PostChatMessage(message.Trim());
         }
 
         public void Expand() => this.FadeIn(300);

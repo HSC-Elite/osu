@@ -36,6 +36,13 @@ namespace osu.Game.Tournament.Models
             MaxValue = 1366,
         };
 
+        public BindableInt FrameRate = new BindableInt(60)
+        {
+            MinValue = 30,
+            MaxValue = 360,
+            Default = 60,
+        };
+
         public Bindable<int> PlayersPerTeam = new BindableInt(4)
         {
             MinValue = 1,
@@ -52,6 +59,8 @@ namespace osu.Game.Tournament.Models
 
         public Bindable<bool> UseAlternateChatSource = new BindableBool();
 
+        public Bindable<bool> UseExternalStageDisplay = new BindableBool();
+
         public BindableList<ModColor> ModColors = new BindableList<ModColor>();
 
         public ModColor GetModColorByModName(string mod) => ModColors.FirstOrDefault(m => m.ModName == mod) ?? new ModColor();
@@ -61,5 +70,12 @@ namespace osu.Game.Tournament.Models
         public BindableList<ModMultiplierSetting> ModMultiplierSettings { get; } = new BindableList<ModMultiplierSetting>();
 
         public Bindable<bool> EnableRoundPreview = new Bindable<bool>();
+
+        public BindableFloat IdleScreenUsernameFontSize = new BindableFloat(45)
+        {
+            MinValue = 1,
+            MaxValue = 100,
+            Precision = 0.1f,
+        };
     }
 }

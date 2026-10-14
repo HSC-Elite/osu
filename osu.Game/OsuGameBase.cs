@@ -77,6 +77,8 @@ namespace osu.Game
     [Cached(typeof(OsuGameBase))]
     public partial class OsuGameBase : Framework.Game, ICanAcceptFiles, IBeatSyncProvider
     {
+        public static bool IsTournament { get; protected set; } = false;
+
 #if DEBUG
         public const string GAME_NAME = "osu! (development)";
 #else
@@ -346,6 +348,7 @@ namespace osu.Game
             // TODO: OsuGame or OsuGameBase?
             dependencies.CacheAs(beatmapUpdater = CreateBeatmapUpdater());
             dependencies.CacheAs(SpectatorClient = new OnlineSpectatorClient(endpoints));
+            dependencies.CacheAs<ISpectatorDataSource>(SpectatorClient);
             dependencies.CacheAs(MultiplayerClient = new OnlineMultiplayerClient(endpoints));
             dependencies.CacheAs(metadataClient = new OnlineMetadataClient(endpoints));
 

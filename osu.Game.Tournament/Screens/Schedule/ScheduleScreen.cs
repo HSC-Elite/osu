@@ -24,6 +24,7 @@ namespace osu.Game.Tournament.Screens.Schedule
         private readonly BindableList<TournamentMatch> allMatches = new BindableList<TournamentMatch>();
         private readonly Bindable<TournamentMatch?> currentMatch = new Bindable<TournamentMatch?>();
         private Container mainContainer = null!;
+        private Container stageContent = null!;
         private LadderInfo ladder = null!;
 
         [BackgroundDependencyLoader]
@@ -33,13 +34,18 @@ namespace osu.Game.Tournament.Screens.Schedule
 
             RelativeSizeAxes = Axes.Both;
 
-            InternalChildren = new Drawable[]
+            var scheduleVideo = new TourneyVideo("schedule")
             {
-                new TourneyVideo("schedule")
+                RelativeSizeAxes = Axes.Both,
+                Loop = true,
+            };
+
+            stageContent = new Container
+            {
+                RelativeSizeAxes = Axes.Both,
+                Children = new Drawable[]
                 {
-                    RelativeSizeAxes = Axes.Both,
-                    Loop = true,
-                },
+                    scheduleVideo,
                 new Container
                 {
                     RelativeSizeAxes = Axes.Both,
@@ -97,7 +103,17 @@ namespace osu.Game.Tournament.Screens.Schedule
                         }
                     }
                 },
+                }
             };
+
+            SetStageVideo(scheduleVideo);
+            SetStageContent(stageContent);
+        }
+
+        public override void Show()
+        {
+            ShowStageContent();
+            base.Show();
         }
 
         protected override void LoadComplete()
