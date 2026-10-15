@@ -252,9 +252,9 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                                         },
                                         new OsuSpriteText
                                         {
-                                            Anchor = mirrored ? Anchor.CentreRight : Anchor.CentreLeft,
-                                            Origin = mirrored ? Anchor.CentreRight : Anchor.CentreLeft,
-                                            X = mirrored ? -6 : 6,
+                                            Anchor = Anchor.Centre,
+                                            Origin = Anchor.Centre,
+                                            X = mirrored ? 30 : -30,
                                             Text = score.TotalScore.ToString("N0"),
                                             Font = OsuFont.Torus.With(size: 28, weight: FontWeight.Bold),
                                             Colour = scoreHeaderTextColour(score.Rank),
@@ -330,6 +330,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                 Anchor side = mirrored ? Anchor.CentreLeft : Anchor.CentreRight;
                 float direction = mirrored ? 1 : -1;
 
+                var shear = new Vector2(mirrored ? 0.12f : -0.12f, 0);
+
                 return new GridContainer
                 {
                     Name = "Hit statistics",
@@ -338,19 +340,21 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                     X = direction * 30,
                     Y = -12,
                     Size = new Vector2(132, 76),
+                    // Slant the placement, then cancel the shear on each item to keep its text upright.
+                    Shear = shear,
                     ColumnDimensions = new[] { new Dimension(), new Dimension() },
                     RowDimensions = new[] { new Dimension(), new Dimension() },
                     Content = new[]
                     {
                         new Drawable[]
                         {
-                            new HitStatistic("GREAT", getStatistic(HitResult.Great), Color4Extensions.FromHex("#02DBCD")),
-                            new HitStatistic("OK", getStatistic(HitResult.Ok), Color4Extensions.FromHex("#9EED00")),
+                            new HitStatistic("GREAT", getStatistic(HitResult.Great), Color4Extensions.FromHex("#02DBCD")) { Shear = -shear },
+                            new HitStatistic("OK", getStatistic(HitResult.Ok), Color4Extensions.FromHex("#9EED00")) { Shear = -shear },
                         },
                         new Drawable[]
                         {
-                            new HitStatistic("MEH", getStatistic(HitResult.Meh), Color4Extensions.FromHex("#F27255")),
-                            new HitStatistic("MISS", getStatistic(HitResult.Miss), Color4Extensions.FromHex("#FA3E3E")),
+                            new HitStatistic("MEH", getStatistic(HitResult.Meh), Color4Extensions.FromHex("#F27255")) { Shear = -shear },
+                            new HitStatistic("MISS", getStatistic(HitResult.Miss), Color4Extensions.FromHex("#FA3E3E")) { Shear = -shear },
                         }
                     }
                 };
@@ -446,11 +450,11 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                     Size = new Vector2(128, 40),
                     Children = new Drawable[]
                     {
-                        createBottomStatistic("PP", score!.PP?.ToString("0") ?? "—", 0.3f),
+                        createBottomStatistic("PP", score!.PP?.ToString("0") ?? "—", 0.3f, mirrored ? 0.7f : 0),
                         new Box
                         {
                             RelativePositionAxes = Axes.X,
-                            X = 0.3f,
+                            X = mirrored ? 0.7f : 0.3f,
                             Y = 13,
                             Size = new Vector2(0.5f, 14),
                             Colour = Color4.White.Opacity(0.6f),
@@ -459,7 +463,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                         {
                             RelativeSizeAxes = Axes.Both,
                             RelativePositionAxes = Axes.X,
-                            X = 0.3f,
+                            X = mirrored ? 0 : 0.3f,
                             Width = 0.7f,
                             Children = new Drawable[]
                             {
@@ -566,6 +570,14 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                                ?? "Tournament result";
                 string difficulty = score.BeatmapInfo?.DifficultyName ?? string.Empty;
                 string artist = score.BeatmapInfo?.Metadata.Artist ?? string.Empty;
+                var difficultyText = new OsuSpriteText
+                {
+                    Anchor = Anchor.CentreLeft,
+                    Origin = Anchor.CentreLeft,
+                    Text = difficulty,
+                    Font = OsuFont.Torus.With(size: 8, weight: FontWeight.SemiBold),
+                };
+                difficultyText.OnUpdate += text => text.Scale = new Vector2(Math.Min(1, text.Parent!.DrawWidth / Math.Max(1, text.Width)));
 
                 return new FillFlowContainer
                 {
@@ -624,14 +636,13 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                                         },
                                     },
                                 },
-                                new TruncatingSpriteText
+                                new Container
                                 {
                                     Anchor = Anchor.CentreLeft,
                                     Origin = Anchor.CentreLeft,
                                     X = 39,
-                                    MaxWidth = 69,
-                                    Text = difficulty,
-                                    Font = OsuFont.Torus.With(size: 8, weight: FontWeight.SemiBold),
+                                    Size = new Vector2(69, 11),
+                                    Child = difficultyText,
                                 },
                             },
                         },
@@ -639,10 +650,12 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                 };
             }
 
-            private static Drawable createBottomStatistic(string label, string value, float relativeWidth) => new Container
+            private static Drawable createBottomStatistic(string label, string value, float relativeWidth, float relativeX) => new Container
             {
                 RelativeSizeAxes = Axes.Both,
                 Width = relativeWidth,
+                RelativePositionAxes = Axes.X,
+                X = relativeX,
                 Height = 1,
                 Children = new Drawable[]
                 {
@@ -713,7 +726,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                             Anchor = Anchor.TopCentre,
                             Origin = Anchor.TopCentre,
                             Text = label,
-                            Font = OsuFont.Torus.With(size: 11, weight: FontWeight.Bold),
+                            Font = OsuFont.Torus.With(size: 16, weight: FontWeight.Bold),
                             Colour = colour,
                         },
                         new OsuSpriteText
@@ -721,7 +734,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                             Anchor = Anchor.TopCentre,
                             Origin = Anchor.TopCentre,
                             Text = value.ToString(),
-                            Font = OsuFont.Torus.With(size: 17, weight: FontWeight.Bold),
+                            Font = OsuFont.Torus.With(size: 22, weight: FontWeight.Bold),
                             Colour = colour.Lighten(0.5f),
                         },
                     }
