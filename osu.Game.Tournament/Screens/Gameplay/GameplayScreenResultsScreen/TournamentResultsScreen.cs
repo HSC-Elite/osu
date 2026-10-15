@@ -320,11 +320,18 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                                         {
                                             new Drawable[]
                                             {
-                                                new TruncatingSpriteText
+                                                new Container
                                                 {
-                                                    RelativeSizeAxes = Axes.X,
-                                                    Text = $"{score.User.Username}'s Ranking",
-                                                    Font = OsuFont.Torus.With(size: 16, weight: FontWeight.Bold),
+                                                    RelativeSizeAxes = Axes.Both,
+                                                    Padding = new MarginPadding { Horizontal = 5f },
+                                                    Child = new TruncatingSpriteText
+                                                    {
+                                                        Anchor = mirrored ? Anchor.TopRight : Anchor.TopLeft,
+                                                        Origin = mirrored ? Anchor.TopRight : Anchor.TopLeft,
+                                                        MaxWidth = 255 - avatar_size - 10,
+                                                        Text = $"{score?.User.Username}'s Ranking",
+                                                        Font = OsuFont.Torus.With(size: 16, weight: FontWeight.Bold),
+                                                    },
                                                 },
                                             },
                                             new[] { createScoreStrip() },
