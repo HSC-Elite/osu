@@ -37,27 +37,27 @@ namespace osu.Game.Screens.Ranking.Expanded.Accuracy
                 {
                     new GradedCircle(0.0, accuracyC)
                     {
-                        Colour = OsuColour.ForRank(ScoreRank.D),
+                        Colour = OsuColour.ForTournamentRank(ScoreRank.D),
                     },
                     new GradedCircle(accuracyC, accuracyB)
                     {
-                        Colour = OsuColour.ForRank(ScoreRank.C),
+                        Colour = OsuColour.ForTournamentRank(ScoreRank.C),
                     },
                     new GradedCircle(accuracyB, accuracyA)
                     {
-                        Colour = OsuColour.ForRank(ScoreRank.B),
+                        Colour = OsuColour.ForTournamentRank(ScoreRank.B),
                     },
                     new GradedCircle(accuracyA, accuracyS)
                     {
-                        Colour = OsuColour.ForRank(ScoreRank.A),
+                        Colour = OsuColour.ForTournamentRank(ScoreRank.A),
                     },
                     new GradedCircle(accuracyS, accuracyX - AccuracyCircle.VIRTUAL_SS_PERCENTAGE)
                     {
-                        Colour = OsuColour.ForRank(ScoreRank.S),
+                        Colour = OsuColour.ForTournamentRank(ScoreRank.S),
                     },
                     new GradedCircle(accuracyX - AccuracyCircle.VIRTUAL_SS_PERCENTAGE, 1.0)
                     {
-                        Colour = OsuColour.ForRank(ScoreRank.X)
+                        Colour = OsuColour.ForTournamentRank(ScoreRank.X)
                     }
                 }
             };
