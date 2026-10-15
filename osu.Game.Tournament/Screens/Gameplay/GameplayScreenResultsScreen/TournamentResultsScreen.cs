@@ -9,6 +9,8 @@ using osu.Framework.Extensions.Color4Extensions;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
+using osu.Game.Beatmaps;
+using osu.Game.Beatmaps.Drawables;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Sprites;
 using osu.Game.Rulesets.Mods;
@@ -63,6 +65,9 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
 
         private partial class ResultCard : CompositeDrawable
         {
+            private const float circle_size = 176;
+            private const float mods_width = 40;
+
             private readonly ScoreInfo? score;
             private readonly bool mirrored;
 
@@ -100,30 +105,132 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                     return;
                 }
 
-                InternalChildren = new Drawable[]
+                InternalChild = new GridContainer
                 {
-                    createHeader(),
-                    createModsBackground(),
-                    createStatisticsBackground(),
-                    createHitStatistics(),
-                    createMods(),
-                    createBottomStatisticsBackground(),
-                    createBottomStatistics(),
-                    createRankCircleBackground(),
-                    new AccuracyCircle(score, showRankBadges: false, rankTextScale: 0.72f)
+                    RelativeSizeAxes = Axes.Both,
+                    Padding = new MarginPadding { Top = 9, Bottom = 13, Horizontal = 24 },
+                    RowDimensions = new[]
                     {
-                        Name = "Accuracy circle",
-                        Anchor = Anchor.Centre,
-                        Origin = Anchor.Centre,
-                        X = mirrored ? 42 : -42,
-                        Y = 9,
-                        Size = new Vector2(176),
+                        new Dimension(GridSizeMode.Absolute, 55),
+                        new Dimension(),
+                        new Dimension(GridSizeMode.AutoSize),
                     },
-                    createPerfectBadge(),
-                    createPlacementBadge(),
-                    createBeatmapInformation(),
+                    Content = new[]
+                    {
+                        new[] { createHeader() },
+                        new[] { createBody() },
+                        new[] { createBeatmapInformation() },
+                    },
                 };
             }
+
+            private Drawable createBody()
+            {
+                var circle = new Container
+                {
+                    Name = "Rank circle",
+                    RelativeSizeAxes = Axes.Both,
+                    Children = new Drawable[]
+                    {
+                        createModsBackground(),
+                        new Container
+                        {
+                            RelativeSizeAxes = Axes.Both,
+                            Padding = mirrored ? new MarginPadding { Right = mods_width } : new MarginPadding { Left = mods_width },
+                            Children = new Drawable[]
+                            {
+                                createRankCircleBackground(),
+                                new AccuracyCircle(score!, showRankBadges: false, rankTextScale: 0.72f)
+                                {
+                                    Name = "Accuracy circle",
+                                    Anchor = Anchor.Centre,
+                                    Origin = Anchor.Centre,
+                                    Size = new Vector2(circle_size),
+                                },
+                                createMods(),
+                            },
+                        },
+                    },
+                };
+                var statistics = new FillFlowContainer
+                {
+                    Name = "Statistics column",
+                    Anchor = Anchor.Centre,
+                    Origin = Anchor.Centre,
+                    RelativeSizeAxes = Axes.X,
+                    AutoSizeAxes = Axes.Y,
+                    Direction = FillDirection.Vertical,
+                    Spacing = new Vector2(0, 10),
+                    Children = new[]
+                    {
+                        createStatisticsPanel(createStatisticsBackground(), createHitStatistics(), 83),
+                        createStatisticsPanel(createBottomStatisticsBackground(), createBottomStatistics(), 40),
+                    },
+                };
+
+                // Share the grid across layers: backplates, circle, then unobscured badges.
+                return new Container
+                {
+                    Name = "Result body",
+                    RelativeSizeAxes = Axes.Both,
+                    Children = new Drawable[]
+                    {
+                        createBodyGrid(new[]
+                        {
+                            orderForSide(new Drawable[] { null!, statistics }),
+                            new Drawable[] { null!, null! },
+                        }),
+                        createBodyGrid(new[]
+                        {
+                            orderForSide(new Drawable[] { circle, null! }),
+                            new Drawable[] { null!, null! },
+                        }),
+                        createBodyGrid(new[]
+                        {
+                            new Drawable[] { null!, null! },
+                            orderForSide(new[]
+                            {
+                                new Container
+                                {
+                                    RelativeSizeAxes = Axes.Both,
+                                    Children = new Drawable[]
+                                    {
+                                        new Container
+                                        {
+                                            RelativeSizeAxes = Axes.Both,
+                                            // Centre placement beneath the mod-side half of the circle column.
+                                            Padding = mirrored
+                                                ? new MarginPadding { Left = circle_size / 2 }
+                                                : new MarginPadding { Right = circle_size / 2 },
+                                            Child = createPlacementBadge(),
+                                        },
+                                        createPerfectBadge(),
+                                    },
+                                },
+                                null!,
+                            }),
+                        }),
+                    },
+                };
+            }
+
+            private GridContainer createBodyGrid(Drawable[][] content) => new GridContainer
+            {
+                RelativeSizeAxes = Axes.Both,
+                Padding = new MarginPadding { Top = 23, Bottom = 8 },
+                RowDimensions = new[] { new Dimension(), new Dimension(GridSizeMode.Absolute, 10) },
+                ColumnDimensions = mirrored
+                    ? new[] { new Dimension(), new Dimension(GridSizeMode.Absolute, circle_size + mods_width) }
+                    : new[] { new Dimension(GridSizeMode.Absolute, circle_size + mods_width), new Dimension() },
+                Content = content,
+            };
+
+            private static Drawable createStatisticsPanel(Drawable background, Drawable content, float height) => new Container
+            {
+                RelativeSizeAxes = Axes.X,
+                Height = height,
+                Children = new[] { background, content },
+            };
 
             protected override void LoadComplete()
             {
@@ -184,119 +291,136 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
 
             private Drawable createHeader()
             {
-                const float header_width = 255;
                 const float avatar_size = 55;
-                const float details_x = avatar_size;
-
-                Anchor side = mirrored ? Anchor.CentreRight : Anchor.CentreLeft;
-                float direction = mirrored ? -1 : 1;
 
                 return new Container
                 {
                     Name = "Score header",
                     Anchor = Anchor.TopCentre,
                     Origin = Anchor.TopCentre,
-                    X = mirrored ? 4 : -4,
-                    Y = 9,
-                    Size = new Vector2(header_width, avatar_size),
+                    Size = new Vector2(255, avatar_size),
                     Children = new Drawable[]
                     {
+                        new GridContainer
+                        {
+                            RelativeSizeAxes = Axes.Both,
+                            ColumnDimensions = mirrored
+                                ? new[] { new Dimension(), new Dimension(GridSizeMode.Absolute, avatar_size) }
+                                : new[] { new Dimension(GridSizeMode.Absolute, avatar_size), new Dimension() },
+                            Content = new[]
+                            {
+                                orderForSide(new Drawable[]
+                                {
+                                    new Container(),
+                                    new GridContainer
+                                    {
+                                        RelativeSizeAxes = Axes.Both,
+                                        RowDimensions = new[] { new Dimension(), new Dimension(GridSizeMode.Absolute, 32) },
+                                        Content = new[]
+                                        {
+                                            new Drawable[]
+                                            {
+                                                new TruncatingSpriteText
+                                                {
+                                                    RelativeSizeAxes = Axes.X,
+                                                    Text = $"{score.User.Username}'s Ranking",
+                                                    Font = OsuFont.Torus.With(size: 16, weight: FontWeight.Bold),
+                                                },
+                                            },
+                                            new[] { createScoreStrip() },
+                                        },
+                                    },
+                                }),
+                            },
+                        },
                         new UpdateableAvatar(score!.User, isInteractive: false)
                         {
-                            Anchor = side,
-                            Origin = side,
+                            Anchor = mirrored ? Anchor.TopRight : Anchor.TopLeft,
+                            Origin = mirrored ? Anchor.TopRight : Anchor.TopLeft,
                             Size = new Vector2(avatar_size),
+                            Masking = true,
+                            CornerRadius = 6,
                         },
-                        new Container
+                    },
+                };
+            }
+
+            private Drawable createScoreStrip() => new Container
+            {
+                RelativeSizeAxes = Axes.Both,
+                Children = new Drawable[]
+                {
+                    new Container
+                    {
+                        Name = "Slanted score background",
+                        RelativeSizeAxes = Axes.Both,
+                        // Extend only the avatar-facing edge; the avatar is drawn above this background.
+                        Anchor = mirrored ? Anchor.TopLeft : Anchor.TopRight,
+                        Origin = mirrored ? Anchor.TopLeft : Anchor.TopRight,
+                        Width = 1.06f,
+                        Shear = new Vector2(mirrored ? 0.14f : -0.14f, 0),
+                        Masking = true,
+                        CornerRadius = 3,
+                        Child = new Box
                         {
-                            Anchor = side,
-                            Origin = side,
-                            X = direction * details_x,
-                            Width = header_width - details_x,
-                            Height = avatar_size,
-                            Children = new Drawable[]
+                            RelativeSizeAxes = Axes.Both,
+                            Colour = scoreHeaderColour(score!.Rank),
+                        },
+                    },
+                    new GridContainer
+                    {
+                        RelativeSizeAxes = Axes.Both,
+                        Padding = new MarginPadding { Horizontal = 8 },
+                        ColumnDimensions = mirrored
+                            ? new[] { new Dimension(GridSizeMode.Absolute, 48), new Dimension() }
+                            : new[] { new Dimension(), new Dimension(GridSizeMode.Absolute, 48) },
+                        Content = new[]
+                        {
+                            orderForSide(new Drawable[]
                             {
-                                new TruncatingSpriteText
+                                new OsuSpriteText
                                 {
-                                    Anchor = Anchor.TopLeft,
-                                    Origin = Anchor.TopLeft,
-                                    Text = $"{score.User.Username}'s Ranking",
-                                    Font = OsuFont.Torus.With(size: 16, weight: FontWeight.Bold),
-                                    MaxWidth = header_width - details_x,
+                                    Anchor = Anchor.Centre,
+                                    Origin = Anchor.Centre,
+                                    Text = score!.TotalScore.ToString("N0"),
+                                    Font = OsuFont.Torus.With(size: 36, weight: FontWeight.Bold),
+                                    Colour = scoreHeaderTextColour(score.Rank),
                                 },
-                                new Container
+                                new FillFlowContainer
                                 {
-                                    Anchor = Anchor.BottomLeft,
-                                    Origin = Anchor.BottomLeft,
-                                    RelativeSizeAxes = Axes.X,
-                                    Width = 1,
-                                    Height = 32,
-                                    Masking = true,
+                                    Anchor = Anchor.Centre,
+                                    Origin = Anchor.Centre,
+                                    Direction = FillDirection.Vertical,
+                                    AutoSizeAxes = Axes.Both,
                                     Children = new Drawable[]
                                     {
-                                        new Container
+                                        new OsuSpriteText
                                         {
-                                            Name = "Slanted score background",
-                                            RelativeSizeAxes = Axes.Both,
-                                            // Extend beneath the avatar and clip that edge straight.
-                                            X = mirrored ? 5 : -5,
-                                            Width = 1,
-                                            Shear = new Vector2(mirrored ? 0.14f : -0.14f, 0),
-                                            Masking = true,
-                                            CornerRadius = 3,
-                                            Child = new Box
-                                            {
-                                                RelativeSizeAxes = Axes.Both,
-                                                Colour = scoreHeaderColour(score.Rank),
-                                            },
+                                            Text = "Accuracy",
+                                            Font = OsuFont.Torus.With(size: 12, weight: FontWeight.Bold),
+                                            Colour = scoreHeaderTextColour(score.Rank),
                                         },
                                         new OsuSpriteText
                                         {
-                                            Anchor = Anchor.Centre,
-                                            Origin = Anchor.Centre,
-                                            X = mirrored ? 30 : -30,
-                                            Text = score.TotalScore.ToString("N0"),
-                                            Font = OsuFont.Torus.With(size: 28, weight: FontWeight.Bold),
+                                            Text = score.Accuracy.ToString("P2"),
+                                            Font = OsuFont.Torus.With(size: 13, weight: FontWeight.Bold),
                                             Colour = scoreHeaderTextColour(score.Rank),
                                         },
-                                        new FillFlowContainer
-                                        {
-                                            Anchor = mirrored ? Anchor.CentreLeft : Anchor.CentreRight,
-                                            Origin = mirrored ? Anchor.CentreLeft : Anchor.CentreRight,
-                                            Direction = FillDirection.Vertical,
-                                            AutoSizeAxes = Axes.Both,
-                                            X = mirrored ? 18 : -18,
-                                            Children = new Drawable[]
-                                            {
-                                                new OsuSpriteText
-                                                {
-                                                    Text = "Accuracy",
-                                                    Font = OsuFont.Torus.With(size: 10, weight: FontWeight.Bold),
-                                                    Colour = scoreHeaderTextColour(score.Rank),
-                                                },
-                                                new OsuSpriteText
-                                                {
-                                                    Text = score.Accuracy.ToString("P2"),
-                                                    Font = OsuFont.Torus.With(size: 11, weight: FontWeight.Bold),
-                                                    Colour = scoreHeaderTextColour(score.Rank),
-                                                },
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                };
-            }
+                                    },
+                                },
+                            }),
+                        },
+                    },
+                },
+            };
+
+            private Drawable[] orderForSide(Drawable[] children) => mirrored ? children.Reverse().ToArray() : children;
 
             private Drawable createModsBackground() => new Container
             {
                 Name = "Mods background",
                 Anchor = mirrored ? Anchor.CentreRight : Anchor.CentreLeft,
                 Origin = mirrored ? Anchor.CentreRight : Anchor.CentreLeft,
-                X = mirrored ? -23 : 23,
-                Y = 8,
                 Size = new Vector2(184, 132),
                 CornerRadius = 45,
                 Masking = true,
@@ -310,11 +434,10 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
             private Drawable createStatisticsBackground() => new Container
             {
                 Name = "Statistics background",
-                Anchor = Anchor.Centre,
-                Origin = Anchor.Centre,
-                X = mirrored ? -82 : 82,
-                Y = -17,
-                Size = new Vector2(180, 83),
+                Anchor = mirrored ? Anchor.CentreLeft : Anchor.CentreRight,
+                Origin = mirrored ? Anchor.CentreLeft : Anchor.CentreRight,
+                RelativeSizeAxes = Axes.Both,
+                Size = new Vector2(1.35f, 1),
                 Masking = true,
                 CornerRadius = 12,
                 Shear = new Vector2(mirrored ? 0.12f : -0.12f, 0),
@@ -327,19 +450,15 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
 
             private Drawable createHitStatistics()
             {
-                Anchor side = mirrored ? Anchor.CentreLeft : Anchor.CentreRight;
-                float direction = mirrored ? 1 : -1;
-
                 var shear = new Vector2(mirrored ? 0.12f : -0.12f, 0);
 
                 return new GridContainer
                 {
                     Name = "Hit statistics",
-                    Anchor = side,
-                    Origin = side,
-                    X = direction * 30,
-                    Y = -12,
-                    Size = new Vector2(132, 76),
+                    Anchor = Anchor.Centre,
+                    Origin = Anchor.Centre,
+                    RelativeSizeAxes = Axes.X,
+                    Height = 76,
                     // Slant the placement, then cancel the shear on each item to keep its text upright.
                     Shear = shear,
                     ColumnDimensions = new[] { new Dimension(), new Dimension() },
@@ -362,7 +481,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
 
             private Drawable createMods()
             {
-                // Keep each icon upright while placing its centre on the circle's outer arc.
+                // Keep each icon upright along a concentric arc just outside the circle.
                 // Packing is bounded vertically so larger mod sets remain on the backplate.
                 var mods = score!.Mods.AsOrdered().ToArray();
                 var container = new Container
@@ -373,9 +492,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                     Origin = mirrored ? Anchor.CentreRight : Anchor.CentreLeft,
                 };
 
-                const float radius = 111;
-                float spacing = mods.Length > 1 ? Math.Min(32, 65f / (mods.Length - 1)) : 0;
-                float centreX = mirrored ? 242 : 158;
+                const float radius = circle_size / 2 + 16;
+                float spacing = mods.Length > 1 ? Math.Min(36, 80f / (mods.Length - 1)) : 0;
 
                 for (int i = 0; i < mods.Length; i++)
                 {
@@ -384,8 +502,9 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
 
                     container.Add(new ModDisplay(showExtendedInformation: false)
                     {
+                        Anchor = Anchor.Centre,
                         Origin = Anchor.Centre,
-                        Position = new Vector2(centreX + (mirrored ? x : -x), 158 + y),
+                        Position = new Vector2(mirrored ? x : -x, y),
                         ExpansionMode = ExpansionMode.AlwaysExpanded,
                         Scale = new Vector2(0.46f),
                         Current = { Value = new[] { mods[i] } },
@@ -400,8 +519,6 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                 Name = "Rank circle background",
                 Anchor = Anchor.Centre,
                 Origin = Anchor.Centre,
-                X = mirrored ? 42 : -42,
-                Y = 9,
                 Size = new Vector2(136),
                 Masking = true,
                 Child = new Box
@@ -413,17 +530,13 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
 
             private Drawable createBottomStatisticsBackground()
             {
-                Anchor side = mirrored ? Anchor.CentreLeft : Anchor.CentreRight;
-                float direction = mirrored ? 1 : -1;
-
                 return new Container
                 {
                     Name = "Bottom statistics background",
-                    Anchor = side,
-                    Origin = side,
-                    X = direction * 25,
-                    Y = 54,
-                    Size = new Vector2(187, 40),
+                    Anchor = mirrored ? Anchor.CentreLeft : Anchor.CentreRight,
+                    Origin = mirrored ? Anchor.CentreLeft : Anchor.CentreRight,
+                    RelativeSizeAxes = Axes.Both,
+                    Size = new Vector2(1.35f, 1),
                     Masking = true,
                     CornerRadius = 9,
                     Shear = new Vector2(mirrored ? -0.29f : 0.29f, 0),
@@ -440,71 +553,76 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                 int maximumCombo = score!.GetMaximumAchievableCombo();
                 bool perfect = maximumCombo > 0 && score!.MaxCombo == maximumCombo;
 
-                return new Container
+                return new GridContainer
                 {
                     Name = "Bottom statistics",
-                    Anchor = mirrored ? Anchor.CentreLeft : Anchor.CentreRight,
-                    Origin = mirrored ? Anchor.CentreLeft : Anchor.CentreRight,
-                    X = mirrored ? 33 : -33,
-                    Y = 54,
-                    Size = new Vector2(128, 40),
-                    Children = new Drawable[]
+                    RelativeSizeAxes = Axes.Both,
+                    Padding = new MarginPadding { Vertical = 7 },
+                    ColumnDimensions = mirrored
+                        ? new[] { new Dimension(), new Dimension(GridSizeMode.Absolute, 0.5f), new Dimension(GridSizeMode.Relative, 0.3f) }
+                        : new[] { new Dimension(GridSizeMode.Relative, 0.3f), new Dimension(GridSizeMode.Absolute, 0.5f), new Dimension() },
+                    Content = new[]
                     {
-                        createBottomStatistic("PP", score!.PP?.ToString("0") ?? "—", 0.3f, mirrored ? 0.7f : 0),
-                        new Box
+                        orderForSide(new Drawable[]
                         {
-                            RelativePositionAxes = Axes.X,
-                            X = mirrored ? 0.7f : 0.3f,
-                            Y = 13,
-                            Size = new Vector2(0.5f, 14),
-                            Colour = Color4.White.Opacity(0.6f),
-                        },
-                        new Container
-                        {
-                            RelativeSizeAxes = Axes.Both,
-                            RelativePositionAxes = Axes.X,
-                            X = mirrored ? 0 : 0.3f,
-                            Width = 0.7f,
-                            Children = new Drawable[]
+                            createBottomStatistic("PP", score!.PP?.ToString("0") ?? "—"),
+                            new Box
                             {
-                                new OsuSpriteText
+                                Anchor = Anchor.Centre,
+                                Origin = Anchor.Centre,
+                                Size = new Vector2(0.5f, 14),
+                                Colour = Color4.White.Opacity(0.6f),
+                            },
+                            new Container
+                            {
+                                RelativeSizeAxes = Axes.Both,
+                                Children = new Drawable[]
                                 {
-                                    Anchor = Anchor.TopCentre,
-                                    Origin = Anchor.TopCentre,
-                                    Y = 7,
-                                    Text = "Max Combo",
-                                    Font = OsuFont.Torus.With(size: 11, weight: FontWeight.Bold),
-                                },
-                                new FillFlowContainer
-                                {
-                                    Anchor = Anchor.BottomCentre,
-                                    Origin = Anchor.BottomCentre,
-                                    Y = -7,
-                                    AutoSizeAxes = Axes.Both,
-                                    Direction = FillDirection.Horizontal,
-                                    Spacing = new Vector2(3, 0),
-                                    Children = new Drawable[]
+                                    new OsuSpriteText
                                     {
-                                        new OsuSpriteText
+                                        Anchor = Anchor.TopCentre,
+                                        Origin = Anchor.TopCentre,
+                                        Text = "Max Combo",
+                                        Font = OsuFont.Torus.With(size: 11, weight: FontWeight.Bold),
+                                    },
+                                    new FillFlowContainer
+                                    {
+                                        Anchor = Anchor.BottomCentre,
+                                        Origin = Anchor.BottomCentre,
+                                        AutoSizeAxes = Axes.Both,
+                                        Direction = FillDirection.Horizontal,
+                                        Spacing = new Vector2(3, 0),
+                                        Children = orderForSide(new Drawable[]
                                         {
-                                            Anchor = Anchor.BottomLeft,
-                                            Origin = Anchor.BottomLeft,
-                                            Text = maximumCombo > 0 ? $"{maximumCombo}x /" : string.Empty,
-                                            Font = OsuFont.Torus.With(size: 8),
-                                            Colour = Color4.White.Opacity(0.65f),
-                                        },
-                                        new OsuSpriteText
-                                        {
-                                            Anchor = Anchor.BottomLeft,
-                                            Origin = Anchor.BottomLeft,
-                                            Text = $"{score!.MaxCombo}x",
-                                            Font = OsuFont.Torus.With(size: 14, weight: FontWeight.Bold),
-                                            Colour = perfect ? Color4Extensions.FromHex("#FFC300") : Color4.White,
-                                        },
+                                            new OsuSpriteText
+                                            {
+                                                Anchor = Anchor.BottomLeft,
+                                                Origin = Anchor.BottomLeft,
+                                                Text = maximumCombo > 0 ? $"{maximumCombo}x" : string.Empty,
+                                                Font = OsuFont.Torus.With(size: 8),
+                                                Colour = Color4.White.Opacity(0.65f),
+                                            },
+                                            new OsuSpriteText
+                                            {
+                                                Anchor = Anchor.BottomLeft,
+                                                Origin = Anchor.BottomLeft,
+                                                Text = maximumCombo > 0 ? "/" : string.Empty,
+                                                Font = OsuFont.Torus.With(size: 8),
+                                                Colour = Color4.White.Opacity(0.65f),
+                                            },
+                                            new OsuSpriteText
+                                            {
+                                                Anchor = Anchor.BottomLeft,
+                                                Origin = Anchor.BottomLeft,
+                                                Text = $"{score!.MaxCombo}x",
+                                                Font = OsuFont.Torus.With(size: 14, weight: FontWeight.Bold),
+                                                Colour = perfect ? Color4Extensions.FromHex("#FFC300") : Color4.White,
+                                            },
+                                        }),
                                     },
                                 },
                             },
-                        },
+                        }),
                     },
                 };
             }
@@ -514,7 +632,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                 return placementBadge = new Container
                 {
                     Name = "Placement badge",
-                    Position = new Vector2(mirrored ? 299 : 76, 228),
+                    Anchor = Anchor.TopCentre,
+                    Origin = Anchor.TopCentre,
                     Size = new Vector2(25, 10),
                     Alpha = 0,
                     CornerRadius = 5,
@@ -540,7 +659,10 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                 return new Container
                 {
                     Name = "Perfect badge",
-                    Position = new Vector2(mirrored ? 137 : 215, 228),
+                    Anchor = mirrored ? Anchor.TopLeft : Anchor.TopRight,
+                    Origin = mirrored ? Anchor.TopLeft : Anchor.TopRight,
+                    // Clear the curved edge while keeping the badge beside the circle.
+                    X = mirrored ? -12 : 12,
                     Size = new Vector2(48, 9),
                     CornerRadius = 5,
                     Masking = true,
@@ -577,16 +699,14 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                     Text = difficulty,
                     Font = OsuFont.Torus.With(size: 8, weight: FontWeight.SemiBold),
                 };
-                difficultyText.OnUpdate += text => text.Scale = new Vector2(Math.Min(1, text.Parent!.DrawWidth / Math.Max(1, text.Width)));
+                difficultyText.OnUpdate += text => text.Scale = new Vector2(Math.Min(1, Math.Max(0, text.Parent!.ChildSize.X) / Math.Max(1, text.Width)));
 
                 return new FillFlowContainer
                 {
                     Name = "Beatmap information",
                     Anchor = Anchor.BottomCentre,
                     Origin = Anchor.BottomCentre,
-                    X = mirrored ? 31 : -31,
-                    Y = -13,
-                    Width = 270,
+                    RelativeSizeAxes = Axes.X,
                     AutoSizeAxes = Axes.Y,
                     Direction = FillDirection.Vertical,
                     Children = new Drawable[]
@@ -618,31 +738,28 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                             Children = new Drawable[]
                             {
                                 new Box { RelativeSizeAxes = Axes.Both, Colour = Color4Extensions.FromHex("#383838") },
-                                new Container
+                                new GridContainer
                                 {
-                                    Size = new Vector2(35, 11),
-                                    Masking = true,
-                                    CornerRadius = 5.5f,
-                                    Children = new Drawable[]
+                                    RelativeSizeAxes = Axes.Both,
+                                    ColumnDimensions = new[] { new Dimension(GridSizeMode.AutoSize), new Dimension() },
+                                    Content = new[]
                                     {
-                                        new Box { RelativeSizeAxes = Axes.Both, Colour = Color4Extensions.FromHex("#7948EA") },
-                                        new OsuSpriteText
+                                        new Drawable[]
                                         {
-                                            Anchor = Anchor.Centre,
-                                            Origin = Anchor.Centre,
-                                            Text = $"★ {score.BeatmapInfo?.StarRating ?? 0:0.00}",
-                                            Font = OsuFont.Torus.With(size: 8, weight: FontWeight.Bold),
-                                            Colour = Color4Extensions.FromHex("#FFC300"),
+                                            new StarRatingDisplay(new StarDifficulty(score.BeatmapInfo?.StarRating ?? 0, 0), StarRatingDisplaySize.Small)
+                                            {
+                                                Anchor = Anchor.CentreLeft,
+                                                Origin = Anchor.CentreLeft,
+                                                Scale = new Vector2(0.7f),
+                                            },
+                                            new Container
+                                            {
+                                                RelativeSizeAxes = Axes.Both,
+                                                Padding = new MarginPadding { Left = 4, Right = 6 },
+                                                Child = difficultyText,
+                                            },
                                         },
                                     },
-                                },
-                                new Container
-                                {
-                                    Anchor = Anchor.CentreLeft,
-                                    Origin = Anchor.CentreLeft,
-                                    X = 39,
-                                    Size = new Vector2(69, 11),
-                                    Child = difficultyText,
                                 },
                             },
                         },
@@ -650,20 +767,15 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                 };
             }
 
-            private static Drawable createBottomStatistic(string label, string value, float relativeWidth, float relativeX) => new Container
+            private static Drawable createBottomStatistic(string label, string value) => new Container
             {
                 RelativeSizeAxes = Axes.Both,
-                Width = relativeWidth,
-                RelativePositionAxes = Axes.X,
-                X = relativeX,
-                Height = 1,
                 Children = new Drawable[]
                 {
                     new OsuSpriteText
                     {
                         Anchor = Anchor.TopCentre,
                         Origin = Anchor.TopCentre,
-                        Y = 7,
                         Text = label,
                         Font = OsuFont.Torus.With(size: 11, weight: FontWeight.Bold),
                     },
@@ -671,7 +783,6 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                     {
                         Anchor = Anchor.BottomCentre,
                         Origin = Anchor.BottomCentre,
-                        Y = -7,
                         Text = value,
                         Font = OsuFont.Torus.With(size: 14, weight: FontWeight.Bold),
                     }
