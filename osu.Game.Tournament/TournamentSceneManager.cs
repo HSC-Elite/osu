@@ -184,6 +184,7 @@ namespace osu.Game.Tournament
                     {
                         AutoSizeAxes = Axes.Both,
                         Depth = float.MaxValue,
+                        WindowTitle = "Tournament Stage Window",
                         Child = stageSizeControlContainer = new Container
                         {
                             Child = new DrawSizePreservingFillContainer
