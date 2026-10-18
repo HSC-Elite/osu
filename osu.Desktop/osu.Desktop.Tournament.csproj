@@ -1,0 +1,10 @@
+<Project>
+  <!-- Reuse the desktop entry point with independent build and runtime files. -->
+  <PropertyGroup>
+    <BaseOutputPath>bin/Tournament/</BaseOutputPath>
+    <BaseIntermediateOutputPath>obj/Tournament/</BaseIntermediateOutputPath>
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin/**;obj/**</DefaultItemExcludes>
+    <RootNamespace>osu.Desktop</RootNamespace>
+  </PropertyGroup>
+  <Import Project="osu.Desktop.csproj" />
+</Project>

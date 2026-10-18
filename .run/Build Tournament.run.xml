@@ -1,9 +1,0 @@
-<component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Build Tournament" type="RunNativeExe" factoryName="Native Executable" folderName="Tournament" activateToolWindowBeforeRun="false">
-    <option name="EXE_PATH" value="C:/Program Files/dotnet/dotnet.exe" />
-    <option name="PROGRAM_PARAMETERS" value="build &quot;$PROJECT_DIR$/osu.Desktop/osu.Desktop.csproj&quot; --configuration Debug --property:OutputPath=bin/Tournament/Debug/net10.0/" />
-    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
-    <option name="PASS_PARENT_ENVS" value="1" />
-    <method v="2" />
-  </configuration>
-</component>
