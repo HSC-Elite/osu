@@ -12,7 +12,10 @@ using osu.Game.Online.Rooms;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Rulesets.Osu;
 using osu.Game.Rulesets.Osu.Mods;
+using osu.Game.Rulesets.Osu.Replays;
+using osu.Game.Rulesets.Osu.UI;
 using osu.Game.Rulesets.Scoring;
+using osu.Game.Rulesets.UI;
 using osu.Game.Screens.OnlinePlay.Multiplayer;
 using osu.Game.Screens.Play;
 
@@ -38,6 +41,20 @@ namespace osu.Game.Tests.Visual.Multiplayer
         }
 
         [Test]
+        public void TestReplayInputSurvivesMultiplayerStart()
+        {
+            DrawableOsuRuleset drawable() => ((ReplayInputMultiplayerPlayer)player).TestDrawableRuleset;
+
+            setup(replayInput: true);
+            AddUntilStep("wait for gameplay start", () => player.LocalUserPlaying.Value);
+            AddAssert("physical input remains blocked", () => !drawable().KeyBindingInputManager.UseParentInput);
+            AddAssert("no replay handler attached", () => drawable().KeyBindingInputManager.ReplayInputHandler == null);
+            AddAssert("local clock has no replay handler", () => ((FrameStabilityContainer)drawable().FrameStableClock).ReplayInputHandler == null);
+            AddUntilStep("recorded input produces score", () => player.ScoreProcessor.TotalScore.Value > 0);
+            AddAssert("input recorded for spectators", () => player.Score.Replay.Frames.OfType<OsuReplayFrame>().Any(f => f.Actions.Any()));
+        }
+
+        [Test]
         public void TestFail()
         {
             setup(() => new[] { new OsuModAutopilot() });
@@ -54,7 +71,7 @@ namespace osu.Game.Tests.Visual.Multiplayer
             AddUntilStep("score changed", () => player.GameplayState.ScoreProcessor.TotalScore.Value > 0);
         }
 
-        private void setup(Func<IReadOnlyList<Mod>>? mods = null)
+        private void setup(Func<IReadOnlyList<Mod>>? mods = null, bool replayInput = false)
         {
             AddStep("set beatmap", () =>
             {
@@ -69,10 +86,14 @@ namespace osu.Game.Tests.Visual.Multiplayer
 
             AddStep("initialise gameplay", () =>
             {
-                Stack.Push(player = new MultiplayerPlayer(MultiplayerClient.ServerAPIRoom!, new PlaylistItem(Beatmap.Value.BeatmapInfo)
+                var item = new PlaylistItem(Beatmap.Value.BeatmapInfo)
                 {
                     RulesetID = Beatmap.Value.BeatmapInfo.Ruleset.OnlineID,
-                }, MultiplayerClient.ServerRoom!.Users.ToArray()));
+                };
+                var users = MultiplayerClient.ServerRoom!.Users.ToArray();
+                Stack.Push(player = replayInput
+                    ? new ReplayInputMultiplayerPlayer(MultiplayerClient.ServerAPIRoom!, item, users)
+                    : new MultiplayerPlayer(MultiplayerClient.ServerAPIRoom!, item, users));
             });
 
             AddUntilStep("wait for player to be current", () => player.IsCurrentScreen() && player.IsLoaded);
@@ -84,6 +105,22 @@ namespace osu.Game.Tests.Visual.Multiplayer
 
             AddUntilStep("gameplay clock is not paused", () => !player.ChildrenOfType<GameplayClockContainer>().Single().IsPaused.Value);
             AddAssert("gameplay clock is running", () => player.ChildrenOfType<GameplayClockContainer>().Single().IsRunning);
+        }
+
+        private partial class ReplayInputMultiplayerPlayer : MultiplayerPlayer
+        {
+            public DrawableOsuRuleset TestDrawableRuleset => (DrawableOsuRuleset)DrawableRuleset;
+
+            public ReplayInputMultiplayerPlayer(Room room, PlaylistItem item, MultiplayerRoomUser[] users)
+                : base(room, item, users)
+            {
+            }
+
+            protected override void PrepareReplay()
+            {
+                base.PrepareReplay();
+                ((DrawableOsuRuleset)DrawableRuleset).SetReplayInput(new OsuAutoGenerator(GameplayState.Beatmap, GameplayState.Mods).Generate());
+            }
         }
     }
 }

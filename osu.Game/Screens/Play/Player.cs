@@ -220,11 +220,16 @@ namespace osu.Game.Screens.Play
         /// </summary>
         protected virtual void PrepareReplay()
         {
+            if (testPlayerReplay != null)
+                DrawableRuleset.SetReplayInput(testPlayerReplay.Replay);
+
             DrawableRuleset.SetRecordTarget(Score);
         }
 
+        private Score testPlayerReplay;
+
         [BackgroundDependencyLoader(true)]
-        private void load(OsuConfigManager config, OsuGameBase game, CancellationToken cancellationToken)
+        private void load(OsuConfigManager config, OsuGameBase game, CancellationToken cancellationToken, CustomConfigManager customConfig, IRulesetStore rulesets, BeatmapManager beatmaps)
         {
             var gameplayMods = Mods.Value.Select(m => m.DeepClone()).ToArray();
 
@@ -241,6 +246,36 @@ namespace osu.Game.Screens.Play
 
             if (playableBeatmap == null)
                 return;
+
+            string replayPath = customConfig?.Get<string>(CustomSetting.TestPlayerReplayPath)?.Trim().Trim('"');
+
+            if (this is SubmittingPlayer && game?.UseDevelopmentServer == true && !string.IsNullOrEmpty(replayPath))
+            {
+                try
+                {
+                    if (ruleset.RulesetInfo.ShortName != "osu")
+                        throw new InvalidOperationException("Test player replay input currently supports osu! only.");
+
+                    if (gameplayMods.Any(m => m.Type == ModType.Automation))
+                        throw new InvalidOperationException("Test player replay input cannot be combined with automation mods.");
+
+                    using var stream = File.OpenRead(replayPath);
+                    var replay = new DatabasedLegacyScoreDecoder(rulesets, beatmaps).Parse(stream);
+                    if (replay.ScoreInfo.BeatmapInfo?.MD5Hash != Beatmap.Value.BeatmapInfo.MD5Hash
+                        || replay.ScoreInfo.Ruleset.ShortName != ruleset.RulesetInfo.ShortName
+                        || !replay.ScoreInfo.Mods.OrderBy(m => m.Acronym).SequenceEqual(gameplayMods.OrderBy(m => m.Acronym))
+                        || replay.Replay.Frames.Count == 0)
+                        throw new InvalidOperationException("Test player replay must contain frames and match the current beatmap, ruleset and mods.");
+
+                    testPlayerReplay = replay;
+                    Logger.Log("Test player replay input loaded.", level: LogLevel.Important);
+                }
+                catch (Exception e)
+                {
+                    Logger.Error(e, "Could not load test player replay. Gameplay loading aborted.");
+                    return;
+                }
+            }
 
             if (!ModUtils.CheckModsBelongToRuleset(ruleset, gameplayMods))
             {
