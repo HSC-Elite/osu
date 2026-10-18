@@ -94,7 +94,7 @@ namespace osu.Game.Tournament.Screens.MapPool
 
             InternalChildren = new Drawable[]
             {
-                controlPanel = new ControlPanel
+                controlPanel = new ControlPanel(true)
                 {
                     Children = new Drawable[]
                     {
