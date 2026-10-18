@@ -214,7 +214,7 @@ namespace osu.Game.Tournament
             stageHeight.BindValueChanged(h =>
             {
                 stageSizeControlContainer.Size = new Vector2((int)(h.NewValue * ASPECT_RATIO), h.NewValue);
-            });
+            }, true);
         }
 
         private float depth;
