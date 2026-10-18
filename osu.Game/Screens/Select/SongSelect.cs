@@ -50,6 +50,7 @@ using osu.Game.Screens.Footer;
 using osu.Game.Screens.Menu;
 using osu.Game.Screens.Play;
 using osu.Game.Screens.Ranking;
+using osu.Game.Screens.Tournament.GameplayScreenResultsScreen;
 using osu.Game.Skinning;
 using osu.Game.Utils;
 using osuTK;
@@ -1167,7 +1168,7 @@ namespace osu.Game.Screens.Select
                     Debug.Assert(Beatmap.Value.BeatmapInfo.Equals(score.BeatmapInfo));
                     Debug.Assert(Ruleset.Value.Equals(score.Ruleset));
 
-                    this.Push(new SoloResultsScreen(score));
+                    this.Push(OsuGameBase.IsTournament ? new TournamentResultsScreen(score, true) : new SoloResultsScreen(score));
                     break;
 
                 case ScorePresentType.Gameplay:

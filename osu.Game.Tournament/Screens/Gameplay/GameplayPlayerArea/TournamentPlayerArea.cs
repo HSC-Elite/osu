@@ -6,7 +6,7 @@ using osu.Game.Scoring;
 using osu.Game.Screens.OnlinePlay.Multiplayer.Spectate;
 using osu.Game.Screens.Play.Leaderboards;
 using osu.Game.Screens.Ranking;
-using osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen;
+using osu.Game.Screens.Tournament.GameplayScreenResultsScreen;
 
 namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 {

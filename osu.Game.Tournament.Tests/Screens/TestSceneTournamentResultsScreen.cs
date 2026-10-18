@@ -25,10 +25,10 @@ using osu.Game.Screens.Play;
 using osu.Game.Screens.Play.Leaderboards;
 using osu.Game.Screens.Ranking;
 using osu.Game.Screens.Ranking.Expanded.Accuracy;
+using osu.Game.Screens.Tournament.GameplayScreenResultsScreen;
 using osu.Game.Tests.Resources;
 using osu.Game.Tests.Visual;
 using osu.Game.Tests.Visual.Ranking;
-using osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen;
 using osuTK;
 using Realms;
 
@@ -77,6 +77,7 @@ namespace osu.Game.Tournament.Tests.Screens
         [TestCase(0.75, ScoreRank.C, 11)]
         [TestCase(0.5, ScoreRank.D, 21)]
         [TestCase(0.2, ScoreRank.D, 51)]
+        [TestCase(0.01, ScoreRank.D, 100)]
         public void TestResultsWithPlayer(double accuracy, ScoreRank rank, int missCount)
         {
             TestResultsScreen? screen = null;

@@ -3,6 +3,8 @@
 
 using System;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Extensions.Color4Extensions;
@@ -24,7 +26,7 @@ using osu.Game.Users.Drawables;
 using osuTK;
 using osuTK.Graphics;
 
-namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
+namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
 {
     public partial class TournamentResultsScreen : ResultsScreen
     {
@@ -79,6 +81,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
             private GameplayLeaderboardScore? trackedScore;
             private Container placementBadge = null!;
             private OsuSpriteText placementText = null!;
+            private OsuSpriteText performanceText = null!;
+            private CancellationTokenSource? performanceCancellation;
 
             public ResultCard(ScoreInfo? score, bool mirrored)
             {
@@ -91,7 +95,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
             }
 
             [BackgroundDependencyLoader]
-            private void load()
+            private void load(BeatmapDifficultyCache difficultyCache, CancellationToken? cancellationToken)
             {
                 if (score == null)
                 {
@@ -122,6 +126,27 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                         new[] { createBeatmapInformation() },
                     },
                 };
+
+                if (!score.PP.HasValue && score.BeatmapInfo != null)
+                {
+                    performanceCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken ?? CancellationToken.None);
+                    var token = performanceCancellation.Token;
+
+                    Task.Run(async () =>
+                    {
+                        var attributes = await difficultyCache.GetDifficultyAsync(score.BeatmapInfo, score.Ruleset, score.Mods, token).ConfigureAwait(false);
+                        var performanceCalculator = score.Ruleset.CreateInstance().CreatePerformanceCalculator();
+
+                        // Calculation requires the beatmap and ruleset to be locally available.
+                        if (attributes?.DifficultyAttributes == null || performanceCalculator == null)
+                            return;
+
+                        var result = await performanceCalculator.CalculateAsync(score, attributes.Value.DifficultyAttributes, token).ConfigureAwait(false);
+
+                        token.ThrowIfCancellationRequested();
+                        Schedule(() => performanceText.Text = result.Total.ToString("0"));
+                    }, token);
+                }
             }
 
             private Drawable createBody()
@@ -284,6 +309,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
 
             protected override void Dispose(bool isDisposing)
             {
+                performanceCancellation?.Cancel();
+                performanceCancellation?.Dispose();
                 leaderboardScores.UnbindAll();
                 placement.UnbindAll();
                 base.Dispose(isDisposing);
@@ -444,7 +471,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                 Anchor = mirrored ? Anchor.CentreLeft : Anchor.CentreRight,
                 Origin = mirrored ? Anchor.CentreLeft : Anchor.CentreRight,
                 RelativeSizeAxes = Axes.Both,
-                Size = new Vector2(1.35f, 1),
+                Size = new Vector2(1.5f, 1),
                 Masking = true,
                 CornerRadius = 12,
                 Shear = new Vector2(mirrored ? 0.12f : -0.12f, 0),
@@ -466,6 +493,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                     Origin = Anchor.Centre,
                     RelativeSizeAxes = Axes.X,
                     Height = 76,
+                    Padding = new MarginPadding { Horizontal = 10f, Top = 3f },
                     // Slant the placement, then cancel the shear on each item to keep its text upright.
                     Shear = shear,
                     ColumnDimensions = new[] { new Dimension(), new Dimension() },
@@ -543,7 +571,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                     Anchor = mirrored ? Anchor.CentreLeft : Anchor.CentreRight,
                     Origin = mirrored ? Anchor.CentreLeft : Anchor.CentreRight,
                     RelativeSizeAxes = Axes.Both,
-                    Size = new Vector2(1.35f, 1),
+                    Size = new Vector2(1.5f, 1),
                     Masking = true,
                     CornerRadius = 9,
                     Shear = new Vector2(mirrored ? -0.29f : 0.29f, 0),
@@ -572,7 +600,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                     {
                         orderForSide(new Drawable[]
                         {
-                            createBottomStatistic("PP", score!.PP?.ToString("0") ?? "—"),
+                            createPerformanceStatistic(),
                             new Box
                             {
                                 Anchor = Anchor.Centre,
@@ -699,14 +727,6 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                                ?? "Tournament result";
                 string difficulty = score.BeatmapInfo?.DifficultyName ?? string.Empty;
                 string artist = score.BeatmapInfo?.Metadata.Artist ?? string.Empty;
-                var difficultyText = new OsuSpriteText
-                {
-                    Anchor = Anchor.CentreLeft,
-                    Origin = Anchor.CentreLeft,
-                    Text = difficulty,
-                    Font = OsuFont.Torus.With(size: 8, weight: FontWeight.SemiBold),
-                };
-                difficultyText.OnUpdate += text => text.Scale = new Vector2(Math.Min(1, Math.Max(0, text.Parent!.ChildSize.X) / Math.Max(1, text.Width)));
 
                 return new FillFlowContainer
                 {
@@ -739,7 +759,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                             Anchor = Anchor.TopCentre,
                             Origin = Anchor.TopCentre,
                             Margin = new MarginPadding { Top = 3 },
-                            Size = new Vector2(111, 11),
+                            AutoSizeAxes = Axes.X,
+                            Height = 11,
                             Masking = true,
                             CornerRadius = 5.5f,
                             Children = new Drawable[]
@@ -747,8 +768,9 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                                 new Box { RelativeSizeAxes = Axes.Both, Colour = Color4Extensions.FromHex("#383838") },
                                 new GridContainer
                                 {
-                                    RelativeSizeAxes = Axes.Both,
-                                    ColumnDimensions = new[] { new Dimension(GridSizeMode.AutoSize), new Dimension() },
+                                    RelativeSizeAxes = Axes.Y,
+                                    AutoSizeAxes = Axes.X,
+                                    ColumnDimensions = new[] { new Dimension(GridSizeMode.AutoSize), new Dimension(GridSizeMode.AutoSize) },
                                     Content = new[]
                                     {
                                         new Drawable[]
@@ -761,9 +783,21 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                                             },
                                             new Container
                                             {
-                                                RelativeSizeAxes = Axes.Both,
+                                                RelativeSizeAxes = Axes.Y,
+                                                AutoSizeAxes = Axes.X,
                                                 Padding = new MarginPadding { Left = 4, Right = 6 },
-                                                Child = difficultyText,
+                                                Children = new Drawable[]
+                                                {
+                                                    // Keep the original badge width as the minimum while allowing longer difficulty names.
+                                                    new Container { Size = new Vector2(50, 11) },
+                                                    new OsuSpriteText
+                                                    {
+                                                        Anchor = Anchor.Centre,
+                                                        Origin = Anchor.Centre,
+                                                        Text = difficulty,
+                                                        Font = OsuFont.Torus.With(size: 8, weight: FontWeight.SemiBold),
+                                                    },
+                                                }
                                             },
                                         },
                                     },
@@ -774,7 +808,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                 };
             }
 
-            private static Drawable createBottomStatistic(string label, string value) => new Container
+            private Drawable createPerformanceStatistic() => new Container
             {
                 RelativeSizeAxes = Axes.Both,
                 Children = new Drawable[]
@@ -783,14 +817,14 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
                     {
                         Anchor = Anchor.TopCentre,
                         Origin = Anchor.TopCentre,
-                        Text = label,
+                        Text = "PP",
                         Font = OsuFont.Torus.With(size: 11, weight: FontWeight.Bold),
                     },
-                    new OsuSpriteText
+                    performanceText = new OsuSpriteText
                     {
                         Anchor = Anchor.BottomCentre,
                         Origin = Anchor.BottomCentre,
-                        Text = value,
+                        Text = score!.PP?.ToString("0") ?? "—",
                         Font = OsuFont.Torus.With(size: 14, weight: FontWeight.Bold),
                     }
                 }
@@ -835,8 +869,11 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen
             {
                 InternalChild = new FillFlowContainer
                 {
-                    RelativeSizeAxes = Axes.Both,
+                    AutoSizeAxes = Axes.Both,
                     Direction = FillDirection.Vertical,
+                    Spacing = new Vector2(0, -3),
+                    Anchor = Anchor.Centre,
+                    Origin = Anchor.Centre,
                     Children = new Drawable[]
                     {
                         new OsuSpriteText
