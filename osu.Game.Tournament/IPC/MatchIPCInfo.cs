@@ -93,7 +93,7 @@ namespace osu.Game.Tournament.IPC
 
         private void onWorkingBeatmapChanged(ValueChangedEvent<WorkingBeatmap> _) => updateTrackLooping();
 
-        private void updateTrackLooping() => workingBeatmap.Value.PrepareTrackForPreview(State.Value != TourneyState.Idle);
+        private void updateTrackLooping() => workingBeatmap.Value.PrepareTrackForPreview(State.Value == TourneyState.Idle);
 
         protected override void Update()
         {
