@@ -12,6 +12,7 @@ using osu.Framework.Extensions.Color4Extensions;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
+using osu.Framework.Screens;
 using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.Drawables;
 using osu.Game.Graphics;
@@ -126,6 +127,13 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
         /// </summary>
         protected virtual int? GetPlacement(ScoreInfo score, IReadOnlyList<GameplayLeaderboardScore> scores)
             => scores.FirstOrDefault(s => s.User.OnlineID == score.UserID)?.Position.Value;
+
+        public override void OnEntering(ScreenTransitionEvent e)
+        {
+            base.OnEntering(e);
+
+            this.FadeInFromZero(250);
+        }
 
         private partial class TournamentResultsContent : CompositeDrawable
         {
