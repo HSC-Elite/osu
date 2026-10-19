@@ -170,8 +170,8 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
             private TournamentResultsScreen resultsScreen { get; set; } = null!;
 
             private Container placementBadge = null!;
-            private OsuSpriteText placementText = null!;
-            private OsuSpriteText performanceText = null!;
+            private StatisticCounter placementText = null!;
+            private StatisticCounter performanceText = null!;
             private AccuracyCircle accuracyCircle = null!;
             private Drawable header = null!;
             private Drawable beatmapInformation = null!;
@@ -241,7 +241,7 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                         var result = await performanceCalculator.CalculateAsync(score, attributes.Value.DifficultyAttributes, token).ConfigureAwait(false);
 
                         token.ThrowIfCancellationRequested();
-                        Schedule(() => performanceText.Text = result.Total.ToString("0"));
+                        Schedule(() => performanceText.SetValue(result.Total));
                     }, token);
                 }
             }
@@ -339,6 +339,7 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
             private Drawable addBodyEntrancePart(Drawable drawable)
             {
                 bodyEntranceParts.Add(drawable);
+                drawable.AlwaysPresent = true;
                 return drawable;
             }
 
@@ -370,10 +371,10 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                 accuracyCircle.FadeInFromZero(250);
 
                 foreach (var part in bodyEntranceParts)
-                    part.FadeOut().Delay(1000).FadeIn(250);
+                    part.FadeOut().Delay(500).FadeIn(250);
 
-                header.FadeOut().Delay(2000).FadeIn(250);
-                beatmapInformation.FadeOut().Delay(2000).FadeIn(250);
+                header.FadeOut().Delay(1000).FadeIn(250);
+                beatmapInformation.FadeOut().Delay(1000).FadeIn(250);
 
                 placement.BindValueChanged(_ => updatePlacement(), true);
 
@@ -424,18 +425,8 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
             private void updatePlacement()
             {
                 int position = placement.Value.GetValueOrDefault();
-                string suffix = position % 100 is 11 or 12 or 13
-                    ? "th"
-                    : (position % 10) switch
-                    {
-                        1 => "st",
-                        2 => "nd",
-                        3 => "rd",
-                        _ => "th",
-                    };
-
                 placementBadge.Alpha = position > 0 ? 1 : 0;
-                placementText.Text = position > 0 ? $"{position}{suffix}" : string.Empty;
+                placementText.SetValue(position);
                 placementText.Colour = position == 1 ? Color4Extensions.FromHex("#FFC300") : Color4.White;
             }
 
@@ -575,11 +566,7 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                                             Text = "Accuracy",
                                             Font = OsuFont.Torus.With(size: 12, weight: FontWeight.Bold),
                                         },
-                                        new OsuSpriteText
-                                        {
-                                            Text = score.Accuracy.ToString("P2"),
-                                            Font = OsuFont.Torus.With(size: 13, weight: FontWeight.Bold),
-                                        },
+                                        new StatisticCounter(score.Accuracy, count => count.ToString("P2"), 13),
                                     },
                                 },
                             }),
@@ -785,12 +772,10 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                                                 Font = OsuFont.Torus.With(size: 8),
                                                 Colour = Color4.White.Opacity(0.65f),
                                             },
-                                            new OsuSpriteText
+                                            new StatisticCounter(score!.MaxCombo, count => $"{count:0}x", 14)
                                             {
                                                 Anchor = Anchor.BottomLeft,
                                                 Origin = Anchor.BottomLeft,
-                                                Text = $"{score!.MaxCombo}x",
-                                                Font = OsuFont.Torus.With(size: 14, weight: FontWeight.Bold),
                                                 Colour = perfect ? Color4Extensions.FromHex("#FFC300") : Color4.White,
                                             },
                                         }),
@@ -816,14 +801,29 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                     Children = new Drawable[]
                     {
                         new Box { RelativeSizeAxes = Axes.Both, Colour = Color4Extensions.FromHex("#383838") },
-                        placementText = new OsuSpriteText
+                        placementText = new StatisticCounter(0, formatPlacement, 8)
                         {
                             Anchor = Anchor.Centre,
                             Origin = Anchor.Centre,
-                            Font = OsuFont.Torus.With(size: 8, weight: FontWeight.Bold),
                         },
                     },
                 };
+            }
+
+            private static string formatPlacement(double count)
+            {
+                int position = (int)Math.Round(count);
+                string suffix = position % 100 is 11 or 12 or 13
+                    ? "th"
+                    : (position % 10) switch
+                    {
+                        1 => "st",
+                        2 => "nd",
+                        3 => "rd",
+                        _ => "th",
+                    };
+
+                return position > 0 ? $"{position}{suffix}" : string.Empty;
             }
 
             private Drawable createPerfectBadge()
@@ -961,12 +961,10 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                         Text = "PP",
                         Font = OsuFont.Torus.With(size: 11, weight: FontWeight.Bold),
                     },
-                    performanceText = new OsuSpriteText
+                    performanceText = new StatisticCounter(score!.PP, count => count.ToString("0"), 14)
                     {
                         Anchor = Anchor.BottomCentre,
                         Origin = Anchor.BottomCentre,
-                        Text = score!.PP?.ToString("0") ?? "—",
-                        Font = OsuFont.Torus.With(size: 14, weight: FontWeight.Bold),
                     }
                 }
             };
@@ -1016,6 +1014,48 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
             };
         }
 
+        private partial class StatisticCounter : RollingCounter<double>
+        {
+            private double? value;
+            private readonly Func<double, string> format;
+            private readonly float fontSize;
+            private bool rollingStarted;
+
+            protected override double RollingDuration => AccuracyCircle.ACCURACY_TRANSFORM_DURATION;
+
+            public StatisticCounter(double? value, Func<double, string> format, float fontSize)
+            {
+                this.value = value;
+                this.format = format;
+                this.fontSize = fontSize;
+            }
+
+            public void SetValue(double newValue)
+            {
+                value = newValue;
+
+                if (rollingStarted)
+                    Current.Value = newValue;
+
+                UpdateDisplay();
+            }
+
+            protected override void LoadComplete()
+            {
+                base.LoadComplete();
+
+                rollingStarted = true;
+                Current.Value = value ?? 0;
+            }
+
+            protected override LocalisableString FormatCount(double count) => value.HasValue ? format(count) : "—";
+
+            protected override OsuSpriteText CreateSpriteText() => new OsuSpriteText
+            {
+                Font = OsuFont.Torus.With(size: fontSize, weight: FontWeight.Bold),
+            };
+        }
+
         private partial class HitStatistic : CompositeDrawable
         {
             private readonly string label;
@@ -1053,12 +1093,10 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                             Font = OsuFont.Torus.With(size: 16, weight: FontWeight.Bold),
                             Colour = colour,
                         },
-                        new OsuSpriteText
+                        new StatisticCounter(value, count => count.ToString("0"), 22)
                         {
                             Anchor = Anchor.TopCentre,
                             Origin = Anchor.TopCentre,
-                            Text = value.ToString(),
-                            Font = OsuFont.Torus.With(size: 22, weight: FontWeight.Bold),
                             Colour = colour.Lighten(0.5f),
                         },
                     }
