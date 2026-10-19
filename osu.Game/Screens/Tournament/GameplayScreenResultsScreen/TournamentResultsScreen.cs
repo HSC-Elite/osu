@@ -173,6 +173,9 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
             private OsuSpriteText placementText = null!;
             private OsuSpriteText performanceText = null!;
             private AccuracyCircle accuracyCircle = null!;
+            private Drawable header = null!;
+            private Drawable beatmapInformation = null!;
+            private readonly List<Drawable> bodyEntranceParts = new List<Drawable>();
             private Box scoreStripBackground = null!;
             private GridContainer scoreStripText = null!;
             private ScoreRank? headerRank;
@@ -215,9 +218,9 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                     },
                     Content = new[]
                     {
-                        new[] { createHeader() },
+                        new[] { header = createHeader() },
                         new[] { createBody() },
-                        new[] { createBeatmapInformation() },
+                        new[] { beatmapInformation = createBeatmapInformation() },
                     },
                 };
 
@@ -251,14 +254,14 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                     RelativeSizeAxes = Axes.Both,
                     Children = new Drawable[]
                     {
-                        createModsBackground(),
+                        addBodyEntrancePart(createModsBackground()),
                         new Container
                         {
                             RelativeSizeAxes = Axes.Both,
                             Padding = mirrored ? new MarginPadding { Right = mods_width } : new MarginPadding { Left = mods_width },
                             Children = new Drawable[]
                             {
-                                createRankCircleBackground(),
+                                addBodyEntrancePart(createRankCircleBackground()),
                                 accuracyCircle = new AccuracyCircle(score!, showRankBadges: false, rankTextScale: 0.72f)
                                 {
                                     Name = "Accuracy circle",
@@ -266,7 +269,7 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                                     Origin = Anchor.Centre,
                                     Size = new Vector2(circle_size),
                                 },
-                                createMods(),
+                                addBodyEntrancePart(createMods()),
                             },
                         },
                     },
@@ -294,17 +297,17 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                     RelativeSizeAxes = Axes.Both,
                     Children = new Drawable[]
                     {
-                        createBodyGrid(new[]
+                        addBodyEntrancePart(createBodyGrid(new[]
                         {
                             orderForSide(new Drawable[] { null!, statistics }),
                             new Drawable[] { null!, null! },
-                        }),
+                        })),
                         createBodyGrid(new[]
                         {
                             orderForSide(new Drawable[] { circle, null! }),
                             new Drawable[] { null!, null! },
                         }),
-                        createBodyGrid(new[]
+                        addBodyEntrancePart(createBodyGrid(new[]
                         {
                             new Drawable[] { null!, null! },
                             orderForSide(new[]
@@ -328,9 +331,15 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                                 },
                                 null!,
                             }),
-                        }),
+                        })),
                     },
                 };
+            }
+
+            private Drawable addBodyEntrancePart(Drawable drawable)
+            {
+                bodyEntranceParts.Add(drawable);
+                return drawable;
             }
 
             private GridContainer createBodyGrid(Drawable[][] content) => new GridContainer
@@ -357,6 +366,14 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
 
                 if (score == null)
                     return;
+
+                accuracyCircle.FadeInFromZero(250);
+
+                foreach (var part in bodyEntranceParts)
+                    part.FadeOut().Delay(1000).FadeIn(250);
+
+                header.FadeOut().Delay(2000).FadeIn(250);
+                beatmapInformation.FadeOut().Delay(2000).FadeIn(250);
 
                 placement.BindValueChanged(_ => updatePlacement(), true);
 
@@ -439,6 +456,7 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                 return new Container
                 {
                     Name = "Score header",
+                    AlwaysPresent = true,
                     Anchor = Anchor.TopCentre,
                     Origin = Anchor.TopCentre,
                     Size = new Vector2(255, avatar_size),
@@ -853,6 +871,7 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                 return new FillFlowContainer
                 {
                     Name = "Beatmap information",
+                    AlwaysPresent = true,
                     Anchor = Anchor.BottomCentre,
                     Origin = Anchor.BottomCentre,
                     RelativeSizeAxes = Axes.X,
