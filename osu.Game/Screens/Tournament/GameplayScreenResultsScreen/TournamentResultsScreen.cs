@@ -2,6 +2,7 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -28,6 +29,7 @@ using osuTK.Graphics;
 
 namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
 {
+    [Cached(typeof(TournamentResultsScreen))]
     public partial class TournamentResultsScreen : ResultsScreen
     {
         /// <summary>
@@ -49,6 +51,12 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
         {
             InternalChild = new TournamentResultsContent(Score, Mirrored);
         }
+
+        /// <summary>
+        /// Returns the placement to display for a player in the shared leaderboard.
+        /// </summary>
+        protected virtual int? GetPlacement(ScoreInfo score, IReadOnlyList<GameplayLeaderboardScore> scores)
+            => scores.FirstOrDefault(s => s.User.OnlineID == score.UserID)?.Position.Value;
 
         private partial class TournamentResultsContent : CompositeDrawable
         {
@@ -78,7 +86,11 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
 
             private readonly IBindableList<GameplayLeaderboardScore> leaderboardScores = new BindableList<GameplayLeaderboardScore>();
             private readonly Bindable<int?> placement = new Bindable<int?>();
-            private GameplayLeaderboardScore? trackedScore;
+            private readonly List<IBindable<int?>> trackedPositions = new List<IBindable<int?>>();
+
+            [Resolved]
+            private TournamentResultsScreen resultsScreen { get; set; } = null!;
+
             private Container placementBadge = null!;
             private OsuSpriteText placementText = null!;
             private OsuSpriteText performanceText = null!;
@@ -275,18 +287,26 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
 
             private void bindPlacement()
             {
-                var playerScore = leaderboardScores.FirstOrDefault(s => s.User.OnlineID == score!.UserID);
-                if (ReferenceEquals(playerScore, trackedScore))
-                    return;
+                unbindPositions();
 
-                if (trackedScore != null)
-                    placement.UnbindFrom(trackedScore.Position);
+                foreach (var playerScore in leaderboardScores)
+                {
+                    var position = playerScore.Position.GetBoundCopy();
+                    trackedPositions.Add(position);
+                    position.BindValueChanged(_ => refreshPlacement());
+                }
 
-                trackedScore = playerScore;
-                placement.Value = null;
+                refreshPlacement();
+            }
 
-                if (trackedScore != null)
-                    placement.BindTo(trackedScore.Position);
+            private void refreshPlacement() => placement.Value = resultsScreen.GetPlacement(score!, leaderboardScores.ToArray());
+
+            private void unbindPositions()
+            {
+                foreach (var position in trackedPositions)
+                    position.UnbindAll();
+
+                trackedPositions.Clear();
             }
 
             private void updatePlacement()
@@ -311,6 +331,7 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
             {
                 performanceCancellation?.Cancel();
                 performanceCancellation?.Dispose();
+                unbindPositions();
                 leaderboardScores.UnbindAll();
                 placement.UnbindAll();
                 base.Dispose(isDisposing);

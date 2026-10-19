@@ -190,7 +190,7 @@ namespace osu.Game.Tournament.IPC
             return leaderboardProvider!.Scores.Where(u => teamIds.Any(t => t == u.User.OnlineID));
         }
 
-        protected int[] GetTeamIds(TeamColour colour)
+        public int[] GetTeamIds(TeamColour colour)
         {
             if (teamIdsCache.TryGetValue(colour, out int[]? ids))
                 return ids;
