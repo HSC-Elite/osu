@@ -48,6 +48,7 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
             set
             {
                 hideBottomPanel = value;
+
                 if (bottomPanel != null)
                 {
                     bottomPanel.Alpha = value ? 0 : 1;
@@ -440,14 +441,25 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                                                 {
                                                     RelativeSizeAxes = Axes.Both,
                                                     Padding = new MarginPadding { Horizontal = 5f },
-                                                    Child = new TruncatingSpriteText
+                                                    Children = new Drawable[]
                                                     {
-                                                        Anchor = mirrored ? Anchor.TopRight : Anchor.TopLeft,
-                                                        Origin = mirrored ? Anchor.TopRight : Anchor.TopLeft,
-                                                        MaxWidth = 255 - avatar_size - 10,
-                                                        Text = $"{score?.User.Username}'s Ranking",
-                                                        Font = OsuFont.Torus.With(size: 16, weight: FontWeight.Bold),
-                                                    },
+                                                        new TruncatingSpriteText
+                                                        {
+                                                            Anchor = mirrored ? Anchor.TopRight : Anchor.TopLeft,
+                                                            Origin = mirrored ? Anchor.TopRight : Anchor.TopLeft,
+                                                            MaxWidth = 255 - avatar_size - 10,
+                                                            Text = $"{score?.User.Username}'s Ranking",
+                                                            Font = OsuFont.Torus.With(size: 16, weight: FontWeight.Bold),
+                                                        },
+                                                        new TruncatingSpriteText
+                                                        {
+                                                            Anchor = mirrored ? Anchor.BottomRight : Anchor.BottomLeft,
+                                                            Origin = mirrored ? Anchor.BottomRight : Anchor.BottomLeft,
+                                                            MaxWidth = 255 - avatar_size - 10,
+                                                            Text = $"Played on {score?.Date}",
+                                                            Font = OsuFont.Torus.With(size: 8, weight: FontWeight.Medium),
+                                                        },
+                                                    }
                                                 },
                                             },
                                             new[] { createScoreStrip() },
