@@ -12,6 +12,7 @@ using osu.Framework.Extensions.Color4Extensions;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
+using osu.Framework.Localisation;
 using osu.Framework.Screens;
 using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.Drawables;
@@ -171,6 +172,10 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
             private Container placementBadge = null!;
             private OsuSpriteText placementText = null!;
             private OsuSpriteText performanceText = null!;
+            private AccuracyCircle accuracyCircle = null!;
+            private Box scoreStripBackground = null!;
+            private GridContainer scoreStripText = null!;
+            private ScoreRank? headerRank;
             private CancellationTokenSource? performanceCancellation;
 
             public ResultCard(ScoreInfo? score, bool mirrored)
@@ -254,7 +259,7 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                             Children = new Drawable[]
                             {
                                 createRankCircleBackground(),
-                                new AccuracyCircle(score!, showRankBadges: false, rankTextScale: 0.72f)
+                                accuracyCircle = new AccuracyCircle(score!, showRankBadges: false, rankTextScale: 0.72f)
                                 {
                                     Name = "Accuracy circle",
                                     Anchor = Anchor.Centre,
@@ -360,6 +365,19 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                     leaderboardScores.BindTo(leaderboard.Scores);
                     leaderboardScores.BindCollectionChanged((_, _) => bindPlacement(), true);
                 }
+            }
+
+            protected override void UpdateAfterChildren()
+            {
+                base.UpdateAfterChildren();
+
+                if (score == null || headerRank == accuracyCircle.CurrentRank)
+                    return;
+
+                // Read after the gauge's transforms have updated so both visuals change in the same frame.
+                headerRank = accuracyCircle.CurrentRank;
+                scoreStripBackground.FadeColour(scoreHeaderColour(headerRank.Value), 100);
+                scoreStripText.FadeColour(scoreHeaderTextColour(headerRank.Value), 100);
             }
 
             private void bindPlacement()
@@ -504,13 +522,13 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                         Shear = new Vector2(mirrored ? 0.14f : -0.14f, 0),
                         Masking = true,
                         CornerRadius = 3,
-                        Child = new Box
+                        Child = scoreStripBackground = new Box
                         {
                             RelativeSizeAxes = Axes.Both,
-                            Colour = scoreHeaderColour(score!.Rank),
+                            Colour = scoreHeaderColour(ScoreRank.D),
                         },
                     },
-                    new GridContainer
+                    scoreStripText = new GridContainer
                     {
                         RelativeSizeAxes = Axes.Both,
                         Padding = new MarginPadding { Horizontal = 8 },
@@ -521,13 +539,10 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                         {
                             orderForSide(new Drawable[]
                             {
-                                new OsuSpriteText
+                                new ScoreCounter(score!.TotalScore)
                                 {
                                     Anchor = Anchor.Centre,
                                     Origin = Anchor.Centre,
-                                    Text = score!.TotalScore.ToString("N0"),
-                                    Font = OsuFont.Torus.With(size: 36, weight: FontWeight.Bold),
-                                    Colour = scoreHeaderTextColour(score.Rank),
                                 },
                                 new FillFlowContainer
                                 {
@@ -541,13 +556,11 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                                         {
                                             Text = "Accuracy",
                                             Font = OsuFont.Torus.With(size: 12, weight: FontWeight.Bold),
-                                            Colour = scoreHeaderTextColour(score.Rank),
                                         },
                                         new OsuSpriteText
                                         {
                                             Text = score.Accuracy.ToString("P2"),
                                             Font = OsuFont.Torus.With(size: 13, weight: FontWeight.Bold),
-                                            Colour = scoreHeaderTextColour(score.Rank),
                                         },
                                     },
                                 },
@@ -954,6 +967,34 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
 
             private static Color4 scoreHeaderTextColour(ScoreRank rank)
                 => rank is ScoreRank.X or ScoreRank.SH or ScoreRank.XH ? Color4Extensions.FromHex("#2E2E2E") : Color4.White;
+        }
+
+        private partial class ScoreCounter : RollingCounter<long>
+        {
+            private readonly long totalScore;
+
+            protected override double RollingDuration => AccuracyCircle.ACCURACY_TRANSFORM_DURATION;
+
+            protected override Easing RollingEasing => AccuracyCircle.ACCURACY_TRANSFORM_EASING;
+
+            public ScoreCounter(long totalScore)
+            {
+                this.totalScore = totalScore;
+            }
+
+            protected override void LoadComplete()
+            {
+                base.LoadComplete();
+
+                this.Delay(AccuracyCircle.ACCURACY_TRANSFORM_DELAY).Schedule(() => Current.Value = totalScore);
+            }
+
+            protected override LocalisableString FormatCount(long count) => count.ToString("N0");
+
+            protected override OsuSpriteText CreateSpriteText() => new OsuSpriteText
+            {
+                Font = OsuFont.Torus.With(size: 36, weight: FontWeight.Bold),
+            };
         }
 
         private partial class HitStatistic : CompositeDrawable
