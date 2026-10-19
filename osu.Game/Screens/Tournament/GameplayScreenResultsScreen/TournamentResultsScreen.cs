@@ -16,6 +16,7 @@ using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.Drawables;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Sprites;
+using osu.Game.Graphics.UserInterface;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Rulesets.Scoring;
 using osu.Game.Scoring;
@@ -38,6 +39,26 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
         /// </summary>
         public bool Mirrored { get; init; }
 
+        /// <summary>
+        /// Whether to hide the bottom panel containing the replay button.
+        /// </summary>
+        public bool HideBottomPanel
+        {
+            get => hideBottomPanel;
+            set
+            {
+                hideBottomPanel = value;
+                if (bottomPanel != null)
+                {
+                    bottomPanel.Alpha = value ? 0 : 1;
+                    bottomPanel.Height = value ? 0 : TwoLayerButton.SIZE_EXTENDED.Y;
+                }
+            }
+        }
+
+        private bool hideBottomPanel;
+        private Container? bottomPanel;
+
         protected override bool UseDefaultResultsLayout => false;
 
         public TournamentResultsScreen(ScoreInfo? score, bool mirrored = false)
@@ -49,7 +70,54 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
         [BackgroundDependencyLoader]
         private void load()
         {
-            InternalChild = new TournamentResultsContent(Score, Mirrored);
+            var buttons = new FillFlowContainer
+            {
+                Anchor = Anchor.Centre,
+                Origin = Anchor.Centre,
+                AutoSizeAxes = Axes.Both,
+                Spacing = new Vector2(5),
+                Direction = FillDirection.Horizontal,
+            };
+
+            if (AllowWatchingReplay)
+            {
+                buttons.Add(new ReplayDownloadButton(SelectedScore.Value)
+                {
+                    Score = { BindTarget = SelectedScore },
+                    Width = 300,
+                });
+            }
+
+            InternalChild = new GridContainer
+            {
+                RelativeSizeAxes = Axes.Both,
+                RowDimensions = new[] { new Dimension(), new Dimension(GridSizeMode.AutoSize) },
+                Content = new[]
+                {
+                    new Drawable[] { new TournamentResultsContent(Score, Mirrored) },
+                    new Drawable[]
+                    {
+                        bottomPanel = new Container
+                        {
+                            Name = "Bottom panel",
+                            Anchor = Anchor.BottomLeft,
+                            Origin = Anchor.BottomLeft,
+                            RelativeSizeAxes = Axes.X,
+                            Height = HideBottomPanel ? 0 : TwoLayerButton.SIZE_EXTENDED.Y,
+                            Alpha = HideBottomPanel ? 0 : 1,
+                            Children = new Drawable[]
+                            {
+                                new Box
+                                {
+                                    RelativeSizeAxes = Axes.Both,
+                                    Colour = Color4Extensions.FromHex("#333"),
+                                },
+                                buttons,
+                            },
+                        },
+                    },
+                },
+            };
         }
 
         /// <summary>

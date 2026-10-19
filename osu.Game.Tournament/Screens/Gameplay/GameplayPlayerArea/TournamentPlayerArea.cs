@@ -76,6 +76,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             {
                 this.leaderboard = leaderboard;
                 AllowRetry = false;
+                HideBottomPanel = true;
             }
         }
     }
