@@ -16,7 +16,6 @@ using osu.Game.Graphics;
 using osu.Game.Graphics.Cursor;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Overlays;
-using osu.Game.Tournament.MultiWindow;
 using osu.Game.Tournament.Models;
 using osuTK.Graphics;
 
@@ -36,7 +35,6 @@ namespace osu.Game.Tournament
         public const string TOURNAMENT_CLIENT_NAME = " Tournament Client ";
 
         public static readonly Color4 TEXT_COLOUR = Color4Extensions.FromHex("#fff");
-        private TournamentCompanionManager? companionManager;
 
         private Bindable<WindowMode> windowMode = null!;
 
@@ -45,18 +43,7 @@ namespace osu.Game.Tournament
         [Cached(typeof(IDialogOverlay))]
         private readonly DialogOverlay dialogOverlay = new DialogOverlay();
 
-        private DependencyContainer dependencies = null!;
-
-        protected override IReadOnlyDependencyContainer CreateChildDependencies(IReadOnlyDependencyContainer parent)
-        {
-            return dependencies = new DependencyContainer(base.CreateChildDependencies(parent));
-        }
-
         public bool IsFirstRun { get; init; }
-
-        public string? LocalSyncPipeName { get; init; }
-
-        public string? RemoteSyncPipeName { get; init; }
 
         [BackgroundDependencyLoader]
         private void load(FrameworkConfigManager frameworkConfig, GameHost host)
@@ -91,7 +78,6 @@ namespace osu.Game.Tournament
                     return;
                 }
 
-                Drawable sceneManager;
                 var components = new Drawable[]
                 {
                     new SaveChangesOverlay
@@ -101,19 +87,10 @@ namespace osu.Game.Tournament
                     new OsuContextMenuContainer
                     {
                         RelativeSizeAxes = Axes.Both,
-                        Child = sceneManager = new TournamentSceneManager()
+                        Child = new TournamentSceneManager()
                     },
-                    new TournamentControlPanelSyncManager(),
                     dialogOverlay,
                 };
-
-                dependencies.Cache(sceneManager);
-
-                if (!string.IsNullOrEmpty(LocalSyncPipeName) && !string.IsNullOrEmpty(RemoteSyncPipeName))
-                {
-                    Add(companionManager = new TournamentCompanionManager(WindowRole, LocalSyncPipeName, RemoteSyncPipeName));
-                    dependencies.Cache(companionManager);
-                }
 
                 LoadComponentsAsync(components, drawables =>
                 {
@@ -131,8 +108,6 @@ namespace osu.Game.Tournament
             if (IsFirstRun)
                 LocalConfig.SetValue(OsuSetting.ReleaseStream, ReleaseStream.LazerMatch);
         }
-
-        public void OpenControlWindow() => companionManager?.OpenControlWindow();
 
         [Resolved]
         private FrameworkConfigManager frameworkSetting { get; set; } = null!;

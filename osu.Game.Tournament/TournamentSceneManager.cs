@@ -16,7 +16,6 @@ using osu.Game.Graphics.Containers;
 using osu.Game.Graphics.Sprites;
 using osu.Game.Tournament.Components;
 using osu.Game.Tournament.Configuration;
-using osu.Game.Tournament.Models;
 using osu.Game.Tournament.Screens;
 using osu.Game.Tournament.Screens.Drawings;
 using osu.Game.Tournament.Screens.Editors;
@@ -55,9 +54,6 @@ namespace osu.Game.Tournament
 
         private Container chatContainer = null!;
         private FillFlowContainer buttons = null!;
-
-        [Resolved]
-        private LadderInfo ladderInfo { get; set; } = null!;
 
         [Cached]
         private StageContainer stageContainer { get; set; } = new StageContainer();
@@ -153,7 +149,6 @@ namespace osu.Game.Tournament
                                     {
                                         new ScreenButton(typeof(SetupScreen)) { Text = "Setup", RequestSelection = SetScreen },
                                         new ScreenButton(typeof(RoomSelectScreen)) { Text = "Select Room", RequestSelection = SetScreen },
-                                        new ToggleControlWindowButton(ladderInfo.UseExternalStageDisplay),
                                         new Separator(),
                                         new ScreenButton(typeof(TeamEditorScreen)) { Text = "Team Editor", RequestSelection = SetScreen },
                                         new ScreenButton(typeof(ModColorEditorScreen)) { Text = "Mod Color Editor", RequestSelection = SetScreen },
@@ -304,25 +299,6 @@ namespace osu.Game.Tournament
             {
                 RelativeSizeAxes = Axes.X;
                 Height = 20;
-            }
-        }
-
-        private partial class ToggleControlWindowButton : TourneyButton
-        {
-            private readonly Bindable<bool> enabled;
-
-            public ToggleControlWindowButton(Bindable<bool> enabled)
-            {
-                this.enabled = enabled;
-
-                RelativeSizeAxes = Axes.X;
-                Action = () => this.enabled.Value = !this.enabled.Value;
-            }
-
-            protected override void LoadComplete()
-            {
-                base.LoadComplete();
-                enabled.BindValueChanged(v => Text = v.NewValue ? "关闭扩展控制窗口" : "启用扩展控制窗口", true);
             }
         }
 

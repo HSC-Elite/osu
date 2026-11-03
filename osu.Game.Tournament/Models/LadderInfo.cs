@@ -59,8 +59,6 @@ namespace osu.Game.Tournament.Models
 
         public Bindable<bool> UseAlternateChatSource = new BindableBool();
 
-        public Bindable<bool> UseExternalStageDisplay = new BindableBool();
-
         public BindableList<ModColor> ModColors = new BindableList<ModColor>();
 
         public ModColor GetModColorByModName(string mod) => ModColors.FirstOrDefault(m => m.ModName == mod) ?? new ModColor();
