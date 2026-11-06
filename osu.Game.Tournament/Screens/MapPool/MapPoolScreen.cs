@@ -27,7 +27,7 @@ namespace osu.Game.Tournament.Screens.MapPool
     public partial class MapPoolScreen : BeatmapInfoScreen
     {
         private FillFlowContainer<FillFlowContainer<TournamentBeatmapPanel>> mapFlows = null!;
-        private TournamentStageContentContainer stageContent = null!;
+        private readonly TournamentStageContentContainer stageContent;
 
         [Resolved]
         private TournamentSceneManager? sceneManager { get; set; }

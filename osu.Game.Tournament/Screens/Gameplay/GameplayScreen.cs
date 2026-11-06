@@ -81,7 +81,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
         private bool switchFromMappool;
 
-        private TournamentStageContentContainer stageContent = null!;
+        private readonly TournamentStageContentContainer stageContent;
 
         public GameplayScreen()
         {
