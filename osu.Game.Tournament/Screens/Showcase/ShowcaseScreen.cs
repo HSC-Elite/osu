@@ -51,7 +51,7 @@ namespace osu.Game.Tournament.Screens.Showcase
         private OsuConfigManager config { get; set; } = null!;
 
         private NestedOsuGame? nestedGame;
-        private ShowCaseSideFlash? flash;
+        private Container? flashContainer;
 
         private readonly BindableFloat flashIntensity = new BindableFloat(2)
         {
@@ -234,10 +234,15 @@ namespace osu.Game.Tournament.Screens.Showcase
                 mods.BindTarget = nestedGame.Dependencies.Get<Bindable<IReadOnlyList<Mod>>>();
             };
 
-            StageContent!.Add(flash = new ShowCaseSideFlash());
+            var flash = new ShowCaseSideFlash();
             flash.FlashIntensity.BindTo(flashIntensity);
             flash.FlashColor.BindTo(flashColor);
             flash.FlashKiaiOnly.BindTo(flashKiaiOnly);
+
+            StageContent!.Add(flashContainer = new ShowcaseFlashContainer(this)
+            {
+                Child = flash,
+            });
         });
 
         private void closeInnerLazer()
@@ -248,12 +253,12 @@ namespace osu.Game.Tournament.Screens.Showcase
                 tournamentGame.ReconnectOnlineClients();
             }
 
-            if (flash != null)
-                StageContent?.Remove(flash, true);
+            if (flashContainer != null)
+                StageContent?.Remove(flashContainer, true);
 
             musicController = null;
             nestedGame = null;
-            flash = null;
+            flashContainer = null;
         }
 
         private GetBeatmapRequest? beatmapLookupRequest;
@@ -319,6 +324,18 @@ namespace osu.Game.Tournament.Screens.Showcase
         IClock IBeatSyncProvider.Clock => ((IBeatSyncProvider?)nestedGame)?.Clock ?? Clock;
 
         ChannelAmplitudes IHasAmplitudes.CurrentAmplitudes => ((IBeatSyncProvider?)nestedGame)?.CurrentAmplitudes ?? ChannelAmplitudes.Empty;
+
+        private partial class ShowcaseFlashContainer : Container
+        {
+            [Cached(typeof(IBeatSyncProvider))]
+            private readonly IBeatSyncProvider provider;
+
+            public ShowcaseFlashContainer(IBeatSyncProvider provider)
+            {
+                this.provider = provider;
+                RelativeSizeAxes = Axes.Both;
+            }
+        }
 
         private partial class ShowCaseSideFlash : MenuSideFlashes
         {
