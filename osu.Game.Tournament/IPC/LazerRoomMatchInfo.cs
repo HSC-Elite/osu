@@ -117,11 +117,6 @@ namespace osu.Game.Tournament.IPC
 
         public void Join(Room room, string? password, Action<Room>? onSuccess = null, Action<string, Exception?>? onFailure = null) => Schedule(() =>
         {
-            if (!client.IsConnected.Value)
-            {
-                return;
-            }
-
             client.JoinRoom(room, password).ContinueWith(result =>
             {
                 if (result.IsCompletedSuccessfully)
