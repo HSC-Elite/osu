@@ -47,6 +47,7 @@ namespace osu.Game.Tournament.IPC
 
         public Bindable<TournamentBeatmap?> Beatmap { get; } = new Bindable<TournamentBeatmap?>();
         public Bindable<LegacyMods> Mods { get; } = new Bindable<LegacyMods>();
+        public Bindable<TournamentScoringMode> ScoringMode { get; } = new Bindable<TournamentScoringMode>(TournamentScoringMode.Score);
         public Bindable<TourneyState> State { get; } = new Bindable<TourneyState>();
         public Bindable<Channel?> ChatChannel { get; } = new Bindable<Channel?>();
         public BindableLong Score1 { get; } = new BindableLong();
@@ -98,6 +99,11 @@ namespace osu.Game.Tournament.IPC
         protected override void Update()
         {
             base.Update();
+
+            int beatmapId = Beatmap.Value?.OnlineID ?? 0;
+            ScoringMode.Value = beatmapId > 0
+                ? Ladder.CurrentMatch.Value?.Round.Value?.Beatmaps.FirstOrDefault(b => b.ID == beatmapId || b.Beatmap?.OnlineID == beatmapId)?.ScoringMode ?? TournamentScoringMode.Score
+                : TournamentScoringMode.Score;
 
             if (State.Value == TourneyState.Playing)
                 updateScore();
@@ -170,7 +176,7 @@ namespace osu.Game.Tournament.IPC
             GameplayLeaderboardScore[] team1Score = GetTeamScore(TeamColour.Red).ToArray();
             GameplayLeaderboardScore[] team2Score = GetTeamScore(TeamColour.Blue).ToArray();
 
-            if (Ladder.ScoringMode.Value == TournamentScoringMode.PerformancePoint)
+            if (ScoringMode.Value == TournamentScoringMode.PerformancePoint)
             {
                 Score1.Value = team1Score.Sum(s => leaderboardProvider!.GetPlayerPerformancePoints((int)s.User.OnlineID));
                 Score2.Value = team2Score.Sum(s => leaderboardProvider!.GetPlayerPerformancePoints((int)s.User.OnlineID));

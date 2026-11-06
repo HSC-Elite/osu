@@ -185,6 +185,8 @@ namespace osu.Game.Tournament.Screens.Editors
 
                     private readonly Bindable<LegacyMods> freeMods = new Bindable<LegacyMods>();
 
+                    private readonly Bindable<TournamentScoringMode> scoringMode = new Bindable<TournamentScoringMode>();
+
                     private readonly Container drawableContainer;
 
                     public RoundBeatmapRow(TournamentRound team, RoundBeatmap beatmap)
@@ -240,6 +242,13 @@ namespace osu.Game.Tournament.Screens.Editors
                                         RelativeSizeAxes = Axes.X,
                                         Margin = new MarginPadding { Horizontal = 5 },
                                         Current = note,
+                                    },
+                                    new LabelledEnumDropdown<TournamentScoringMode>(padded: false)
+                                    {
+                                        Label = "Scoring mode",
+                                        RelativeSizeAxes = Axes.None,
+                                        Width = 300,
+                                        Current = scoringMode,
                                     },
                                     new OsuFlagsDropdown<LegacyMods>
                                     {
@@ -317,6 +326,9 @@ namespace osu.Game.Tournament.Screens.Editors
                         {
                             Model.Note = n.NewValue;
                         });
+
+                        scoringMode.Value = Model.ScoringMode;
+                        scoringMode.BindValueChanged(mode => Model.ScoringMode = mode.NewValue);
 
                         freeMods.Value = Model.AllowFreeMods;
                         freeMods.BindValueChanged(m =>

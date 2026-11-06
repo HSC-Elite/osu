@@ -21,16 +21,13 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
         private readonly Colour4 black = Colour4.FromHex("1f1f1f");
 
         [Resolved]
-        private LadderInfo ladderInfo { get; set; } = null!;
-
-        [Resolved]
         private MatchIPCInfo ipc { get; set; } = null!;
 
         [Resolved]
         private TournamentMatchScoreProcessor? scoreProcessor { get; set; }
 
         // PP differences are much smaller than score differences, so use a correspondingly smaller scale.
-        protected override float ScoreDifferenceScale => ladderInfo.ScoringMode.Value == TournamentScoringMode.PerformancePoint ? 750 : base.ScoreDifferenceScale;
+        protected override float ScoreDifferenceScale => ipc.ScoringMode.Value == TournamentScoringMode.PerformancePoint ? 750 : base.ScoreDifferenceScale;
 
         public bool InvertTextColor
         {
