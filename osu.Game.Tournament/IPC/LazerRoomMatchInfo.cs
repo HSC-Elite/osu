@@ -194,11 +194,16 @@ namespace osu.Game.Tournament.IPC
         {
             HasActiveMatch.Value = client.Room != null;
 
-            if (currentRoom.Value != null && client.Room == null)
+            if (client.Room == null)
             {
-                Logger.Log("exiting room");
+                State.Value = TourneyState.Idle;
 
-                currentRoom.Value = null;
+                if (currentRoom.Value != null)
+                {
+                    Logger.Log("exiting room");
+                    currentRoom.Value = null;
+                }
+
                 return;
             }
 
@@ -234,10 +239,12 @@ namespace osu.Game.Tournament.IPC
 
         private void onLoadRequested()
         {
-            SetLiveLeaderboardProvider(null);
-
             Scheduler.AddOnce(() =>
             {
+                if (client.Room == null || client.LocalUser == null)
+                    return;
+
+                SetLiveLeaderboardProvider(null);
                 State.Value = TourneyState.Idle;
 
                 updateGameplayState();
