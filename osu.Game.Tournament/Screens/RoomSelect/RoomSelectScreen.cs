@@ -5,6 +5,8 @@ using osu.Framework.Allocation;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Cursor;
 using osu.Game.Overlays;
+using osu.Game.Overlays.Settings;
+using osu.Game.Tournament.Components;
 using osu.Game.Screens;
 using osu.Game.Screens.Footer;
 
@@ -15,12 +17,14 @@ namespace osu.Game.Tournament.Screens.RoomSelect
         [Cached]
         private OverlayColourProvider colourProvider = new OverlayColourProvider(OverlayColourScheme.Purple);
 
+        private readonly RoomSelectMultiplayerLoungeSubScreen lounge = new RoomSelectMultiplayerLoungeSubScreen();
         private readonly OsuScreenStack screenStack;
         private readonly ScreenFooter.BackReceptor backReceptor;
 
         public RoomSelectScreen()
         {
             RelativeSizeAxes = Axes.Both;
+            AlwaysPresent = true;
 
             InternalChildren = new Drawable[]
             {
@@ -38,12 +42,21 @@ namespace osu.Game.Tournament.Screens.RoomSelect
                         BackButtonPressed = handleBackButton
                     }
                 },
+                new ControlPanel
+                {
+                    Child = new SettingsCheckbox
+                    {
+                        RelativeSizeAxes = Axes.X,
+                        LabelText = "掉线后自动重新入房",
+                        Current = { BindTarget = lounge.AutoReconnect }
+                    }
+                },
             };
         }
 
         protected override void LoadComplete()
         {
-            screenStack.Push(new RoomSelectMultiplayerLoungeSubScreen());
+            screenStack.Push(lounge);
         }
 
         private void handleBackButton()

@@ -10,6 +10,7 @@ using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Extensions;
 using osu.Framework.Extensions.ExceptionExtensions;
+using osu.Framework.Extensions.ObjectExtensions;
 using osu.Framework.Logging;
 using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.Legacy;
@@ -57,7 +58,13 @@ namespace osu.Game.Tournament.IPC
 
         public IBindable<Room?> CurrentRoom => currentRoom;
 
+        public event Action? RoomLeft;
+
         private long lastPlaylistItemId;
+        private bool joiningRoom;
+        private bool joinCancelled;
+        private bool leavingRoom;
+        private bool disposed;
 
         public LazerRoomMatchInfo()
         {
@@ -117,42 +124,73 @@ namespace osu.Game.Tournament.IPC
 
         public void Join(Room room, string? password, Action<Room>? onSuccess = null, Action<string, Exception?>? onFailure = null) => Schedule(() =>
         {
-            client.JoinRoom(room, password).ContinueWith(result =>
+            if (joiningRoom || leavingRoom)
             {
-                if (result.IsCompletedSuccessfully)
-                {
-                    Scheduler.Add(() =>
-                    {
-                        currentRoom.Value = room;
-                        HasActiveMatch.Value = true;
-                        onSuccess?.Invoke(room);
-                    });
-                }
-                else
-                {
-                    Scheduler.Add(() =>
-                    {
-                        currentRoom.Value = null;
-                        Exception? exception = result.Exception?.AsSingular();
+                onFailure?.Invoke("A multiplayer room join is already in progress.", null);
+                return;
+            }
 
-                        onFailure ??= (m, e) => Logger.Error(e, m);
-
-                        if (exception?.GetHubExceptionMessage() is string message)
-                            onFailure?.Invoke(message, exception);
-                        else
-                            onFailure?.Invoke($"Failed to join multiplayer room. {exception?.Message}", exception);
-                    });
-                }
-            });
+            joinRoom(room, password, onSuccess, onFailure);
         });
+
+        private void joinRoom(Room room, string? password, Action<Room>? onSuccess = null, Action<string, Exception?>? onFailure = null)
+        {
+            joinCancelled = false;
+            joiningRoom = true;
+
+            client.JoinRoom(room, password).ContinueWith(result => Scheduler.Add(() =>
+            {
+                joiningRoom = false;
+
+                // Left() already cancels the underlying join and queues LeaveRoom().
+                if (disposed || joinCancelled)
+                {
+                    _ = result.Exception;
+                    onFailure?.Invoke("Multiplayer room join was cancelled.", null);
+                    return;
+                }
+
+                if (result.IsCompletedSuccessfully && client.IsConnected.Value && client.Room?.RoomID == room.RoomID)
+                {
+                    currentRoom.Value = room;
+                    HasActiveMatch.Value = true;
+                    onSuccess?.Invoke(room);
+                    return;
+                }
+
+                currentRoom.Value = null;
+                HasActiveMatch.Value = false;
+
+                Exception? exception = result.Exception?.AsSingular();
+                string message = exception?.GetHubExceptionMessage()
+                                 ?? $"Failed to join multiplayer room. {exception?.Message}";
+
+                if (onFailure != null)
+                    onFailure(message, exception);
+                else
+                    Logger.Log(message, level: LogLevel.Error);
+            }));
+        }
 
         public void Left()
         {
-            if (currentRoom.Value == null) return;
-
-            client.LeaveRoom().FireAndForget();
+            RoomLeft?.Invoke();
+            joinCancelled = true;
+            leaveRoom();
             currentRoom.Value = null;
             HasActiveMatch.Value = false;
+            State.Value = TourneyState.Idle;
+        }
+
+        private void leaveRoom()
+        {
+            if (leavingRoom)
+                return;
+
+            leavingRoom = true;
+            client.LeaveRoom().FireAndForget(
+                onSuccess: () => Schedule(() => leavingRoom = false),
+                onError: _ => Schedule(() => leavingRoom = false));
         }
 
         protected override void LoadComplete()
@@ -178,7 +216,7 @@ namespace osu.Game.Tournament.IPC
             client.LoadRequested += onLoadRequested;
             client.UserJoined += _ => updateUsers();
             client.UserLeft += _ => updateUsers();
-            client.UserKicked += _ => updateUsers();
+            client.UserKicked += onUserKicked;
             client.UserStateChanged += (_, _) => updateUsers();
             client.ResultsReady += () =>
             {
@@ -190,12 +228,22 @@ namespace osu.Game.Tournament.IPC
             };
         }
 
+        private void onUserKicked(MultiplayerRoomUser user)
+        {
+            if (user.UserID == api.LocalUser.Value.Id)
+                joinCancelled = true;
+
+            updateUsers();
+        }
+
         private void onRoomUpdated() => Scheduler.AddOnce(() =>
         {
             HasActiveMatch.Value = client.Room != null;
 
             if (client.Room == null)
             {
+                beatmapLookUpCancellation?.Cancel();
+                pendingBeatmapId = null;
                 State.Value = TourneyState.Idle;
 
                 if (currentRoom.Value != null)
@@ -207,10 +255,8 @@ namespace osu.Game.Tournament.IPC
                 return;
             }
 
-            if (client.LocalUser != null && client.LocalUser.State != MultiplayerUserState.Spectating)
-            {
+            if (client.IsConnected.Value && client.LocalUser?.State is MultiplayerUserState.Idle or MultiplayerUserState.Ready)
                 client.ToggleSpectate().FireAndForget();
-            }
 
             Logger.Log($"Room status {client.Room?.State} {client.Room?.MatchState} {currentRoom.Value?.Status}");
         });
@@ -239,9 +285,13 @@ namespace osu.Game.Tournament.IPC
 
         private void onLoadRequested()
         {
+            MultiplayerRoom? room = client.Room;
+
             Scheduler.AddOnce(() =>
             {
-                if (client.Room == null || client.LocalUser == null)
+                // sans check
+                if (disposed || joinCancelled || room == null || !ReferenceEquals(client.Room, room)
+                    || !client.IsConnected.Value || client.LocalUser == null)
                     return;
 
                 SetLiveLeaderboardProvider(null);
@@ -308,15 +358,19 @@ namespace osu.Game.Tournament.IPC
                 return;
             }
 
-            beatmapLookUpCancellation = new CancellationTokenSource();
+            var cancellation = beatmapLookUpCancellation = new CancellationTokenSource();
+            MultiplayerRoom room = client.Room;
 
-            beatmapLookupCache.GetBeatmapAsync(gameplayBeatmapId, beatmapLookUpCancellation.Token).ContinueWith(t =>
+            beatmapLookupCache.GetBeatmapAsync(gameplayBeatmapId, cancellation.Token).ContinueWith(t =>
             {
                 if (!t.IsCompletedSuccessfully)
                     return;
 
                 Scheduler.Add(() =>
                 {
+                    if (disposed || cancellation.IsCancellationRequested || !ReferenceEquals(client.Room, room))
+                        return;
+
                     APIBeatmap? beatmapSet = t.GetResultSafely();
                     if (beatmapSet == null)
                         return;
@@ -324,7 +378,7 @@ namespace osu.Game.Tournament.IPC
                     Beatmap.Value = new TournamentBeatmap(beatmapSet);
                     Mods.Value = LegacyMods.None;
                 });
-            });
+            }, cancellation.Token);
         }
 
         private int? pendingBeatmapId;
@@ -433,6 +487,17 @@ namespace osu.Game.Tournament.IPC
 
         protected override void Dispose(bool isDisposing)
         {
+            disposed = true;
+            joinCancelled = true;
+            if (joiningRoom)
+                leaveRoom();
+
+            if (client.IsNotNull())
+            {
+                client.UserKicked -= onUserKicked;
+            }
+
+            beatmapLookUpCancellation?.Cancel();
             leaveChatChannel();
             base.Dispose(isDisposing);
         }
