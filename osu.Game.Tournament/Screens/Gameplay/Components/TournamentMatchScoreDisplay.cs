@@ -29,6 +29,9 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
         [Resolved]
         private TournamentMatchScoreProcessor? scoreProcessor { get; set; }
 
+        // PP differences are much smaller than score differences, so use a correspondingly smaller scale.
+        protected override float ScoreDifferenceScale => ladderInfo.ScoringMode.Value == TournamentScoringMode.PerformancePoint ? 750 : base.ScoreDifferenceScale;
+
         public bool InvertTextColor
         {
             get => invertTextColor;
