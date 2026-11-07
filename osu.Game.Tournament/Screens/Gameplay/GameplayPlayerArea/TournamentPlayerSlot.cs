@@ -1,6 +1,7 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
+using System;
 using System.Collections.Generic;
 using System.IO;
 using osu.Framework.Allocation;
@@ -10,6 +11,7 @@ using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.IO.Stores;
+using osu.Framework.Input.Events;
 using osu.Framework.Utils;
 using osu.Game.Screens;
 using osu.Game.Tournament.IO;
@@ -21,6 +23,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 {
     internal partial class TournamentPlayerSlot : CompositeDrawable
     {
+        public event Action<TournamentPlayerSlot>? Clicked;
+
         public TeamColour TeamColour { get; }
         public int Index { get; }
         public int? UserId { get; private set; }
@@ -72,6 +76,15 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         {
             playerCombo.BindValueChanged(comboChanged);
             initSamples();
+        }
+
+        protected override bool OnClick(ClickEvent e)
+        {
+            if (!HasGameplay)
+                return false;
+
+            Clicked?.Invoke(this);
+            return true;
         }
 
         public void ApplySlotInfo(TournamentPlayerSlotInfo info)

@@ -72,6 +72,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         private MasterGameplayClockContainer? masterClockContainer;
         private SpectatorSyncManager? syncManager;
         private TournamentPlayerPresentation? currentAudioSource;
+        private TournamentPlayerPresentation? preferredAudioSource;
         private IAggregateAudioAdjustment? boundAdjustments;
         private IDisposable? realmSubscription;
         private IDisposable? userWatchToken;
@@ -130,8 +131,14 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                 return;
             }
 
+            foreach (var slot in slots)
+                slot.Clicked -= selectAudioSource;
+
             slots.Clear();
             slots.AddRange(newSlotArray);
+
+            foreach (var slot in slots)
+                slot.Clicked += selectAudioSource;
 
             var assignedSlots = slots.Where(s => s.UserId != null).ToArray();
             var desiredUserIds = assignedSlots.Select(s => s.UserId!.Value).ToHashSet();
@@ -530,6 +537,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             foreach (int userId in clocksByUserId.Keys.ToArray())
                 removeManagedClock(userId);
 
+            preferredAudioSource = null;
             gameplayStates.Clear();
             disposeLeaderboardProvider();
             currentAudioSource = null;
@@ -553,13 +561,24 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         private IEnumerable<TournamentPlayerPresentation> activePlayerPresentations
             => slots.Select(s => s.GameplayPresentation).OfType<TournamentPlayerPresentation>();
 
+        private void selectAudioSource(TournamentPlayerSlot slot)
+        {
+            preferredAudioSource = slot.GameplayPresentation;
+            checkAudioSource();
+        }
+
         private void checkAudioSource()
         {
             if (syncManager == null || masterClockContainer == null)
                 return;
 
-            var candidate = activePlayerPresentations.Where(i => i.IsAudioSourceCandidate)
-                                                     .MinBy(i => Math.Abs(i.CurrentTime - syncManager.CurrentMasterTime));
+            if (preferredAudioSource != null && !activePlayerPresentations.Contains(preferredAudioSource))
+                preferredAudioSource = null;
+
+            var candidate = preferredAudioSource?.IsAudioSourceCandidate == true
+                ? preferredAudioSource
+                : activePlayerPresentations.Where(i => i.IsAudioSourceCandidate)
+                                           .MinBy(i => Math.Abs(i.CurrentTime - syncManager.CurrentMasterTime));
 
             if (candidate == currentAudioSource)
                 return;
@@ -636,6 +655,9 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
         protected override void Dispose(bool isDisposing)
         {
+            foreach (var slot in slots)
+                slot.Clicked -= selectAudioSource;
+
             bindAudioAdjustments(null);
             disposeLeaderboardProvider();
 
