@@ -341,7 +341,9 @@ namespace osu.Game.Rulesets.Scoring
         /// Gets the final score change to be applied to the combo portion of the score.
         /// </summary>
         /// <param name="result">The judgement result.</param>
-        protected virtual double GetComboScoreChange(JudgementResult result) => GetBaseScoreForResult(result.Type) * (1 + result.ComboAfterJudgement / 10d);
+        // Keep upstream scoring on this branch. The custom ScoreV2 variant used:
+        // GetBaseScoreForResult(result.Type) * (1 + result.ComboAfterJudgement / 10d).
+        protected virtual double GetComboScoreChange(JudgementResult result) => GetBaseScoreForResult(result.Judgement.MaxResult) * Math.Pow(result.ComboAfterJudgement, COMBO_EXPONENT);
 
         public virtual int GetBaseScoreForResult(HitResult result)
         {
@@ -376,7 +378,8 @@ namespace osu.Game.Rulesets.Scoring
                     return 10;
 
                 case HitResult.LargeBonus:
-                    return 500;
+                    // The custom ScoreV2 variant used 500; retain the upstream value here.
+                    return 50;
             }
         }
 
@@ -426,8 +429,11 @@ namespace osu.Game.Rulesets.Scoring
 
         protected virtual double ComputeTotalScore(double comboProgress, double accuracyProgress, double bonusPortion)
         {
-            return 700000 * comboProgress +
-                   300000 * Math.Pow(Accuracy.Value, 10) * accuracyProgress + bonusPortion;
+            // Keep upstream scoring on this branch. The custom ScoreV2 variant used:
+            // 700000 * comboProgress + 300000 * Math.Pow(Accuracy.Value, 10) * accuracyProgress + bonusPortion.
+            return 500000 * Accuracy.Value * comboProgress +
+                   500000 * Math.Pow(Accuracy.Value, 5) * accuracyProgress +
+                   bonusPortion;
         }
 
         /// <summary>
