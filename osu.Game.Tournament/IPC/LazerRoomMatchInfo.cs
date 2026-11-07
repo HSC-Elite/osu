@@ -214,18 +214,26 @@ namespace osu.Game.Tournament.IPC
             client.ItemChanged += onItemChanged;
             client.GameplayAborted += onGameplayAborted;
             client.LoadRequested += onLoadRequested;
-            client.UserJoined += _ => updateUsers();
-            client.UserLeft += _ => updateUsers();
+            client.UserJoined += onUserJoined;
+            client.UserLeft += onUserLeft;
             client.UserKicked += onUserKicked;
-            client.UserStateChanged += (_, _) => updateUsers();
-            client.ResultsReady += () =>
+            client.UserStateChanged += onUserStateChanged;
+            client.ResultsReady += onResultsReady;
+        }
+
+        private void onUserJoined(MultiplayerRoomUser user) => updateUsers();
+
+        private void onUserLeft(MultiplayerRoomUser user) => updateUsers();
+
+        private void onUserStateChanged(MultiplayerRoomUser user, MultiplayerUserState state) => updateUsers();
+
+        private void onResultsReady()
+        {
+            if (State.Value == TourneyState.Playing)
             {
-                if (State.Value == TourneyState.Playing)
-                {
-                    State.Value = TourneyState.Ranking;
-                    Logger.Log("Switching to ranking");
-                }
-            };
+                State.Value = TourneyState.Ranking;
+                Logger.Log("Switching to ranking");
+            }
         }
 
         private void onUserKicked(MultiplayerRoomUser user)
@@ -489,13 +497,23 @@ namespace osu.Game.Tournament.IPC
         {
             disposed = true;
             joinCancelled = true;
-            if (joiningRoom)
-                leaveRoom();
 
             if (client.IsNotNull())
             {
+                client.RoomUpdated -= onRoomUpdated;
+                client.SettingsChanged -= onSettingsChanged;
+                client.ItemChanged -= onItemChanged;
+                client.GameplayAborted -= onGameplayAborted;
+                client.LoadRequested -= onLoadRequested;
+                client.UserJoined -= onUserJoined;
+                client.UserLeft -= onUserLeft;
                 client.UserKicked -= onUserKicked;
+                client.UserStateChanged -= onUserStateChanged;
+                client.ResultsReady -= onResultsReady;
             }
+
+            if (joiningRoom)
+                leaveRoom();
 
             beatmapLookUpCancellation?.Cancel();
             leaveChatChannel();
