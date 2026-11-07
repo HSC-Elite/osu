@@ -575,7 +575,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
                         && scoreProcessor.WaitingForAuthoritativeResult.Value)
                         return;
 
-                    var lastPick = CurrentMatch.Value.PicksBans.LastOrDefault(p => p.Type == ChoiceType.Pick && p.BeatmapID == IPC.Beatmap.Value?.OnlineID);
+                    var lastPick = CurrentMatch.Value.PicksBans.LastOrDefault(p => (p.Type == ChoiceType.Pick || p.Type == ChoiceType.TB) && p.BeatmapID == IPC.Beatmap.Value?.OnlineID);
 
                     if (lastPick?.Winner.Value != null)
                         return;
@@ -586,12 +586,12 @@ namespace osu.Game.Tournament.Screens.Gameplay
                     if (score1 > score2)
                     {
                         CurrentMatch.Value.Team1Score.Value++;
-                        if (lastPick != null) lastPick.Winner.Value = TeamColour.Red;
+                        lastPick?.Winner.Value = TeamColour.Red;
                     }
                     else
                     {
                         CurrentMatch.Value.Team2Score.Value++;
-                        if (lastPick != null) lastPick.Winner.Value = TeamColour.Blue;
+                        lastPick?.Winner.Value = TeamColour.Blue;
                     }
                 }
 
