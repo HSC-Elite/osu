@@ -25,6 +25,7 @@ using osu.Game.Screens.OnlinePlay.Multiplayer.Spectate;
 using osu.Game.Screens.Play;
 using osu.Game.Screens.Spectate;
 using osu.Game.Tournament.IPC;
+using osu.Game.Tournament.Configuration;
 using Realms;
 
 namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
@@ -58,6 +59,9 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
         [Resolved]
         private ITournamentPlayerPresentationFactory playerPresentationFactory { get; set; } = null!;
+
+        [Resolved]
+        private TournamentConfigManager config { get; set; } = null!;
 
         private readonly List<TournamentPlayerSlot> slots = new List<TournamentPlayerSlot>();
         private readonly Dictionary<int, TournamentPlayerSlot> slotsByUserId = new Dictionary<int, TournamentPlayerSlot>();
@@ -113,6 +117,10 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             syncManager = new SpectatorSyncManager(masterClockContainer)
             {
                 ReadyToStart = performInitialSeek,
+                FollowSlowest = true,
+                MinimumBufferDuration = config.Get<int>(StorageConfig.SpectatorMinimumBuffer),
+                BufferDuration = config.Get<int>(StorageConfig.SpectatorBuffer),
+                BufferTimeout = config.Get<int>(StorageConfig.SpectatorBufferTimeout),
             };
 
             AddInternal(masterClockContainer);
@@ -463,7 +471,11 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             if (slot.HasGameplay)
                 return;
 
-            var clock = syncManager.CreateManagedClock();
+            var clock = syncManager.CreateManagedClock(() =>
+            {
+                var replay = gameplayState.Score.Replay;
+                return replay.HasReceivedAllFrames ? double.PositiveInfinity : replay.Frames.LastOrDefault()?.Time ?? double.NegativeInfinity;
+            });
 
             if (syncManager.HasStarted)
                 clock.Seek(syncManager.CurrentMasterTime);
@@ -628,9 +640,6 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                 masterClockContainer.Reset(0, true);
                 return;
             }
-
-            double mean = minFrameTimes.Average();
-            minFrameTimes.RemoveAll(t => mean - t > 1000);
 
             double startTime = minFrameTimes.Min() - 100;
 

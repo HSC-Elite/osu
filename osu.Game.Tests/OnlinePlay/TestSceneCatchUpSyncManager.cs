@@ -25,13 +25,17 @@ namespace osu.Game.Tests.OnlinePlay
         private Dictionary<SpectatorPlayerClock, int> clocksById = null!;
         private SpectatorPlayerClock player1 = null!;
         private SpectatorPlayerClock player2 = null!;
+        private double available1;
+        private double available2;
 
         [SetUp]
         public void Setup()
         {
             syncManager = new SpectatorSyncManager(master = new GameplayClockContainer(new TestManualClock(), false, false));
-            player1 = syncManager.CreateManagedClock();
-            player2 = syncManager.CreateManagedClock();
+            syncManager.ReadyToStart = master.Start;
+            available1 = available2 = double.PositiveInfinity;
+            player1 = syncManager.CreateManagedClock(() => available1);
+            player2 = syncManager.CreateManagedClock(() => available2);
 
             clocksById = new Dictionary<SpectatorPlayerClock, int>
             {
@@ -144,6 +148,70 @@ namespace osu.Game.Tests.OnlinePlay
             assertPlayerClockState(() => player1, true);
             setWaiting(() => player1, true);
             assertPlayerClockState(() => player1, false);
+        }
+
+        [Test]
+        public void TestSlowestPlayerPausesMasterUntilBufferReplenished()
+        {
+            setAllWaiting(false);
+            AddStep("enable slowest sync with one low buffer", () =>
+            {
+                available1 = 500;
+                syncManager.FollowSlowest = true;
+            });
+            AddAssert("master paused for slowest", () => !master.IsRunning);
+            AddStep("replenish above low water only", () => available1 = 2000);
+            AddAssert("master still buffering", () => !master.IsRunning);
+            AddStep("replenish to resume water", () => available1 = 4000);
+            AddAssert("master resumes", () => master.IsRunning);
+        }
+
+        [Test]
+        public void TestSlowestSyncWaitsForLaggingPlayerWithAvailableFrames()
+        {
+            setAllWaiting(false);
+            AddStep("enable slowest sync", () => syncManager.FollowSlowest = true);
+            setMasterTime(100);
+            setPlayerClockTime(() => player1, 0);
+            AddAssert("master waits for other player", () => !master.IsRunning);
+            setPlayerClockTime(() => player2, 0);
+            AddAssert("master resumes after catchup", () => master.IsRunning);
+        }
+
+        [Test]
+        public void TestSlowestSyncTimeoutAndRecovery()
+        {
+            setAllWaiting(false);
+            AddStep("enable slowest sync", () =>
+            {
+                available1 = 0;
+                syncManager.FollowSlowest = true;
+                syncManager.BufferTimeout = 1000;
+            });
+            AddAssert("master pauses", () => !master.IsRunning);
+            AddUntilStep("timeout lets others continue", () => master.IsRunning);
+            AddStep("partial recovery", () => available1 = 2000);
+            AddAssert("excluded player does not block", () => master.IsRunning);
+            AddStep("full recovery", () => available1 = 4000);
+            AddWaitStep("allow rejoin", 2);
+            AddStep("buffer runs low again", () => available1 = 0);
+            AddAssert("rejoined player blocks again", () => !master.IsRunning);
+        }
+
+        [Test]
+        public void TestSlowestSyncRemovalAndCompletedReplay()
+        {
+            setAllWaiting(false);
+            AddStep("enable slowest sync", () =>
+            {
+                available1 = available2 = 0;
+                syncManager.FollowSlowest = true;
+            });
+            AddAssert("master pauses", () => !master.IsRunning);
+            AddStep("remove first player", () => syncManager.RemoveManagedClock(player1));
+            AddAssert("remaining player still blocks", () => !master.IsRunning);
+            AddStep("remaining replay complete", () => available2 = double.PositiveInfinity);
+            AddAssert("completed replay needs no buffer", () => master.IsRunning);
         }
 
         private void setWaiting(Func<SpectatorPlayerClock> playerClock, bool waiting)

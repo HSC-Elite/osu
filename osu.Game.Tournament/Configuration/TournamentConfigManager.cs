@@ -23,6 +23,9 @@ namespace osu.Game.Tournament.Configuration
 
             SetDefault(StorageConfig.CurrentTournament, default_tournament);
             SetDefault(StorageConfig.StageHeight, 900, 480, 2160);
+            SetDefault(StorageConfig.SpectatorMinimumBuffer, 1000, 0, 10000);
+            SetDefault(StorageConfig.SpectatorBuffer, 3000, 0, 30000);
+            SetDefault(StorageConfig.SpectatorBufferTimeout, 20000, 1000, 120000);
         }
     }
 
@@ -30,5 +33,8 @@ namespace osu.Game.Tournament.Configuration
     {
         CurrentTournament,
         StageHeight,
+        SpectatorMinimumBuffer,
+        SpectatorBuffer,
+        SpectatorBufferTimeout,
     }
 }

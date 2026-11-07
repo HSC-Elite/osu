@@ -33,11 +33,17 @@ namespace osu.Game.Tournament.Screens.Setup
         private TournamentSceneManager? sceneManager { get; set; }
 
         private Bindable<int> stageSize = null!;
+        private Bindable<int> spectatorMinimumBuffer = null!;
+        private Bindable<int> spectatorBuffer = null!;
+        private Bindable<int> spectatorBufferTimeout = null!;
 
         [BackgroundDependencyLoader]
         private void load(TournamentConfigManager config)
         {
             stageSize = config.GetBindable<int>(StorageConfig.StageHeight);
+            spectatorMinimumBuffer = config.GetBindable<int>(StorageConfig.SpectatorMinimumBuffer);
+            spectatorBuffer = config.GetBindable<int>(StorageConfig.SpectatorBuffer);
+            spectatorBufferTimeout = config.GetBindable<int>(StorageConfig.SpectatorBufferTimeout);
 
             InternalChildren = new Drawable[]
             {
@@ -106,6 +112,24 @@ namespace osu.Game.Tournament.Screens.Setup
                     Description = "Changes the background videos and bracket to match the selected tournament. This requires a restart to apply changes.",
                 },
                 new RoundBeatmapDownloadAction(),
+                new LabelledSliderBar<int>
+                {
+                    Label = "Spectator minimum buffer (ms)",
+                    Description = "Pause all players when any synchronised player has less replay data buffered. Changes apply on the next spectating session.",
+                    Current = spectatorMinimumBuffer,
+                },
+                new LabelledSliderBar<int>
+                {
+                    Label = "Spectator resume buffer (ms)",
+                    Description = "Resume after every synchronised player has this much data buffered. Uses at least the minimum buffer.",
+                    Current = spectatorBuffer,
+                },
+                new LabelledSliderBar<int>
+                {
+                    Label = "Spectator buffer timeout (ms)",
+                    Description = "Temporarily exclude a player from synchronisation after waiting this long. Rejoin when caught up with sufficient buffer.",
+                    Current = spectatorBufferTimeout,
+                },
                 resolution = new ResolutionSelector
                 {
                     Label = "Stream area resolution",
