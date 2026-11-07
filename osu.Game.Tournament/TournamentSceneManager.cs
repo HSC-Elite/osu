@@ -186,6 +186,7 @@ namespace osu.Game.Tournament
                             {
                                 Children = new Drawable[]
                                 {
+                                    stageContainer,
                                     chatContainer = new Container
                                     {
                                         Position = new Vector2(332, -142),
@@ -194,7 +195,6 @@ namespace osu.Game.Tournament
                                         Origin = Anchor.TopLeft,
                                         Child = chat
                                     },
-                                    stageContainer
                                 }
                             }
                         }
