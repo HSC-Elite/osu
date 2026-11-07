@@ -186,6 +186,7 @@ namespace osu.Game.Tournament.IPC
                 Score1.Value = team1Score.Sum(CalculateModMultiplier);
                 Score2.Value = team2Score.Sum(CalculateModMultiplier);
             }
+
             Team1Combo.Value = team1Score.Sum(s => s.Combo.Value);
             Team2Combo.Value = team2Score.Sum(s => s.Combo.Value);
         }
@@ -202,8 +203,8 @@ namespace osu.Game.Tournament.IPC
                 return ids;
 
             return teamIdsCache[colour] = Ladder.CurrentMatch.Value?.GetTeamByColor(colour)?.Players
-                                                       .Select(p => p.OnlineID)
-                                                       .ToArray() ?? Array.Empty<int>();
+                                                .Select(p => p.OnlineID)
+                                                .ToArray() ?? Array.Empty<int>();
         }
 
         private long CalculateModMultiplier(GameplayLeaderboardScore score)
