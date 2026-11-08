@@ -20,6 +20,11 @@ namespace osu.Game.Tournament.Screens.RoomSelect
         private readonly RoomSelectMultiplayerLoungeSubScreen lounge = new RoomSelectMultiplayerLoungeSubScreen();
         private readonly OsuScreenStack screenStack;
         private readonly ScreenFooter.BackReceptor backReceptor;
+        private bool inputEnabled;
+
+        public override bool PropagateNonPositionalInputSubTree => inputEnabled && base.PropagateNonPositionalInputSubTree;
+
+        public override bool PropagatePositionalInputSubTree => inputEnabled && base.PropagatePositionalInputSubTree;
 
         public RoomSelectScreen()
         {
@@ -57,6 +62,24 @@ namespace osu.Game.Tournament.Screens.RoomSelect
         protected override void LoadComplete()
         {
             screenStack.Push(lounge);
+        }
+
+        public override void Show()
+        {
+            inputEnabled = true;
+            base.Show();
+        }
+
+        public override void Hide()
+        {
+            inputEnabled = false;
+
+            // AlwaysPresent keeps reconnection processing alive, but also keeps a hidden
+            // search box valid for focus. Release it explicitly when hiding.
+            if (GetContainingInputManager()?.FocusedDrawable.FindClosestParent<RoomSelectScreen>() == this)
+                GetContainingFocusManager()?.ChangeFocus(null);
+
+            base.Hide();
         }
 
         private void handleBackButton()

@@ -27,7 +27,7 @@ namespace osu.Game.Tournament.Screens.MapPool
     public partial class MapPoolScreen : BeatmapInfoScreen
     {
         private FillFlowContainer<FillFlowContainer<TournamentBeatmapPanel>> mapFlows = null!;
-        private readonly TournamentStageContentContainer stageContent;
+        private readonly Container stageContent;
 
         [Resolved]
         private TournamentSceneManager? sceneManager { get; set; }
@@ -45,7 +45,6 @@ namespace osu.Game.Tournament.Screens.MapPool
         private OsuButton buttonBlueBan = null!;
         private OsuButton buttonRedPick = null!;
         private OsuButton buttonBluePick = null!;
-        private ControlPanel controlPanel = null!;
 
         private AutoAdvancePrompt? scheduledScreenChange;
 
@@ -53,7 +52,7 @@ namespace osu.Game.Tournament.Screens.MapPool
 
         public MapPoolScreen()
         {
-            stageContent = new TournamentStageContentContainer(ColourProvider);
+            stageContent = new Container { RelativeSizeAxes = Axes.Both };
         }
 
         [BackgroundDependencyLoader]
@@ -67,7 +66,6 @@ namespace osu.Game.Tournament.Screens.MapPool
                 Loop = true,
                 RelativeSizeAxes = Axes.Both,
             };
-            SetStageVideo(mapPoolVideo);
 
             stageContent.AddRange(new Drawable[]
             {
@@ -92,103 +90,100 @@ namespace osu.Game.Tournament.Screens.MapPool
                 },
             });
 
-            InternalChildren = new Drawable[]
+            ControlPanel = new ControlPanel(true)
             {
-                controlPanel = new ControlPanel(true)
+                Children = new Drawable[]
                 {
-                    Children = new Drawable[]
+                    new TournamentSpriteText
                     {
-                        new TournamentSpriteText
-                        {
-                            Text = "Current Mode"
-                        },
-                        buttonRedProtected = new TourneyButton
-                        {
-                            RelativeSizeAxes = Axes.X,
-                            Text = "Red Protect",
-                            Action = () => setMode(TeamColour.Red, ChoiceType.Protected)
-                        },
-                        buttonBlueProtected = new TourneyButton
-                        {
-                            RelativeSizeAxes = Axes.X,
-                            Text = "Blue Protect",
-                            Action = () => setMode(TeamColour.Blue, ChoiceType.Protected)
-                        },
-                        buttonRedBan = new TourneyButton
-                        {
-                            RelativeSizeAxes = Axes.X,
-                            Text = "Red Ban",
-                            Action = () => setMode(TeamColour.Red, ChoiceType.Ban)
-                        },
-                        buttonBlueBan = new TourneyButton
-                        {
-                            RelativeSizeAxes = Axes.X,
-                            Text = "Blue Ban",
-                            Action = () => setMode(TeamColour.Blue, ChoiceType.Ban)
-                        },
-                        buttonRedPick = new TourneyButton
-                        {
-                            RelativeSizeAxes = Axes.X,
-                            Text = "Red Pick",
-                            Action = () => setMode(TeamColour.Red, ChoiceType.Pick)
-                        },
-                        buttonBluePick = new TourneyButton
-                        {
-                            RelativeSizeAxes = Axes.X,
-                            Text = "Blue Pick",
-                            Action = () => setMode(TeamColour.Blue, ChoiceType.Pick)
-                        },
-                        new TourneyButton
-                        {
-                            RelativeSizeAxes = Axes.X,
-                            Text = "Pick TB",
-                            Action = addTB
-                        },
-                        new ControlPanel.Spacer(),
-                        new SettingsCheckbox
-                        {
-                            RelativeSizeAxes = Axes.X,
-                            LabelText = "修改地图胜者",
-                            Current = { BindTarget = pendingSelectMapModifyWinner }
-                        },
-                        new TextFlowContainer(f => f.Font = OsuFont.Default.With(size: 10))
-                        {
-                            RelativeSizeAxes = Axes.X,
-                            AutoSizeAxes = Axes.Y,
-                            Text = "打开上方开关后选择要修改的地图\n别忘记关了"
-                        },
-                        modifyWinnerMapText = new TournamentSpriteText
-                        {
-                            RelativeSizeAxes = Axes.X,
-                            AllowMultiline = true,
-                            Font = OsuFont.Default.With(size: 10),
-                            Text = "当前选择的地图为: 没选吧"
-                        },
-                        winnerColorDropDown = new SettingsWinnerDropdown
-                        {
-                            RelativeSizeAxes = Axes.X,
-                            LabelText = "胜者队伍"
-                        },
-                        new ControlPanel.Spacer(),
-                        new TourneyButton
-                        {
-                            RelativeSizeAxes = Axes.X,
-                            Text = "Reset",
-                            Action = reset
-                        },
-                        new ControlPanel.Spacer(),
-                        new SettingsCheckbox
-                        {
-                            LabelText = "Split display by mods",
-                            Current = LadderInfo.SplitMapPoolByMods,
-                        },
-                        new ControlPanel.Spacer(),
-                        new MatchRoundNameTextBox
-                        {
-                            RelativeSizeAxes = Axes.X,
-                        },
+                        Text = "Current Mode"
                     },
-                }
+                    buttonRedProtected = new TourneyButton
+                    {
+                        RelativeSizeAxes = Axes.X,
+                        Text = "Red Protect",
+                        Action = () => setMode(TeamColour.Red, ChoiceType.Protected)
+                    },
+                    buttonBlueProtected = new TourneyButton
+                    {
+                        RelativeSizeAxes = Axes.X,
+                        Text = "Blue Protect",
+                        Action = () => setMode(TeamColour.Blue, ChoiceType.Protected)
+                    },
+                    buttonRedBan = new TourneyButton
+                    {
+                        RelativeSizeAxes = Axes.X,
+                        Text = "Red Ban",
+                        Action = () => setMode(TeamColour.Red, ChoiceType.Ban)
+                    },
+                    buttonBlueBan = new TourneyButton
+                    {
+                        RelativeSizeAxes = Axes.X,
+                        Text = "Blue Ban",
+                        Action = () => setMode(TeamColour.Blue, ChoiceType.Ban)
+                    },
+                    buttonRedPick = new TourneyButton
+                    {
+                        RelativeSizeAxes = Axes.X,
+                        Text = "Red Pick",
+                        Action = () => setMode(TeamColour.Red, ChoiceType.Pick)
+                    },
+                    buttonBluePick = new TourneyButton
+                    {
+                        RelativeSizeAxes = Axes.X,
+                        Text = "Blue Pick",
+                        Action = () => setMode(TeamColour.Blue, ChoiceType.Pick)
+                    },
+                    new TourneyButton
+                    {
+                        RelativeSizeAxes = Axes.X,
+                        Text = "Pick TB",
+                        Action = addTB
+                    },
+                    new ControlPanel.Spacer(),
+                    new SettingsCheckbox
+                    {
+                        RelativeSizeAxes = Axes.X,
+                        LabelText = "修改地图胜者",
+                        Current = { BindTarget = pendingSelectMapModifyWinner }
+                    },
+                    new TextFlowContainer(f => f.Font = OsuFont.Default.With(size: 10))
+                    {
+                        RelativeSizeAxes = Axes.X,
+                        AutoSizeAxes = Axes.Y,
+                        Text = "打开上方开关后选择要修改的地图\n别忘记关了"
+                    },
+                    modifyWinnerMapText = new TournamentSpriteText
+                    {
+                        RelativeSizeAxes = Axes.X,
+                        AllowMultiline = true,
+                        Font = OsuFont.Default.With(size: 10),
+                        Text = "当前选择的地图为: 没选吧"
+                    },
+                    winnerColorDropDown = new SettingsWinnerDropdown
+                    {
+                        RelativeSizeAxes = Axes.X,
+                        LabelText = "胜者队伍"
+                    },
+                    new ControlPanel.Spacer(),
+                    new TourneyButton
+                    {
+                        RelativeSizeAxes = Axes.X,
+                        Text = "Reset",
+                        Action = reset
+                    },
+                    new ControlPanel.Spacer(),
+                    new SettingsCheckbox
+                    {
+                        LabelText = "Split display by mods",
+                        Current = LadderInfo.SplitMapPoolByMods,
+                    },
+                    new ControlPanel.Spacer(),
+                    new MatchRoundNameTextBox
+                    {
+                        RelativeSizeAxes = Axes.X,
+                    },
+                },
             };
 
             ipc.Beatmap.BindValueChanged(beatmapChanged);
@@ -222,7 +217,7 @@ namespace osu.Game.Tournament.Screens.MapPool
                 }
             });
 
-            SetStageContent(stageContent);
+            AddInternal(stageContent);
         }
 
         private Bindable<bool>? splitMapPoolByMods;
@@ -233,12 +228,6 @@ namespace osu.Game.Tournament.Screens.MapPool
 
             splitMapPoolByMods = LadderInfo.SplitMapPoolByMods.GetBoundCopy();
             splitMapPoolByMods.BindValueChanged(_ => updateDisplay());
-        }
-
-        public override void Show()
-        {
-            ShowStageContent();
-            base.Show();
         }
 
         private void beatmapChanged(ValueChangedEvent<TournamentBeatmap?> beatmap)
@@ -400,12 +389,12 @@ namespace osu.Game.Tournament.Screens.MapPool
                 BeatmapID = beatmapId
             });
 
-            if (LadderInfo.AutoProgressScreens.Value)
+            if (IsStageActive && LadderInfo.AutoProgressScreens.Value)
             {
                 if (pickType == ChoiceType.Pick && CurrentMatch.Value.PicksBans.Any(i => i.Type == ChoiceType.Pick) || pickType == ChoiceType.TB)
                 {
                     scheduledScreenChange?.Cancel();
-                    controlPanel.Add(scheduledScreenChange = new AutoAdvancePrompt(() => { sceneManager?.SetScreen(typeof(GameplayScreen)); }, 10000));
+                    sceneManager?.ShowAutoAdvance(scheduledScreenChange = new AutoAdvancePrompt(() => { sceneManager?.SetScreen(typeof(GameplayScreen)); }, 10000));
                 }
             }
 

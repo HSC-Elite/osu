@@ -23,7 +23,7 @@ using osuTK.Graphics;
 
 namespace osu.Game.Tournament.Screens.Drawings
 {
-    public partial class DrawingsScreen : TournamentScreen
+    public partial class DrawingsScreen : TournamentStageScreen
     {
         private const string results_filename = "drawings_results.txt";
 
@@ -81,7 +81,7 @@ namespace osu.Game.Tournament.Screens.Drawings
                 };
 
                 links.AddLink("Click for details on the file format", "https://osu.ppy.sh/wiki/en/Tournament_Drawings", t => t.Colour = Color4.White);
-                SetStageContent(stageContent);
+                AddInternal(stageContent);
                 return;
             }
 
@@ -92,7 +92,6 @@ namespace osu.Game.Tournament.Screens.Drawings
                 Loop = true,
                 RelativeSizeAxes = Axes.Both,
             };
-            SetStageVideo(drawingsVideo);
 
             stageContent = new Container
             {
@@ -153,40 +152,36 @@ namespace osu.Game.Tournament.Screens.Drawings
                 }
             };
 
-            InternalChildren = new Drawable[]
+            ControlPanel = new ControlPanel(true)
             {
-                // Control panel container
-                new ControlPanel
+                new TourneyButton
                 {
-                    new TourneyButton
-                    {
-                        RelativeSizeAxes = Axes.X,
+                    RelativeSizeAxes = Axes.X,
 
-                        Text = "Begin random",
-                        Action = teamsContainer.StartScrolling,
-                    },
-                    new TourneyButton
-                    {
-                        RelativeSizeAxes = Axes.X,
+                    Text = "Begin random",
+                    Action = teamsContainer.StartScrolling,
+                },
+                new TourneyButton
+                {
+                    RelativeSizeAxes = Axes.X,
 
-                        Text = "Stop random",
-                        Action = teamsContainer.StopScrolling,
-                    },
-                    new TourneyButton
-                    {
-                        RelativeSizeAxes = Axes.X,
+                    Text = "Stop random",
+                    Action = teamsContainer.StopScrolling,
+                },
+                new TourneyButton
+                {
+                    RelativeSizeAxes = Axes.X,
 
-                        Text = "Reload",
-                        Action = reloadTeams
-                    },
-                    new ControlPanel.Spacer(),
-                    new TourneyButton
-                    {
-                        RelativeSizeAxes = Axes.X,
+                    Text = "Reload",
+                    Action = reloadTeams
+                },
+                new ControlPanel.Spacer(),
+                new TourneyButton
+                {
+                    RelativeSizeAxes = Axes.X,
 
-                        Text = "Reset",
-                        Action = () => reset()
-                    }
+                    Text = "Reset",
+                    Action = () => reset()
                 }
             };
 
@@ -194,13 +189,7 @@ namespace osu.Game.Tournament.Screens.Drawings
             teamsContainer.OnScrollStarted += () => fullTeamNameText.FadeOut(200);
 
             reset(true);
-            SetStageContent(stageContent);
-        }
-
-        public override void Show()
-        {
-            ShowStageContent();
-            base.Show();
+            AddInternal(stageContent);
         }
 
         private void onTeamSelected(TournamentTeam team)

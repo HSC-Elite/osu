@@ -6,7 +6,7 @@ using osu.Game.Tournament.Models;
 
 namespace osu.Game.Tournament.Screens
 {
-    public abstract partial class TournamentMatchScreen : TournamentScreen
+    public abstract partial class TournamentMatchScreen : TournamentStageScreen
     {
         protected readonly Bindable<TournamentMatch?> CurrentMatch = new Bindable<TournamentMatch?>();
         private WarningBox? noMatchWarning;
@@ -33,10 +33,7 @@ namespace osu.Game.Tournament.Screens
 
         private protected virtual void AddMatchWarning(WarningBox warning)
         {
-            if (StageContent == null)
-                AddInternal(warning);
-            else
-                StageContent.Add(warning);
+            AddInternal(warning);
         }
     }
 }

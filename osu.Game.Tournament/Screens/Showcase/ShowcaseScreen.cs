@@ -83,7 +83,6 @@ namespace osu.Game.Tournament.Screens.Showcase
                 Loop = true,
                 RelativeSizeAxes = Axes.Both,
             };
-            SetStageVideo(showcaseVideo);
 
             stageContent = new Container
             {
@@ -153,7 +152,7 @@ namespace osu.Game.Tournament.Screens.Showcase
                 }
             });
 
-            SetStageContent(stageContent);
+            AddInternal(stageContent);
         }
 
         protected override void LoadComplete()
@@ -179,7 +178,7 @@ namespace osu.Game.Tournament.Screens.Showcase
                 {
                     nestedLazerSettingContainer.AutoSizeAxes = Axes.Y;
                     showcaseContainer.Clear(true);
-                    if (StageShowing)
+                    if (IsStageActive)
                         startInnerLazer();
                 }
                 else
@@ -203,7 +202,6 @@ namespace osu.Game.Tournament.Screens.Showcase
 
         public override void Show()
         {
-            ShowStageContent();
             base.Show();
 
             if (useOsuLazer.Value)
@@ -212,7 +210,7 @@ namespace osu.Game.Tournament.Screens.Showcase
 
         private void startInnerLazer() => Scheduler.AddOnce(() =>
         {
-            if (nestedGame != null)
+            if (!IsStageActive || nestedGame != null)
                 return;
 
             nestedGame = new NestedOsuGame(host.Storage, new ForwardingAPIAccess(api), config)
@@ -239,7 +237,7 @@ namespace osu.Game.Tournament.Screens.Showcase
             flash.FlashColor.BindTo(flashColor);
             flash.FlashKiaiOnly.BindTo(flashKiaiOnly);
 
-            StageContent!.Add(flashContainer = new ShowcaseFlashContainer(this)
+            stageContent.Add(flashContainer = new ShowcaseFlashContainer(this)
             {
                 Child = flash,
             });
@@ -254,7 +252,7 @@ namespace osu.Game.Tournament.Screens.Showcase
             }
 
             if (flashContainer != null)
-                StageContent?.Remove(flashContainer, true);
+                stageContent.Remove(flashContainer, true);
 
             musicController = null;
             nestedGame = null;

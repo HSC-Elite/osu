@@ -48,14 +48,7 @@ namespace osu.Game.Tournament.Screens.TeamIntro
                 }
             };
 
-            SetStageVideo(teamIntroVideo);
-            SetStageContent(stageContent);
-        }
-
-        public override void Show()
-        {
-            ShowStageContent();
-            base.Show();
+            AddInternal(stageContent);
         }
 
         protected override void CurrentMatchChanged(ValueChangedEvent<TournamentMatch?> match)

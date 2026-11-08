@@ -54,17 +54,9 @@ namespace osu.Game.Tournament.Screens.TeamWin
                 }
             };
 
-            SetStageVideo(blueWinVideo);
-            SetStageVideo(redWinVideo);
-            SetStageContent(stageContent);
+            AddInternal(stageContent);
 
             currentCompleted.BindValueChanged(_ => update());
-        }
-
-        public override void Show()
-        {
-            ShowStageContent();
-            base.Show();
         }
 
         protected override void CurrentMatchChanged(ValueChangedEvent<TournamentMatch?> match)

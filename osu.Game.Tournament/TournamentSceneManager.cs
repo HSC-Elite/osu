@@ -2,6 +2,7 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
@@ -14,6 +15,7 @@ using osu.Framework.Threading;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Containers;
 using osu.Game.Graphics.Sprites;
+using osu.Game.Overlays;
 using osu.Game.Tournament.Components;
 using osu.Game.Tournament.Configuration;
 using osu.Game.Tournament.Screens;
@@ -37,30 +39,40 @@ namespace osu.Game.Tournament
     [Cached]
     public partial class TournamentSceneManager : CompositeDrawable
     {
-        private Container screens = null!;
-        private TourneyVideo video = null!;
-
         public const int CONTROL_AREA_WIDTH = 200;
-
         public const int STREAM_AREA_WIDTH = 1366;
         public const int STREAM_AREA_HEIGHT = (int)(STREAM_AREA_WIDTH / ASPECT_RATIO);
-
         public const float ASPECT_RATIO = 16 / 9f;
-
         public const int REQUIRED_WIDTH = CONTROL_AREA_WIDTH * 2 + STREAM_AREA_WIDTH;
 
         [Cached]
-        private TournamentMatchChatDisplay chat = new TournamentMatchChatDisplay();
-
-        private Container chatContainer = null!;
-        private FillFlowContainer buttons = null!;
+        private readonly TournamentMatchChatDisplay chat = new TournamentMatchChatDisplay();
 
         [Cached]
-        private StageContainer stageContainer { get; set; } = new StageContainer();
+        private readonly OverlayColourProvider colourProvider = new OverlayColourProvider(OverlayColourScheme.Blue);
 
-        private Container? stageSizeControlContainer;
+        private readonly Bindable<int> stageHeight = new Bindable<int>();
+        private readonly Bindable<Type> currentScreenBindable = new Bindable<Type>();
+        private readonly Dictionary<Type, TournamentScreen> screens = new Dictionary<Type, TournamentScreen>();
+        private readonly Dictionary<TournamentStageScreen, Container> controlPanels = new Dictionary<TournamentStageScreen, Container>();
 
-        private Bindable<int> stageHeight = new Bindable<int>();
+        private Container consoleRoot = null!;
+        private Container stageRoot = null!;
+        private Container stageSizeControlContainer = null!;
+        private Container chatContainer = null!;
+        private Container autoAdvanceContainer = null!;
+        private FillFlowContainer buttons = null!;
+        private TourneyVideo video = null!;
+        private Drawable? consoleContent;
+        private Drawable? temporaryScreen;
+        private ScheduledDelegate? scheduledHide;
+        private AutoAdvancePrompt? autoAdvancePrompt;
+        private float depth;
+
+        public IBindable<Type> CurrentScreen => currentScreenBindable;
+        public Drawable? ActiveScreen { get; private set; }
+        public TournamentStageScreen? ActiveStage { get; private set; }
+        public TournamentStageScreen? PreviousStage { get; private set; }
 
         public TournamentSceneManager()
         {
@@ -72,6 +84,16 @@ namespace osu.Game.Tournament
         {
             config.BindWith(StorageConfig.StageHeight, stageHeight);
 
+            foreach (var screen in new TournamentScreen[]
+                     {
+                         new SetupScreen(), new RoomSelectScreen(), new LadderScreen(), new LadderEditorScreen(),
+                         new TeamEditorScreen(), new ModColorEditorScreen(), new ModMultiplierSettingsEditorScreen(),
+                         new RoundEditorScreen(), new OsuGameScreen(),
+                         new ScheduleScreen(), new TeamIntroScreen(), new SeedingScreen(), new MapPoolScreen(),
+                         new GameplayScreen(), new TeamWinScreen(), new DrawingsScreen(), new ShowcaseScreen(),
+                     })
+                screens.Add(screen.GetType(), screen);
+
             InternalChild = new RefCountedBackbufferProvider
             {
                 RelativeSizeAxes = Axes.Both,
@@ -81,47 +103,15 @@ namespace osu.Game.Tournament
                     {
                         RelativeSizeAxes = Axes.Both,
                         Padding = new MarginPadding { Left = CONTROL_AREA_WIDTH },
-                        Anchor = Anchor.TopLeft,
-                        Origin = Anchor.TopLeft,
                         Children = new Drawable[]
                         {
-                            new Box
-                            {
-                                Colour = new Color4(20, 20, 20, 255),
-                                Anchor = Anchor.TopRight,
-                                RelativeSizeAxes = Axes.Both,
-                                Width = 10,
-                            },
-                            video = new TourneyVideo("main", true)
-                            {
-                                Loop = true,
-                                RelativeSizeAxes = Axes.Both,
-                            },
-                            screens = new Container
+                            new Box { RelativeSizeAxes = Axes.Both, Colour = OsuColour.Gray(0.08f) },
+                            consoleRoot = new Container
                             {
                                 RelativeSizeAxes = Axes.Both,
-                                Children = new Drawable[]
-                                {
-                                    new SetupScreen(),
-                                    new RoomSelectScreen(),
-                                    new ScheduleScreen(),
-                                    new LadderScreen(),
-                                    new LadderEditorScreen(),
-                                    new TeamEditorScreen(),
-                                    new ModColorEditorScreen(),
-                                    new ModMultiplierSettingsEditorScreen(),
-                                    new RoundEditorScreen(),
-                                    new ShowcaseScreen(),
-                                    new MapPoolScreen(),
-                                    new TeamIntroScreen(),
-                                    new SeedingScreen(),
-                                    new DrawingsScreen(),
-                                    new GameplayScreen(),
-                                    new TeamWinScreen(),
-                                    new OsuGameScreen()
-                                }
+                                ChildrenEnumerable = screens.Values.Where(s => s is not TournamentStageScreen),
                             },
-                        }
+                        },
                     },
                     new Container
                     {
@@ -129,188 +119,277 @@ namespace osu.Game.Tournament
                         Width = CONTROL_AREA_WIDTH,
                         Children = new Drawable[]
                         {
-                            new Box
-                            {
-                                Colour = Color4.Black,
-                                RelativeSizeAxes = Axes.Both,
-                            },
-                            new OsuScrollContainer
+                            new Box { RelativeSizeAxes = Axes.Both, Colour = Color4.Black },
+                            new GridContainer
                             {
                                 RelativeSizeAxes = Axes.Both,
-                                ScrollbarVisible = false,
-                                Child = buttons = new FillFlowContainer
+                                RowDimensions = new[] { new Dimension(), new Dimension(GridSizeMode.AutoSize) },
+                                Content = new[]
                                 {
-                                    RelativeSizeAxes = Axes.X,
-                                    AutoSizeAxes = Axes.Y,
-                                    Direction = FillDirection.Vertical,
-                                    Spacing = new Vector2(5),
-                                    Padding = new MarginPadding(5),
-                                    Children = new Drawable[]
+                                    new Drawable[]
                                     {
-                                        new ScreenButton(typeof(SetupScreen)) { Text = "Setup", RequestSelection = SetScreen },
-                                        new ScreenButton(typeof(RoomSelectScreen)) { Text = "Select Room", RequestSelection = SetScreen },
-                                        new Separator(),
-                                        new ScreenButton(typeof(TeamEditorScreen)) { Text = "Team Editor", RequestSelection = SetScreen },
-                                        new ScreenButton(typeof(ModColorEditorScreen)) { Text = "Mod Color Editor", RequestSelection = SetScreen },
-                                        new ScreenButton(typeof(ModMultiplierSettingsEditorScreen)) { Text = "Mod Multiplier Editor", RequestSelection = SetScreen },
-                                        new ScreenButton(typeof(RoundEditorScreen)) { Text = "Rounds Editor", RequestSelection = SetScreen },
-                                        new ScreenButton(typeof(LadderEditorScreen)) { Text = "Bracket Editor", RequestSelection = SetScreen },
-                                        new Separator(),
-                                        new ScreenButton(typeof(ScheduleScreen), Key.S) { Text = "Schedule", RequestSelection = SetScreen },
-                                        new ScreenButton(typeof(LadderScreen), Key.B) { Text = "Bracket", RequestSelection = SetScreen },
-                                        new Separator(),
-                                        new ScreenButton(typeof(TeamIntroScreen), Key.I) { Text = "Team Intro", RequestSelection = SetScreen },
-                                        new ScreenButton(typeof(SeedingScreen), Key.D) { Text = "Seeding", RequestSelection = SetScreen },
-                                        new Separator(),
-                                        new ScreenButton(typeof(MapPoolScreen), Key.M) { Text = "Map Pool", RequestSelection = SetScreen },
-                                        new ScreenButton(typeof(GameplayScreen), Key.G) { Text = "Gameplay", RequestSelection = SetScreen },
-                                        new Separator(),
-                                        new ScreenButton(typeof(TeamWinScreen), Key.W) { Text = "Win", RequestSelection = SetScreen },
-                                        new Separator(),
-                                        new ScreenButton(typeof(DrawingsScreen)) { Text = "Drawings", RequestSelection = SetScreen },
-                                        new ScreenButton(typeof(ShowcaseScreen)) { Text = "Showcase", RequestSelection = SetScreen },
-                                        new ScreenButton(typeof(OsuGameScreen)) { Text = "Osu", RequestSelection = SetScreen }
-                                    }
-                                }
+                                        new OsuScrollContainer
+                                        {
+                                            RelativeSizeAxes = Axes.Both,
+                                            ScrollbarVisible = false,
+                                            Child = buttons = new FillFlowContainer
+                                            {
+                                                RelativeSizeAxes = Axes.X,
+                                                AutoSizeAxes = Axes.Y,
+                                                Direction = FillDirection.Vertical,
+                                                Spacing = new Vector2(5),
+                                                Padding = new MarginPadding(5),
+                                                Children = new Drawable[]
+                                                {
+                                                    heading("Console"),
+                                                    button<SetupScreen>("Setup"),
+                                                    button<RoomSelectScreen>("Select Room"),
+                                                    button<LadderScreen>("Bracket", Key.B),
+                                                    button<TeamEditorScreen>("Team Editor"),
+                                                    button<ModColorEditorScreen>("Mod Color Editor"),
+                                                    button<ModMultiplierSettingsEditorScreen>("Mod Multiplier Editor"),
+                                                    button<RoundEditorScreen>("Rounds Editor"),
+                                                    button<LadderEditorScreen>("Bracket Editor"),
+                                                    button<OsuGameScreen>("Osu"),
+                                                    heading("Stage"),
+                                                    button<ScheduleScreen>("Schedule", Key.S),
+                                                    button<TeamIntroScreen>("Team Intro", Key.I),
+                                                    button<SeedingScreen>("Seeding", Key.D),
+                                                    button<MapPoolScreen>("Map Pool", Key.M),
+                                                    button<GameplayScreen>("Gameplay", Key.G),
+                                                    button<TeamWinScreen>("Win", Key.W),
+                                                    button<DrawingsScreen>("Drawings"),
+                                                    button<ShowcaseScreen>("Showcase"),
+                                                },
+                                            },
+                                        },
+                                    },
+                                    new Drawable[]
+                                    {
+                                        autoAdvanceContainer = new Container
+                                        {
+                                            RelativeSizeAxes = Axes.X,
+                                            AutoSizeAxes = Axes.Y,
+                                            Padding = new MarginPadding { Horizontal = 5 },
+                                        },
+                                    },
+                                },
                             },
                         },
                     },
-                    new ExternalWindowContainer
+                    CreateStageWindow(stageSizeControlContainer = new Container
                     {
-                        AutoSizeAxes = Axes.Both,
-                        Depth = float.MaxValue,
-                        WindowTitle = "Tournament Stage Window",
-                        Child = stageSizeControlContainer = new Container
+                        Child = new DrawSizePreservingFillContainer
                         {
-                            Child = new DrawSizePreservingFillContainer
+                            Children = new Drawable[]
                             {
-                                Children = new Drawable[]
+                                video = new TourneyVideo("main", true) { RelativeSizeAxes = Axes.Both, Loop = true },
+                                stageRoot = new ShortcutContainer(handleShortcut)
                                 {
-                                    stageContainer,
-                                    chatContainer = new Container
-                                    {
-                                        Position = new Vector2(332, -142),
-                                        Width = 700,
-                                        Anchor = Anchor.BottomLeft,
-                                        Origin = Anchor.TopLeft,
-                                        Child = chat
-                                    },
-                                }
-                            }
-                        }
-                    }
-                }
+                                    RelativeSizeAxes = Axes.Both,
+                                    ChildrenEnumerable = screens.Values.OfType<TournamentStageScreen>(),
+                                },
+                                chatContainer = new Container
+                                {
+                                    Alpha = 0,
+                                    Position = new Vector2(332, -142),
+                                    Width = 700,
+                                    Anchor = Anchor.BottomLeft,
+                                    Origin = Anchor.TopLeft,
+                                    Child = chat,
+                                },
+                            },
+                        },
+                    }),
+                },
             };
 
-            foreach (var drawable in screens)
-                drawable.Hide();
+            foreach (var screen in screens.Values)
+                screen.Hide();
 
-            SetScreen(typeof(SetupScreen));
-
-            stageHeight.BindValueChanged(h =>
-            {
-                stageSizeControlContainer.Size = new Vector2((int)(h.NewValue * ASPECT_RATIO), h.NewValue);
-            }, true);
+            stageHeight.BindValueChanged(h => stageSizeControlContainer.Size = new Vector2((int)(h.NewValue * ASPECT_RATIO), h.NewValue), true);
         }
 
-        private float depth;
+        // Tests can host the same two trees without creating a native window.
+        protected virtual Drawable CreateStageWindow(Container content) => new ExternalWindowContainer
+        {
+            AutoSizeAxes = Axes.Both,
+            Depth = float.MaxValue,
+            WindowTitle = "Tournament Stage Window",
+            Child = content,
+        };
 
-        private Drawable? currentScreen;
-        private ScheduledDelegate? scheduledHide;
+        protected override void LoadComplete()
+        {
+            base.LoadComplete();
 
-        public IBindable<Type> CurrentScreen => currentScreenBindable;
-        private readonly Bindable<Type> currentScreenBindable = new Bindable<Type>();
+            // Screen dependency loaders have now populated their detached control panels.
+            foreach (var screen in screens.Values.OfType<TournamentStageScreen>())
+            {
+                var panelContainer = new Container
+                {
+                    RelativeSizeAxes = Axes.Both,
+                    Alpha = 0,
+                    Child = screen.ControlPanel,
+                };
+                controlPanels.Add(screen, panelContainer);
+                consoleRoot.Add(panelContainer);
+            }
 
-        public Drawable? ActiveScreen => currentScreen;
+            SetScreen(typeof(SetupScreen));
+        }
 
-        private Drawable? temporaryScreen;
+        private static Drawable heading(string text) => new OsuSpriteText
+        {
+            Text = text,
+            Font = OsuFont.Default.With(size: 20, weight: FontWeight.Bold),
+            Margin = new MarginPadding { Top = 15, Bottom = 5 },
+        };
+
+        private ScreenButton button<T>(string text, Key? shortcut = null) where T : TournamentScreen
+            => new ScreenButton(typeof(T), shortcut) { Text = text, RequestSelection = SetScreen };
 
         public void SetScreen(Drawable screen)
         {
-            currentScreen?.Hide();
-            currentScreen = null;
-
-            screens.Add(temporaryScreen = screen);
+            hideConsoleContent();
+            temporaryScreen?.Expire();
+            consoleRoot.Add(temporaryScreen = screen);
+            consoleContent = screen;
+            ActiveScreen = screen;
+            currentScreenBindable.Value = screen.GetType();
+            screen.Show();
+            updateButtons();
         }
 
         public void SetScreen(Type screenType)
         {
+            if (!screens.TryGetValue(screenType, out var target) || ActiveScreen == target)
+                return;
+
+            hideConsoleContent();
             temporaryScreen?.Expire();
+            temporaryScreen = null;
 
-            var target = screens.FirstOrDefault(s => s.GetType() == screenType);
+            if (target is TournamentStageScreen stage)
+            {
+                switchStage(stage);
+                consoleContent = controlPanels[stage];
+            }
+            else
+                consoleContent = target;
 
-            if (target == null || currentScreen == target) return;
-
+            ActiveScreen = target;
             currentScreenBindable.Value = screenType;
+            consoleRoot.ChangeChildDepth(consoleContent, depth--);
+            consoleContent.Show();
+            updateButtons();
+        }
 
+        private void hideConsoleContent()
+        {
+            if (consoleContent is TournamentScreen screen)
+                screen.Hide();
+            else
+                consoleContent?.FadeOut(TournamentScreen.FADE_DELAY);
+        }
+
+        private void switchStage(TournamentStageScreen target)
+        {
+            if (ActiveStage == target)
+                return;
+
+            autoAdvancePrompt?.Cancel();
+
+            // Finish any previous delayed exit before starting a new transition.
             if (scheduledHide?.Completed == false)
             {
                 scheduledHide.RunTask();
-                scheduledHide.Cancel(); // see https://github.com/ppy/osu-framework/issues/2967
-                scheduledHide = null;
+                scheduledHide.Cancel();
             }
 
-            var lastScreen = currentScreen;
-            currentScreen = target;
+            scheduledHide = null;
 
-            bool hasVideo = currentScreen.ChildrenOfType<TourneyVideo>().FirstOrDefault()?.VideoAvailable == true
-                            || currentScreen is TournamentScreen tournamentScreen && tournamentScreen.StageVideoAvailable;
+            var previous = ActiveStage;
+            PreviousStage = previous;
+            previous?.IsStageActive = false;
+            ActiveStage = target;
+            target.IsStageActive = true;
 
-            if (hasVideo)
+            if (target.ChildrenOfType<TourneyVideo>().Any(v => v.VideoAvailable))
             {
-                video.FadeOut(200);
-
-                // delay the hide to avoid a double-fade transition.
-                scheduledHide = Scheduler.AddDelayed(() => lastScreen?.Hide(), TournamentScreen.FADE_DELAY);
+                video.FadeOut(TournamentScreen.FADE_DELAY);
+                scheduledHide = Scheduler.AddDelayed(() => previous?.Hide(), TournamentScreen.FADE_DELAY);
             }
             else
             {
-                lastScreen?.Hide();
+                previous?.Hide();
                 video.Show();
             }
 
-            screens.ChangeChildDepth(currentScreen, depth--);
-            currentScreen.Show();
+            stageRoot.ChangeChildDepth(target, depth--);
+            target.Show();
 
-            switch (currentScreen)
+            if (target is MapPoolScreen or GameplayScreen)
             {
-                case MapPoolScreen:
-                    chatContainer.FadeIn(TournamentScreen.FADE_DELAY);
-                    chatContainer.ResizeHeightTo(82, TournamentScreen.FADE_DELAY, Easing.In);
-                    break;
-
-                case GameplayScreen:
-                    chatContainer.FadeIn(TournamentScreen.FADE_DELAY);
-                    chatContainer.ResizeHeightTo(82, TournamentScreen.FADE_DELAY, Easing.In);
-                    break;
-
-                default:
-                    chatContainer.FadeOut(TournamentScreen.FADE_DELAY);
-                    break;
+                chatContainer.FadeIn(TournamentScreen.FADE_DELAY);
+                chatContainer.ResizeHeightTo(82, TournamentScreen.FADE_DELAY, Easing.In);
             }
-
-            foreach (var s in buttons.OfType<ScreenButton>())
-                s.IsSelected = screenType == s.Type;
+            else
+                chatContainer.FadeOut(TournamentScreen.FADE_DELAY);
         }
 
-        private partial class Separator : CompositeDrawable
+        /// <summary>
+        /// Displays a caller-owned prompt independently of the selected console page.
+        /// A change of stage cancels the current prompt.
+        /// </summary>
+        public void ShowAutoAdvance(AutoAdvancePrompt prompt)
         {
-            public Separator()
+            autoAdvancePrompt?.Cancel();
+            autoAdvanceContainer.Clear();
+            autoAdvanceContainer.Add(autoAdvancePrompt = prompt);
+        }
+
+        private void updateButtons()
+        {
+            foreach (var button in buttons.OfType<ScreenButton>())
+                button.IsSelected = button.Type == ActiveScreen?.GetType() || button.Type == ActiveStage?.GetType();
+        }
+
+        protected override bool OnKeyDown(KeyDownEvent e) => handleShortcut(e) || base.OnKeyDown(e);
+
+        private bool handleShortcut(KeyDownEvent e)
+        {
+            var button = buttons.OfType<ScreenButton>().FirstOrDefault(b => b.ShortcutKey == e.Key);
+            if (button == null)
+                return false;
+
+            SetScreen(button.Type);
+            return true;
+        }
+
+        // The external window has its own input manager, so its unhandled shortcuts
+        // must be routed from inside that tree as well as from the console tree.
+        private partial class ShortcutContainer : Container
+        {
+            private readonly Func<KeyDownEvent, bool> handleShortcut;
+
+            public ShortcutContainer(Func<KeyDownEvent, bool> handleShortcut)
             {
-                RelativeSizeAxes = Axes.X;
-                Height = 20;
+                this.handleShortcut = handleShortcut;
             }
+
+            protected override bool OnKeyDown(KeyDownEvent e) => handleShortcut(e) || base.OnKeyDown(e);
         }
 
         private partial class ScreenButton : TourneyButton
         {
             public readonly Type Type;
 
-            private readonly Key? shortcutKey;
+            public Key? ShortcutKey { get; }
 
             public ScreenButton(Type type, Key? shortcutKey = null)
             {
-                this.shortcutKey = shortcutKey;
+                ShortcutKey = shortcutKey;
 
                 Type = type;
 
@@ -350,17 +429,6 @@ namespace osu.Game.Tournament
                 }
             }
 
-            protected override bool OnKeyDown(KeyDownEvent e)
-            {
-                if (e.Key == shortcutKey)
-                {
-                    TriggerClick();
-                    return true;
-                }
-
-                return base.OnKeyDown(e);
-            }
-
             private bool isSelected;
 
             public Action<Type>? RequestSelection;
@@ -370,8 +438,11 @@ namespace osu.Game.Tournament
                 get => isSelected;
                 set
                 {
+                    if (isSelected == value)
+                        return;
+
                     isSelected = value;
-                    Background.FadeColour(value ? Color4.Gray : BackgroundColour, 50);
+                    BackgroundColour = value ? Color4.Gray : OsuColour.Gray(0.2f);
                 }
             }
         }

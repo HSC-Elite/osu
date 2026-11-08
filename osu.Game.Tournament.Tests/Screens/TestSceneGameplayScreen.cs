@@ -23,6 +23,23 @@ namespace osu.Game.Tournament.Tests.Screens
         [Resolved]
         private TournamentMatchScoreProcessor scoreProcessor { get; set; } = null!;
 
+        [SetUpSteps]
+        public override void SetUpSteps()
+        {
+            AddStep("reset gameplay state", () =>
+            {
+                Remove(chat, false);
+                Clear();
+                IPCInfo.HasActiveMatch.Value = false;
+                IPCInfo.State.Value = TourneyState.Idle;
+                scoreProcessor.CurrentlyListening.Value = false;
+                scoreProcessor.WaitingForAuthoritativeResult.Value = false;
+                Ladder.Matches.First().Team1Score.Value = 0;
+                Ladder.Matches.First().Team2Score.Value = 0;
+            });
+            base.SetUpSteps();
+        }
+
         [Test]
         public void TestWarmup()
         {
@@ -58,6 +75,7 @@ namespace osu.Game.Tournament.Tests.Screens
             AddStep("reset gameplay and API state", () =>
             {
                 IPCInfo.State.Value = TourneyState.Idle;
+                IPCInfo.HasActiveMatch.Value = false;
                 scoreProcessor.CurrentlyListening.Value = false;
                 scoreProcessor.WaitingForAuthoritativeResult.Value = false;
             });
@@ -69,10 +87,10 @@ namespace osu.Game.Tournament.Tests.Screens
             toggleWarmup();
             checkLiveScoreWarningVisibility(false);
 
-            AddStep("start API listener", () => scoreProcessor.CurrentlyListening.Value = true);
+            AddStep("join active match", () => IPCInfo.HasActiveMatch.Value = true);
             checkLiveScoreWarningVisibility(true);
 
-            AddStep("stop API listener", () => scoreProcessor.CurrentlyListening.Value = false);
+            AddStep("leave active match", () => IPCInfo.HasActiveMatch.Value = false);
             checkLiveScoreWarningVisibility(false);
 
             AddStep("set ranking state", () => IPCInfo.State.Value = TourneyState.Ranking);
@@ -85,6 +103,7 @@ namespace osu.Game.Tournament.Tests.Screens
             AddStep("reset API listener and result wait", () =>
             {
                 IPCInfo.State.Value = TourneyState.Idle;
+                IPCInfo.HasActiveMatch.Value = false;
                 scoreProcessor.CurrentlyListening.Value = false;
                 scoreProcessor.WaitingForAuthoritativeResult.Value = false;
             });
@@ -93,7 +112,11 @@ namespace osu.Game.Tournament.Tests.Screens
             AddUntilStep("song bar initially idle", () => !gameplaySongBar.IsLoading.Value);
             AddStep("wait for authoritative result", () => scoreProcessor.WaitingForAuthoritativeResult.Value = true);
             AddUntilStep("no loading when API listener is off", () => !gameplaySongBar.IsLoading.Value);
-            AddStep("enable API listener", () => scoreProcessor.CurrentlyListening.Value = true);
+            AddStep("enable API listener", () =>
+            {
+                scoreProcessor.CurrentlyListening.Value = true;
+                IPCInfo.HasActiveMatch.Value = true;
+            });
             AddUntilStep("song bar shows loading", () => gameplaySongBar.IsLoading.Value);
             AddStep("authoritative result received", () => scoreProcessor.WaitingForAuthoritativeResult.Value = false);
             AddUntilStep("song bar hides loading", () => !gameplaySongBar.IsLoading.Value);
@@ -108,7 +131,7 @@ namespace osu.Game.Tournament.Tests.Screens
 
                 Children = new Drawable[]
                 {
-                    new GameplayScreen(),
+                    CreateScreenPreview(new GameplayScreen()),
                     chat,
                 };
             });

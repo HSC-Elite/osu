@@ -6,6 +6,7 @@ using System.Linq;
 using osu.Framework.Allocation;
 using osu.Framework.Audio;
 using osu.Framework.Bindables;
+using osu.Framework.Extensions.ObjectExtensions;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Sprites;
@@ -79,13 +80,11 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
         protected override bool ShowLogo => true;
 
-        private bool switchFromMappool;
-
-        private readonly TournamentStageContentContainer stageContent;
+        private readonly Container stageContent;
 
         public GameplayScreen()
         {
-            stageContent = new TournamentStageContentContainer(ColourProvider);
+            stageContent = new Container { RelativeSizeAxes = Axes.Both };
         }
 
         [BackgroundDependencyLoader]
@@ -98,7 +97,6 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 Loop = true,
                 RelativeSizeAxes = Axes.Both,
             };
-            SetStageVideo(gameplayVideo);
 
             ControlPanel.Anchor = Anchor.TopLeft;
             ControlPanel.RelativeSizeAxes = Axes.Both;
@@ -298,17 +296,6 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 updateScoreWarning();
             }, true);
 
-            sceneManager?.CurrentScreen.BindValueChanged(s =>
-            {
-                if (s.OldValue == typeof(MapPoolScreen) && s.NewValue == typeof(GameplayScreen))
-                {
-                    switchFromMappool = true;
-                    return;
-                }
-
-                switchFromMappool = false;
-            });
-
             playerPerTeam.BindTo(LadderInfo.PlayersPerTeam);
             playerPerTeam.BindValueChanged(_ => rebuildPlayerSlots(), true);
 
@@ -320,7 +307,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 chatBox.Text = string.Empty;
             };
 
-            SetStageContent(stageContent);
+            AddInternal(stageContent);
         }
 
         private bool roundPreviewShow;
@@ -339,7 +326,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
             if (roundPreviewShow)
                 return false;
 
-            if (!IsPresent)
+            if (!IsStageActive)
                 return false;
 
             if (State.Value != TourneyState.Idle && State.Value != TourneyState.Ranking)
@@ -441,8 +428,12 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
             gameplaySongBar.Expanded = false;
             scoreDisplay.FadeOut(100);
-            using (chat.BeginDelayedSequence(500))
-                chat.Expand();
+
+            if (IsStageActive)
+            {
+                using (chat.BeginDelayedSequence(500))
+                    chat.Expand();
+            }
         }
 
         private void expand()
@@ -452,7 +443,9 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
             scheduledContract?.Cancel();
 
-            chat.Contract();
+            if (IsStageActive)
+                chat.Contract();
+
             gameplaySongBar.Expanded = true;
 
             using (BeginDelayedSequence(300))
@@ -463,7 +456,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
         private void rebuildPlayerSlots()
         {
-            if (!IsLoaded)
+            if (playerGridContainer.IsNull())
                 return;
 
             cancelScheduledWindowAnimations();
@@ -600,7 +593,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
                         contract();
 
-                        if (LadderInfo.AutoProgressScreens.Value)
+                        if (IsStageActive && LadderInfo.AutoProgressScreens.Value)
                         {
                             const float delay_before_progression = 4000;
 
@@ -614,7 +607,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
                                     scheduledScreenChange = new AutoAdvancePrompt(() => { sceneManager?.SetScreen(typeof(MapPoolScreen)); }, delay_before_progression);
 
                                 if (scheduledScreenChange != null)
-                                    ControlPanel.Add(scheduledScreenChange);
+                                    sceneManager?.ShowAutoAdvance(scheduledScreenChange);
                             }
                         }
 
@@ -677,10 +670,10 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
         public override void Show()
         {
-            ShowStageContent();
+            base.Show();
             updateState();
 
-            if (switchFromMappool)
+            if (sceneManager?.PreviousStage is MapPoolScreen)
             {
                 scheduledShowRoundPreview = Scheduler.AddDelayed(() =>
                 {
@@ -688,8 +681,6 @@ namespace osu.Game.Tournament.Screens.Gameplay
                         scheduledHideRoundPreview = Scheduler.AddDelayed(HideRoundPreview, 30000);
                 }, 5000);
             }
-
-            base.Show();
         }
     }
 }
