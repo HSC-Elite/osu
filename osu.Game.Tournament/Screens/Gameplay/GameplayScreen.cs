@@ -463,7 +463,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
         private void rebuildPlayerSlots()
         {
-            if (playerGridContainer == null)
+            if (!IsLoaded)
                 return;
 
             cancelScheduledWindowAnimations();
@@ -538,15 +538,13 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
             cancelScheduledWindowAnimations();
 
-            int playersPerTeam = playerPerTeam.Value;
-
             foreach (var slot in playerSlots)
             {
                 MatchRoomPlayerInfo? user = IPC.RoomPlayers
-                                                  .Where(p => p.Team == slot.TeamColour && p.SlotIndex != null)
-                                                  .OrderBy(p => p.SlotIndex)
-                                                  .Select(p => (MatchRoomPlayerInfo?)p)
-                                                  .ElementAtOrDefault(slot.Index);
+                                               .Where(p => p.Team == slot.TeamColour && p.SlotIndex != null)
+                                               .OrderBy(p => p.SlotIndex)
+                                               .Select(p => (MatchRoomPlayerInfo?)p)
+                                               .ElementAtOrDefault(slot.Index);
 
                 slot.ApplySlotInfo(new TournamentPlayerSlotInfo(slot.TeamColour, slot.Index, user));
             }
@@ -662,7 +660,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
         private void updateResultLoading()
         {
             gameplaySongBar.WaitForResult.Value = scoreProcessor?.CurrentlyListening.Value == true
-                                                 && scoreProcessor.WaitingForAuthoritativeResult.Value;
+                                                  && scoreProcessor.WaitingForAuthoritativeResult.Value;
         }
 
         public override void Hide()
