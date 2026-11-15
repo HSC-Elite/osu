@@ -719,7 +719,7 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                 {
                     Name = "Bottom statistics",
                     RelativeSizeAxes = Axes.Both,
-                    Padding = new MarginPadding { Vertical = 7 },
+                    Padding = new MarginPadding { Vertical = 4 },
                     ColumnDimensions = mirrored
                         ? new[] { new Dimension(), new Dimension(GridSizeMode.Absolute, 0.5f), new Dimension(GridSizeMode.Relative, 0.3f) }
                         : new[] { new Dimension(GridSizeMode.Relative, 0.3f), new Dimension(GridSizeMode.Absolute, 0.5f), new Dimension() },
@@ -732,7 +732,7 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                             {
                                 Anchor = Anchor.Centre,
                                 Origin = Anchor.Centre,
-                                Size = new Vector2(0.5f, 14),
+                                Size = new Vector2(0.5f, 18),
                                 Colour = Color4.White.Opacity(0.6f),
                             },
                             new Container
@@ -745,7 +745,7 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                                         Anchor = Anchor.TopCentre,
                                         Origin = Anchor.TopCentre,
                                         Text = "Max Combo",
-                                        Font = OsuFont.Torus.With(size: 11, weight: FontWeight.Bold),
+                                        Font = OsuFont.Torus.With(size: 15, weight: FontWeight.Bold),
                                     },
                                     new FillFlowContainer
                                     {
@@ -761,7 +761,7 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                                                 Anchor = Anchor.BottomLeft,
                                                 Origin = Anchor.BottomLeft,
                                                 Text = maximumCombo > 0 ? $"{maximumCombo}x" : string.Empty,
-                                                Font = OsuFont.Torus.With(size: 8),
+                                                Font = OsuFont.Torus.With(size: 12),
                                                 Colour = Color4.White.Opacity(0.65f),
                                             },
                                             new OsuSpriteText
@@ -769,10 +769,10 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                                                 Anchor = Anchor.BottomLeft,
                                                 Origin = Anchor.BottomLeft,
                                                 Text = maximumCombo > 0 ? "/" : string.Empty,
-                                                Font = OsuFont.Torus.With(size: 8),
+                                                Font = OsuFont.Torus.With(size: 12),
                                                 Colour = Color4.White.Opacity(0.65f),
                                             },
-                                            new StatisticCounter(score!.MaxCombo, count => $"{count:0}x", 14)
+                                            new StatisticCounter(score!.MaxCombo, count => $"{count:0}x", 18)
                                             {
                                                 Anchor = Anchor.BottomLeft,
                                                 Origin = Anchor.BottomLeft,
@@ -795,6 +795,7 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                     Anchor = Anchor.TopCentre,
                     Origin = Anchor.TopCentre,
                     Size = new Vector2(25, 10),
+                    Scale = new Vector2(1.5f),
                     Alpha = 0,
                     CornerRadius = 5,
                     Masking = true,
@@ -837,8 +838,9 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                     Anchor = mirrored ? Anchor.TopLeft : Anchor.TopRight,
                     Origin = mirrored ? Anchor.TopLeft : Anchor.TopRight,
                     // Clear the curved edge while keeping the badge beside the circle.
-                    X = mirrored ? -12 : 12,
+                    X = mirrored ? -32 : 32,
                     Size = new Vector2(48, 9),
+                    Scale = new Vector2(1.5f),
                     CornerRadius = 5,
                     Masking = true,
                     Children = new Drawable[]
@@ -959,9 +961,9 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                         Anchor = Anchor.TopCentre,
                         Origin = Anchor.TopCentre,
                         Text = "PP",
-                        Font = OsuFont.Torus.With(size: 11, weight: FontWeight.Bold),
+                        Font = OsuFont.Torus.With(size: 15, weight: FontWeight.Bold),
                     },
-                    performanceText = new StatisticCounter(score!.PP, count => count.ToString("0"), 14)
+                    performanceText = new StatisticCounter(score!.PP, count => count.ToString("0"), 18)
                     {
                         Anchor = Anchor.BottomCentre,
                         Origin = Anchor.BottomCentre,
