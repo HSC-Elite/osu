@@ -346,10 +346,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
             chat.Contract();
 
             using (roundPreview.BeginDelayedSequence(200))
-            {
                 roundPreview.FadeIn(200);
-                chat.Expand();
-            }
 
             roundPreviewShow = true;
             return true;
@@ -365,7 +362,10 @@ namespace osu.Game.Tournament.Screens.Gameplay
             roundPreview.FadeOut(100);
 
             using (SongBar.BeginDelayedSequence(200))
+            {
                 SongBar.FadeIn(200);
+                chat.Expand();
+            }
 
             roundPreviewShow = false;
         }
