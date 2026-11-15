@@ -217,6 +217,7 @@ namespace osu.Game.Tournament
             Depth = float.MaxValue,
             WindowTitle = "Tournament Stage Window",
             Child = content,
+            OnExit = () => true,
         };
 
         protected override void LoadComplete()
