@@ -190,7 +190,17 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 {
                     RelativeSizeAxes = Axes.X,
                     Text = "Toggle chat",
-                    Action = () => { State.Value = State.Value == TourneyState.Idle ? TourneyState.Playing : TourneyState.Idle; }
+                    Action = () =>
+                    {
+                        if (!chat.IsPresent)
+                        {
+                            chat.Expand();
+                        }
+                        else
+                        {
+                            chat.Contract();
+                        }
+                    }
                 },
                 new SettingsSlider<int>
                 {
@@ -336,7 +346,10 @@ namespace osu.Game.Tournament.Screens.Gameplay
             chat.Contract();
 
             using (roundPreview.BeginDelayedSequence(200))
+            {
                 roundPreview.FadeIn(200);
+                chat.Expand();
+            }
 
             roundPreviewShow = true;
             return true;
