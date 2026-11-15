@@ -54,7 +54,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                 {
                     Anchor = Anchor.BottomRight,
                     Origin = Anchor.BottomRight,
-                    Font = OsuFont.Default.With(size: 60),
+                    Font = OsuFont.Default.With(size: 60, weight: FontWeight.Bold),
                     Colour = colour == TeamColour.Red ? Color4Extensions.FromHex("#FB8B96") : Color4Extensions.FromHex("#AFF0F7")
                 }
             };
