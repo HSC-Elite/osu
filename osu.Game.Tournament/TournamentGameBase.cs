@@ -28,6 +28,7 @@ using osu.Game.Online.Metadata;
 using osu.Game.Online.Multiplayer;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Screens.OnlinePlay;
+using osu.Game.Screens.Tournament;
 using osu.Game.Tournament.Components;
 using osu.Game.Tournament.Configuration;
 using osu.Game.Tournament.IO;
@@ -279,6 +280,7 @@ namespace osu.Game.Tournament
                 ipc = new LazerRoomMatchInfo();
                 dependencies.CacheAs((LazerRoomMatchInfo)ipc);
                 dependencies.CacheAs(ipc);
+                dependencies.CacheAs<ITeamColorProvider>(ipc);
                 dependencies.Cache(scoreProcessor = new TournamentMatchScoreProcessor());
                 Add(ipc);
                 Add(scoreProcessor);

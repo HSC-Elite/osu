@@ -34,6 +34,8 @@ namespace osu.Game.Skinning
         [SettingSource("Shake when miss")]
         public Bindable<bool> ShakeWhenMiss { get; } = new Bindable<bool>();
 
+        protected virtual bool OverrideUserTextColor => false;
+
         /// <summary>
         /// Implement to apply the user font selection to one or more components.
         /// </summary>
@@ -48,7 +50,13 @@ namespace osu.Game.Skinning
             Font.BindValueChanged(_ => updateFont());
             TextWeight.BindValueChanged(_ => updateFont(), true);
 
-            TextColour.BindValueChanged(e => SetTextColour(e.NewValue), true);
+            TextColour.BindValueChanged(e =>
+            {
+                if (OverrideUserTextColor)
+                    return;
+
+                SetTextColour(e.NewValue);
+            }, true);
         }
 
         private void updateFont() => SetFont(OsuFont.GetFont(Font.Value, weight: TextWeight.Value));

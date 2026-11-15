@@ -8,6 +8,8 @@ using System.Threading;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Extensions;
+using osu.Framework.Extensions.Color4Extensions;
+using osu.Framework.Graphics.Colour;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Logging;
 using osu.Game.Beatmaps;
@@ -17,12 +19,14 @@ using osu.Game.Online.API.Requests.Responses;
 using osu.Game.Online.Chat;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Screens.Play.Leaderboards;
+using osu.Game.Screens.Tournament;
 using osu.Game.Tournament.Models;
 using osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea;
+using osuTK.Graphics;
 
 namespace osu.Game.Tournament.IPC
 {
-    public partial class MatchIPCInfo : CompositeComponent
+    public partial class MatchIPCInfo : CompositeComponent, ITeamColorProvider
     {
         [Resolved]
         private IBindable<WorkingBeatmap> workingBeatmap { get; set; } = null!;
@@ -205,6 +209,16 @@ namespace osu.Game.Tournament.IPC
             return teamIdsCache[colour] = Ladder.CurrentMatch.Value?.GetTeamByColor(colour)?.Players
                                                 .Select(p => p.OnlineID)
                                                 .ToArray() ?? Array.Empty<int>();
+        }
+
+        public ColourInfo GetTeamColor(int userId)
+        {
+            if (GetTeamIds(TeamColour.Red).Contains(userId))
+                return Color4Extensions.FromHex("#FB8B96");
+            if (GetTeamIds(TeamColour.Blue).Contains(userId))
+                return Color4Extensions.FromHex("#AFF0F7");
+
+            return Color4.White;
         }
 
         private long CalculateModMultiplier(GameplayLeaderboardScore score)
