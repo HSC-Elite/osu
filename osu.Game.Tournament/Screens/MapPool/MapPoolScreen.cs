@@ -1,6 +1,7 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
+using System.Collections.Specialized;
 using System.Diagnostics;
 using System.Linq;
 using osu.Framework.Allocation;
@@ -12,6 +13,7 @@ using osu.Framework.Graphics.Textures;
 using osu.Game.Beatmaps;
 using osu.Game.Graphics;
 using osu.Game.Graphics.UserInterface;
+using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Overlays.Settings;
 using osu.Game.Tournament.Components;
 using osu.Game.Tournament.IPC;
@@ -32,6 +34,10 @@ namespace osu.Game.Tournament.Screens.MapPool
         [Resolved]
         private TournamentSceneManager? sceneManager { get; set; }
 
+        private bool selectionEnabled = true;
+        private readonly Bindable<TeamColour> firstPickTeam = new Bindable<TeamColour>();
+        private TournamentSpriteText flowStatus = null!;
+        private BanPickFlowSubscription? flowSubscription;
         private TeamColour pickColour;
         private ChoiceType pickType;
         private readonly BindableBool pendingSelectMapModifyWinner = new BindableBool();
@@ -97,6 +103,18 @@ namespace osu.Game.Tournament.Screens.MapPool
                     new TournamentSpriteText
                     {
                         Text = "Current Mode"
+                    },
+                    new LabelledEnumDropdown<TeamColour>(true)
+                    {
+                        RelativeSizeAxes = Axes.X,
+                        Label = "本场先手队颜色",
+                        Current = firstPickTeam
+                    },
+                    flowStatus = new TournamentSpriteText
+                    {
+                        RelativeSizeAxes = Axes.X,
+                        AllowMultiline = true,
+                        Font = OsuFont.Default.With(size: 14)
                     },
                     buttonRedProtected = new TourneyButton
                     {
@@ -235,7 +253,7 @@ namespace osu.Game.Tournament.Screens.MapPool
             if (CurrentMatch.Value?.Round.Value == null)
                 return;
 
-            if (pickType != ChoiceType.Pick)
+            if (!selectionEnabled || pickType != ChoiceType.Pick)
                 return;
 
             // if bans have already been placed, beatmap changes result in a selection being made automatically
@@ -245,6 +263,7 @@ namespace osu.Game.Tournament.Screens.MapPool
 
         private void setMode(TeamColour colour, ChoiceType choiceType)
         {
+            selectionEnabled = true;
             pickColour = colour;
             pickType = choiceType;
 
@@ -263,58 +282,18 @@ namespace osu.Game.Tournament.Screens.MapPool
             if (CurrentMatch.Value?.Round.Value == null)
                 return;
 
-            int banPickCount = CurrentMatch.Value.PicksBans.Count;
-            var groups = CurrentMatch.Value.Round.Value.BanPickFlowGroups;
+            var match = CurrentMatch.Value;
+            var next = BanPickFlow.Next(match);
 
-            int accumulatedSteps = 0;
-
-            BanPickFlowGroup? currentGroup = null;
-
-            foreach (BanPickFlowGroup g in groups)
+            if (next == null)
             {
-                accumulatedSteps += g.TotalStep;
-
-                if (accumulatedSteps <= banPickCount) continue;
-
-                currentGroup = g;
-                break;
-            }
-
-            if (currentGroup == null)
-            {
-                // we've exhausted all defined steps; loop the last group
-                currentGroup = groups.LastOrDefault();
-                if (currentGroup == null)
-                    return;
-
-                int loopIndex = (banPickCount - (accumulatedSteps - currentGroup.Steps.Count)) % currentGroup.Steps.Count;
-                BanPickFlowStep loopStep = currentGroup.Steps[loopIndex];
-
-                TeamColour lastPickColour = CurrentMatch.Value.PicksBans.LastOrDefault()?.Team ?? TeamColour.Red;
-                TeamColour loopColour = !loopStep.SwapFromLastColor.Value
-                    ? lastPickColour
-                    : getOppositeTeamColour(lastPickColour);
-
-                setMode(loopColour, loopStep.CurrentAction.Value);
+                selectionEnabled = match.Round.Value.BanPickFlowGroups.Count == 0 && !match.Completed.Value;
+                flowStatus.Text = match.Completed.Value ? "比赛已结束" : selectionEnabled ? "未设置流程：手动选择模式" : "流程已完成；需要额外操作时请手动选择模式";
                 return;
             }
 
-            int stepsBeforeGroup = accumulatedSteps - currentGroup.TotalStep;
-            int currentIndex = banPickCount - stepsBeforeGroup;
-
-            if (currentIndex < 0 || currentIndex >= currentGroup.TotalStep)
-                return;
-
-            BanPickFlowStep currentStep = currentGroup.Steps[currentIndex % currentGroup.Steps.Count];
-
-            TeamColour lastTeam = CurrentMatch.Value.PicksBans.LastOrDefault()?.Team ?? TeamColour.Red;
-            TeamColour nextColor = !currentStep.SwapFromLastColor.Value
-                ? lastTeam
-                : getOppositeTeamColour(lastTeam);
-
-            setMode(nextColor, currentStep.CurrentAction.Value);
-
-            TeamColour getOppositeTeamColour(TeamColour colour) => colour == TeamColour.Red ? TeamColour.Blue : TeamColour.Red;
+            setMode(next.Team, next.Step.CurrentAction.Value);
+            flowStatus.Text = $"{next.Group.Name.Value} · 第 {next.Index + 1} 步 · {(next.Team == TeamColour.Red ? "红队" : "蓝队")}{BanPickFlow.ActionName(next.Step.CurrentAction.Value)}";
         }
 
         private void handleMapClick(TournamentBeatmapPanel map, MouseButton button)
@@ -352,19 +331,24 @@ namespace osu.Game.Tournament.Screens.MapPool
                 return;
 
             var lastPickType = pickType;
+            selectionEnabled = true;
             pickType = ChoiceType.TB;
 
             addForBeatmap(tbId.Value);
             pickType = lastPickType;
+            setNextMode();
         }
 
         private void addForBeatmap(int beatmapId)
         {
-            if (CurrentMatch.Value?.Round.Value == null)
+            if (!selectionEnabled || CurrentMatch.Value?.Round.Value == null || CurrentMatch.Value.Completed.Value)
                 return;
 
             if (CurrentMatch.Value.Round.Value.Beatmaps.All(b => b.Beatmap?.OnlineID != beatmapId))
                 // don't attempt to add if the beatmap isn't in our pool
+                return;
+
+            if (pickType == ChoiceType.TB && CurrentMatch.Value.PicksBans.Any(p => p.BeatmapID == beatmapId && p.Type == ChoiceType.TB))
                 return;
 
             if (pickType == ChoiceType.Protected && CurrentMatch.Value.PicksBans.Any(p => p.BeatmapID == beatmapId))
@@ -382,11 +366,13 @@ namespace osu.Game.Tournament.Screens.MapPool
             if (CurrentMatch.Value.Round.Value?.Beatmaps.FirstOrDefault(b => b.Mods == "TB")?.ID == beatmapId && pickType != ChoiceType.TB)
                 return;
 
+            var next = BanPickFlow.Next(CurrentMatch.Value);
             CurrentMatch.Value.PicksBans.Add(new BeatmapChoice
             {
                 Team = pickColour,
                 Type = pickType,
-                BeatmapID = beatmapId
+                BeatmapID = beatmapId,
+                FlowStepIndex = next?.Step.CurrentAction.Value == pickType ? next.Index : -1
             });
 
             if (IsStageActive && LadderInfo.AutoProgressScreens.Value)
@@ -410,8 +396,58 @@ namespace osu.Game.Tournament.Screens.MapPool
         protected override void CurrentMatchChanged(ValueChangedEvent<TournamentMatch?> match)
         {
             base.CurrentMatchChanged(match);
+
+            if (match.OldValue != null)
+            {
+                firstPickTeam.UnbindFrom(match.OldValue.FirstPickTeam);
+                match.OldValue.FirstPickTeam.ValueChanged -= firstTeamChanged;
+                match.OldValue.Completed.ValueChanged -= completionChanged;
+                match.OldValue.Round.ValueChanged -= flowRoundChanged;
+                match.OldValue.PicksBans.CollectionChanged -= choicesChanged;
+            }
+
+            if (match.NewValue != null)
+            {
+                firstPickTeam.BindTo(match.NewValue.FirstPickTeam);
+                match.NewValue.FirstPickTeam.ValueChanged += firstTeamChanged;
+                match.NewValue.Completed.ValueChanged += completionChanged;
+                match.NewValue.Round.ValueChanged += flowRoundChanged;
+                match.NewValue.PicksBans.CollectionChanged += choicesChanged;
+            }
+
+            bindFlowRound();
             setNextMode();
             updateDisplay();
+        }
+
+        private void firstTeamChanged(ValueChangedEvent<TeamColour> _) => setNextMode();
+        private void completionChanged(ValueChangedEvent<bool> _) => setNextMode();
+        private void flowRoundChanged(ValueChangedEvent<TournamentRound?> _) => bindFlowRound();
+        private void choicesChanged(object? sender, NotifyCollectionChangedEventArgs e) => Scheduler.AddOnce(setNextMode);
+
+        private void bindFlowRound()
+        {
+            flowSubscription?.Dispose();
+            flowSubscription = CurrentMatch.Value?.Round.Value is TournamentRound round
+                ? new BanPickFlowSubscription(round, () => Scheduler.AddOnce(setNextMode))
+                : null;
+            Scheduler.AddOnce(setNextMode);
+        }
+
+        protected override void Dispose(bool isDisposing)
+        {
+            flowSubscription?.Dispose();
+
+            if (CurrentMatch.Value != null)
+            {
+                firstPickTeam.UnbindFrom(CurrentMatch.Value.FirstPickTeam);
+                CurrentMatch.Value.FirstPickTeam.ValueChanged -= firstTeamChanged;
+                CurrentMatch.Value.Completed.ValueChanged -= completionChanged;
+                CurrentMatch.Value.Round.ValueChanged -= flowRoundChanged;
+                CurrentMatch.Value.PicksBans.CollectionChanged -= choicesChanged;
+            }
+
+            base.Dispose(isDisposing);
         }
 
         private void updateDisplay()

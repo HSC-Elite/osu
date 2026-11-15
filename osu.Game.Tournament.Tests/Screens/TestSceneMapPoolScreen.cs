@@ -361,6 +361,30 @@ namespace osu.Game.Tournament.Tests.Screens
             });
         }
 
+        [Test]
+        public void TestFiniteFlowRequiresManualModeAfterCompletion()
+        {
+            AddStep("one pick flow", () => setBanPickFlow((ChoiceType.Pick, TeamColour.Red)));
+            AddStep("load two maps", () =>
+            {
+                Ladder.CurrentMatch.Value!.Round.Value!.Beatmaps.Clear();
+                addBeatmap();
+                addBeatmap();
+                Ladder.SplitMapPoolByMods.Value = false;
+            });
+            AddStep("select red pick", () => screen.ControlPanel.ChildrenOfType<TourneyButton>().First(b => b.Text == "Red Pick").TriggerClick());
+            AddStep("pick first map", () => clickBeatmapPanel(0));
+            checkTotalPickBans(1);
+            AddAssert("flow position recorded", () => Ladder.CurrentMatch.Value!.PicksBans[0].FlowStepIndex, () => Is.EqualTo(0));
+            AddStep("click after completion", () => clickBeatmapPanel(1));
+            checkTotalPickBans(1);
+            AddStep("select manual blue pick", () => screen.ControlPanel.ChildrenOfType<TourneyButton>().First(b => b.Text == "Blue Pick").TriggerClick());
+            AddStep("pick extra map", () => clickBeatmapPanel(1));
+            checkTotalPickBans(2);
+            checkLastPick(ChoiceType.Pick, TeamColour.Blue);
+            AddAssert("extra is outside schedule", () => Ladder.CurrentMatch.Value!.PicksBans[1].FlowStepIndex, () => Is.EqualTo(-1));
+        }
+
         private void setBanPickFlow(params (ChoiceType type, TeamColour team)[] choices)
         {
             var banPickFlowGroups = Ladder.CurrentMatch.Value!.Round.Value!.BanPickFlowGroups;

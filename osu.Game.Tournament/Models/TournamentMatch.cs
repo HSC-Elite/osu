@@ -48,6 +48,8 @@ namespace osu.Game.Tournament.Models
 
         public readonly Bindable<bool> Losers = new Bindable<bool>();
 
+        public readonly Bindable<TeamColour> FirstPickTeam = new Bindable<TeamColour>(TeamColour.Red);
+
         public readonly BindableList<BeatmapChoice> PicksBans = new BindableList<BeatmapChoice>();
 
         [JsonIgnore]
