@@ -11,7 +11,7 @@ using osuTK;
 
 namespace osu.Game.Tournament.Screens.Gameplay.Components.RoundInformation
 {
-    /// <summary>A shared stage renderer for the broadcast and the flow editor.</summary>
+    /// <summary>An annotated stage preview for the flow editor. The broadcast keeps its own presentation.</summary>
     public partial class BanPickStageDisplay : FillFlowContainer
     {
         public BanPickStageDisplay(string name, IEnumerable<BanPickFlowSlot> slots)

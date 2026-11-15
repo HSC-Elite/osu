@@ -24,23 +24,24 @@ namespace osu.Game.Tournament.Models
                     slots.Add(new BanPickFlowSlot(slots.Count, group, group.Steps[i % group.Steps.Count]));
             }
 
-            // Legacy choices have no position; consume matching slots in chronological order.
-            // Explicit positions never fall back to a different stage.
-            int cursor = 0;
+            var recordedChoices = choices.ToArray();
 
-            foreach (var choice in choices)
+            // Reserve explicit positions first, regardless of where they occur in the history.
+            // Invalid or duplicate positions never fall back to a different stage.
+            foreach (var choice in recordedChoices.Where(c => c.FlowStepIndex.HasValue))
             {
-                BanPickFlowSlot? slot;
-                if (choice.FlowStepIndex is int index)
-                    slot = slots.ElementAtOrDefault(index);
-                else
-                    slot = slots.Skip(cursor).FirstOrDefault(s => s.Choice == null && s.Step.CurrentAction.Value == choice.Type);
+                var slot = slots.ElementAtOrDefault(choice.FlowStepIndex!.Value);
+                if (slot != null && slot.Choice == null && slot.Step.CurrentAction.Value == choice.Type)
+                    slot.Choice = choice;
+            }
 
-                if (slot == null || slot.Choice != null || slot.Step.CurrentAction.Value != choice.Type)
-                    continue;
-
-                slot.Choice = choice;
-                cursor = Math.Max(cursor, slot.Index + 1);
+            // Legacy choices may be entered out of flow order. Fill the earliest matching vacancy,
+            // preserving the recorded order within each action type.
+            foreach (var choice in recordedChoices.Where(c => !c.FlowStepIndex.HasValue))
+            {
+                var slot = slots.FirstOrDefault(s => s.Choice == null && s.Step.CurrentAction.Value == choice.Type);
+                if (slot != null)
+                    slot.Choice = choice;
             }
 
             TeamColour previous = TeamColour.Red; // Legacy files used a virtual red previous team.

@@ -1,6 +1,7 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
+using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Linq;
 using osu.Framework.Allocation;
@@ -36,7 +37,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
         public RoundInformationPreview()
         {
             AutoSizeAxes = Axes.X;
-            Height = 155;
+            Height = 110;
             Masking = true;
             CornerRadius = 10;
 
@@ -203,31 +204,16 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
 
             foreach (var group in round.BanPickFlowGroups)
             {
-                if (group.TotalStep == 0)
-                    continue;
-                if (MapContentContainer.Count > 0)
-                    MapContentContainer.Add(createDivideLine());
-                MapContentContainer.Add(new BanPickStageDisplay(group.Name.Value, slots.Where(s => s.Group == group)));
-            }
-
-            var assigned = slots.Where(s => s.Choice != null).Select(s => s.Choice).ToHashSet();
-            var extra = match.PicksBans.Where(c => !assigned.Contains(c) && (c.Type != ChoiceType.TB || !round.SeparateTiebreaker.Value)).ToArray();
-
-            if (extra.Length > 0)
-            {
-                var manualGroup = new BanPickFlowGroup { Name = { Value = "手动操作" } };
+                var currentMapDetail = new MapDetailContent();
+                currentMapDetail.UpdateBeatmap(slots.Where(s => s.Group == group).Select(s => s.Choice));
+                MapContentContainer.Add(currentMapDetail);
                 MapContentContainer.Add(createDivideLine());
-                MapContentContainer.Add(new BanPickStageDisplay("手动操作", extra.Select(c => new BanPickFlowSlot(-1, manualGroup,
-                    new BanPickFlowStep { CurrentAction = { Value = c.Type } }) { Choice = c })));
             }
 
             var tbMap = round.Beatmaps.FirstOrDefault(map => map.Mods == "TB");
 
             if (round.SeparateTiebreaker.Value && !slots.Any(s => s.Step.CurrentAction.Value == ChoiceType.TB) && tbMap != null)
-            {
-                MapContentContainer.Add(createDivideLine());
-                MapContentContainer.Add(new TbMapBox(tbMap) { Margin = new MarginPadding { Top = 22 } });
-            }
+                MapContentContainer.Add(new TbMapBox(tbMap));
         }
 
         protected virtual void UpdateMapCount()
@@ -276,7 +262,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
             Width = 2f,
             Margin = new MarginPadding
             {
-                Top = 59f
+                Top = 37f
             }
         };
 
@@ -292,6 +278,127 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
             }
 
             base.Dispose(isDisposing);
+        }
+
+        private partial class MapDetailContent : CompositeDrawable
+        {
+            private FillFlowContainer mapContent = null!;
+
+            [Resolved]
+            private LadderInfo ladderInfo { get; set; } = null!;
+
+            [BackgroundDependencyLoader]
+            private void load()
+            {
+                AutoSizeAxes = Axes.Both;
+
+                InternalChild = new FillFlowContainer
+                {
+                    Anchor = Anchor.TopCentre,
+                    Origin = Anchor.TopCentre,
+                    AutoSizeAxes = Axes.Both,
+                    Direction = FillDirection.Vertical,
+                    Children = new Drawable[]
+                    {
+                        //createHeaderSection(headerName),
+                        mapContent = new FillFlowContainer
+                        {
+                            Spacing = new Vector2(10),
+                            Direction = FillDirection.Horizontal,
+                            AutoSizeAxes = Axes.Both,
+                        }
+                    }
+                };
+            }
+
+            public void UpdateBeatmap(IEnumerable<BeatmapChoice?> maps) => Scheduler.AddOnce(() =>
+            {
+                TournamentRound? round = ladderInfo.CurrentMatch.Value?.Round.Value;
+
+                if (round == null)
+                    return;
+
+                mapContent.Clear();
+
+                mapContent.ChildrenEnumerable = maps.Select(map =>
+                {
+                    MapBox mapBox;
+
+                    switch (map?.Type)
+                    {
+                        case ChoiceType.Protected:
+                            mapBox = new ProtectMapBox(map);
+                            break;
+
+                        case ChoiceType.Ban:
+                            mapBox = new BanMapBox(map);
+                            break;
+
+                        case ChoiceType.Pick:
+                            mapBox = new PickMapBox(map);
+                            break;
+
+                        default:
+                        case null:
+                            mapBox = new UnselectMapBox();
+                            break;
+                    }
+
+                    return mapBox;
+                });
+            });
+
+            private static Drawable createHeaderSection(string text)
+            {
+                return new GridContainer
+                {
+                    RelativeSizeAxes = Axes.X,
+                    Height = 20f,
+                    ColumnDimensions = new Dimension[]
+                    {
+                        new Dimension(GridSizeMode.Distributed),
+                        new Dimension(GridSizeMode.AutoSize),
+                        new Dimension(GridSizeMode.Distributed)
+                    },
+                    Content = new[]
+                    {
+                        new Drawable[]
+                        {
+                            // 左边的线条
+                            new Box
+                            {
+                                RelativeSizeAxes = Axes.X,
+                                Height = 1,
+                                Colour = new Color4(166, 166, 166, 255),
+                            },
+                            // 文字
+                            new Container
+                            {
+                                AutoSizeAxes = Axes.X,
+                                RelativeSizeAxes = Axes.Y,
+                                Anchor = Anchor.TopLeft,
+                                Origin = Anchor.CentreLeft,
+                                Margin = new MarginPadding { Horizontal = 10f },
+                                Child = new TournamentSpriteText
+                                {
+                                    Text = text,
+                                    Font = OsuFont.Torus.With(size: 20),
+                                    Colour = Color4.Gray,
+                                    Anchor = Anchor.Centre,
+                                    Origin = Anchor.Centre,
+                                },
+                            },
+                            // 右边的线条
+                            new Box
+                            {
+                                RelativeSizeAxes = Axes.X,
+                                Height = 1,
+                                Colour = new Color4(166, 166, 166, 255),
+                            }
+                        }
+                    }
+                };
+            }
         }
     }
 }

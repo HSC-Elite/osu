@@ -12,6 +12,21 @@ namespace osu.Game.Tournament.Tests.NonVisual
     [TestFixture]
     public class BanPickFlowTest
     {
+        [Test]
+        public void TestExplicitPositionsTakePriorityOverUnpositionedChoices()
+        {
+            var round = createRound(7, false, true);
+            var legacyPick = new BeatmapChoice { Type = ChoiceType.Pick };
+            var positionedPick = new BeatmapChoice { Type = ChoiceType.Pick, FlowStepIndex = 4 };
+            var lateBan = new BeatmapChoice { Type = ChoiceType.Ban };
+            var lateProtect = new BeatmapChoice { Type = ChoiceType.Protected };
+            var slots = BanPickFlow.Resolve(round, new[] { legacyPick, positionedPick, lateBan, lateProtect }, TeamColour.Red);
+            Assert.That(slots[0].Choice, Is.SameAs(lateProtect));
+            Assert.That(slots[2].Choice, Is.SameAs(lateBan));
+            Assert.That(slots[4].Choice, Is.SameAs(positionedPick));
+            Assert.That(slots[5].Choice, Is.SameAs(legacyPick));
+        }
+
         [TestCase(3)]
         [TestCase(7)]
         [TestCase(9)]

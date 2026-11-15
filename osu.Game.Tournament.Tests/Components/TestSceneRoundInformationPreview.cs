@@ -32,12 +32,16 @@ namespace osu.Game.Tournament.Tests.Components
                     Anchor = Anchor.Centre,
                 }
             }));
+
             AddStep("Add a red pick", () => addChoice(TeamColour.Red, ChoiceType.Pick));
             AddStep("Add a blue pick", () => addChoice(TeamColour.Blue, ChoiceType.Pick));
             AddStep("Add a red protected", () => addChoice(TeamColour.Red, ChoiceType.Protected));
             AddStep("Add a blue protected", () => addChoice(TeamColour.Blue, ChoiceType.Protected));
             AddStep("Add a red ban", () => addChoice(TeamColour.Red, ChoiceType.Ban));
             AddStep("Add a blue ban", () => addChoice(TeamColour.Blue, ChoiceType.Ban));
+            AddUntilStep("late protects displayed", () => this.ChildrenOfType<ProtectMapBox>().Count() == 2);
+            AddUntilStep("late bans displayed", () => this.ChildrenOfType<BanMapBox>().Count() == 2);
+            AddAssert("picks still displayed", () => this.ChildrenOfType<PickMapBox>().Count(), () => Is.EqualTo(2));
         }
 
         [Test]
@@ -66,23 +70,24 @@ namespace osu.Game.Tournament.Tests.Components
                     Child = preview = new RoundInformationPreview()
                 });
             });
-            AddUntilStep("four stages displayed", () => preview.ChildrenOfType<BanPickStageDisplay>().Count() == 4);
-            AddAssert("seven pending picks", () => preview.ChildrenOfType<TournamentSpriteText>().Count(t => t.Text == "选图"), () => Is.EqualTo(7));
+            AddUntilStep("configured slots displayed", () => preview.ChildrenOfType<UnselectMapBox>().Count() == 11);
+            AddAssert("original height", () => preview.Height, () => Is.EqualTo(110));
+            AddAssert("editor renderer not used for broadcast", () => !preview.ChildrenOfType<BanPickStageDisplay>().Any());
             AddStep("rename lower half", () => round.BanPickFlowGroups[3].Name.Value = "第二阶段");
-            AddUntilStep("title refreshed", () => preview.ChildrenOfType<TournamentSpriteText>().Any(t => t.Text == "第二阶段"));
+            AddAssert("stage names do not add broadcast headings", () => !preview.ChildrenOfType<TournamentSpriteText>().Any(t => t.Text == "第二阶段"));
             AddStep("change first team", () => Ladder.CurrentMatch.Value!.FirstPickTeam.Value = TeamColour.Blue);
-            AddUntilStep("teams refreshed", () => preview.ChildrenOfType<TournamentSpriteText>().Count(t => t.Text == "蓝队") == 6);
+            AddAssert("pending slots keep original appearance", () => !preview.ChildrenOfType<TournamentSpriteText>().Any(t => t.Text == "蓝队" || t.Text == "红队"));
             AddStep("add a pick", () => round.BanPickFlowGroups[3].Steps.Add(new BanPickFlowStep { TeamRule = { Value = BanPickTeamRule.First } }));
-            AddUntilStep("new slot displayed", () => preview.ChildrenOfType<TournamentSpriteText>().Count(t => t.Text == "选图") == 8);
+            AddUntilStep("new slot displayed", () => preview.ChildrenOfType<UnselectMapBox>().Count() == 12);
             AddStep("switch round without switching match", () =>
             {
                 var replacement = new TournamentRound();
                 replacement.BanPickFlowGroups.AddRange(BanPickFlow.CreateTemplate(9));
                 Ladder.CurrentMatch.Value!.Round.Value = replacement;
             });
-            AddUntilStep("replacement shown", () => preview.ChildrenOfType<BanPickStageDisplay>().Count() == 3);
+            AddUntilStep("replacement shown", () => preview.ChildrenOfType<UnselectMapBox>().Count() == 12);
             AddStep("clear flow", () => Ladder.CurrentMatch.Value!.Round.Value!.BanPickFlowGroups.Clear());
-            AddUntilStep("stages cleared", () => !preview.ChildrenOfType<BanPickStageDisplay>().Any());
+            AddUntilStep("stages cleared", () => !preview.ChildrenOfType<MapBox>().Any());
         }
 
         private void addChoice(TeamColour colour, ChoiceType type)
