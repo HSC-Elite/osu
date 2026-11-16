@@ -72,6 +72,7 @@ namespace osu.Game.Tournament.StableClient
             }
 
             int userId = match.SlotUserIds[slotIndex];
+
             if (userId <= 0)
             {
                 userText.Text = string.Empty;

@@ -15,6 +15,7 @@ namespace osu.Game.Tournament.StableClient.Protocol
 
             int length = 0;
             int shift = 0;
+
             while (true)
             {
                 byte b = reader.ReadByte();
@@ -22,6 +23,7 @@ namespace osu.Game.Tournament.StableClient.Protocol
                 if ((b & 0x80) == 0) break;
                 shift += 7;
             }
+
             return Encoding.UTF8.GetString(reader.ReadBytes(length));
         }
     }

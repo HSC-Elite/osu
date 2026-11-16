@@ -218,16 +218,23 @@ namespace osu.Game.Tournament.StableClient
 
             private partial class PlayerIsolationContainer : Container
             {
-                [Cached] [Cached(typeof(IBindable<RulesetInfo>))]
+                [Cached]
+                [Cached(typeof(IBindable<RulesetInfo>))]
                 private readonly Bindable<RulesetInfo> ruleset = new Bindable<RulesetInfo>();
-                [Cached] [Cached(typeof(IBindable<WorkingBeatmap>))]
+
+                [Cached]
+                [Cached(typeof(IBindable<WorkingBeatmap>))]
                 private readonly Bindable<WorkingBeatmap> beatmap = new Bindable<WorkingBeatmap>();
-                [Cached] [Cached(typeof(IBindable<IReadOnlyList<Mod>>))]
+
+                [Cached]
+                [Cached(typeof(IBindable<IReadOnlyList<Mod>>))]
                 private readonly Bindable<IReadOnlyList<Mod>> mods = new Bindable<IReadOnlyList<Mod>>();
 
                 public PlayerIsolationContainer(WorkingBeatmap beatmap, RulesetInfo ruleset, IReadOnlyList<Mod> mods)
                 {
-                    this.beatmap.Value = beatmap; this.ruleset.Value = ruleset; this.mods.Value = mods;
+                    this.beatmap.Value = beatmap;
+                    this.ruleset.Value = ruleset;
+                    this.mods.Value = mods;
                 }
 
                 protected override IReadOnlyDependencyContainer CreateChildDependencies(IReadOnlyDependencyContainer parent)

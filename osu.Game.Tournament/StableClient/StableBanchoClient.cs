@@ -69,8 +69,8 @@ namespace osu.Game.Tournament.StableClient
                             ?? Environment.GetEnvironmentVariable("OSU_TOURNAMENT_BANCHO_ENDPOINT")
                             ?? "https://c.ppy.sh";
             allowInsecureEndpoint = Uri.TryCreate(this.endpoint, UriKind.Absolute, out var endpointUri)
-                                     && endpointUri.Scheme == Uri.UriSchemeHttp
-                                     && endpointUri.IsLoopback;
+                                    && endpointUri.Scheme == Uri.UriSchemeHttp
+                                    && endpointUri.IsLoopback;
             endpointHost = Environment.GetEnvironmentVariable("OSU_TOURNAMENT_BANCHO_HOST");
         }
 
@@ -126,6 +126,7 @@ namespace osu.Game.Tournament.StableClient
                 await initializationSource.Task.ConfigureAwait(false);
 
                 await loginAsync().ConfigureAwait(false);
+
                 if (!HasSuccessfulLogin(localUserId, token))
                 {
                     token = null;
@@ -158,11 +159,13 @@ namespace osu.Game.Tournament.StableClient
             sendEmptyPacket(PacketType.Osu_LobbyJoin).FireAndForget();
             sendStringPacket(PacketType.Osu_ChannelJoin, "#lobby").FireAndForget();
         }
+
         public void PartLobby()
         {
             sendEmptyPacket(PacketType.Osu_LobbyPart).FireAndForget();
             sendStringPacket(PacketType.Osu_ChannelLeave, "#lobby").FireAndForget();
         }
+
         public void SpecialJoinMatchChannel(int matchId) => sendPacket(PacketType.Osu_SpecialJoinMatchChannel, matchId).FireAndForget();
 
         private async Task loginAsync()
@@ -176,6 +179,7 @@ namespace osu.Game.Tournament.StableClient
         internal static byte[] CreateLoginPayload(string username, string passwordHash, string version, int utcOffset, string clientHashes)
         {
             using var ms = new MemoryStream();
+
             using (var writer = new StreamWriter(ms, new UTF8Encoding(false), leaveOpen: true))
             {
                 writer.NewLine = "\n";
@@ -259,11 +263,13 @@ namespace osu.Game.Tournament.StableClient
 
                     case PacketType.Bancho_LoginReply:
                         int userId = reader.ReadInt32();
+
                         if (HasSuccessfulLogin(userId, token))
                         {
                             localUserId = userId;
                             OnLoginSuccess?.Invoke(userId);
                         }
+
                         break;
 
                     case PacketType.Bancho_SendMessage:
@@ -398,6 +404,7 @@ namespace osu.Game.Tournament.StableClient
         internal static byte[] CreateStringPacket(PacketType type, string value)
         {
             byte[] stringPayload;
+
             using (var payloadStream = new MemoryStream())
             using (var payloadWriter = new BinaryWriter(payloadStream, Encoding.UTF8, leaveOpen: true))
             {
@@ -405,6 +412,7 @@ namespace osu.Game.Tournament.StableClient
                 payloadWriter.Write((byte)0x0b);
 
                 int remainingLength = encodedValue.Length;
+
                 while (remainingLength >= 0x80)
                 {
                     payloadWriter.Write((byte)((remainingLength & 0x7f) | 0x80));
@@ -418,6 +426,7 @@ namespace osu.Game.Tournament.StableClient
             }
 
             using var packetStream = new MemoryStream();
+
             using (var packetWriter = new BinaryWriter(packetStream, Encoding.UTF8, leaveOpen: true))
             {
                 packetWriter.Write((short)type);

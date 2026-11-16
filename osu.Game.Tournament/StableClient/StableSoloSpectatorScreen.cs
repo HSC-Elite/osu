@@ -472,6 +472,7 @@ namespace osu.Game.Tournament.StableClient
             }
 
             var localBeatmap = handler?.Beatmap.Value?.BeatmapInfo;
+
             if (localBeatmap?.OnlineID > 0)
             {
                 beatmapLookupCache.GetBeatmapAsync(localBeatmap.OnlineID).ContinueWith(t => beatmapFetchCallback = Schedule(() =>

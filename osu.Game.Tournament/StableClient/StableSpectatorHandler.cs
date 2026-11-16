@@ -328,8 +328,8 @@ namespace osu.Game.Tournament.StableClient
                 return;
 
             bool needsRetry = !receivedFramesForCurrentBeatmap
-                              ? Time.Current - lastStatusUpdateTime >= spectate_retry_interval
-                              : Time.Current - lastFrameReceivedTime >= frame_timeout;
+                ? Time.Current - lastStatusUpdateTime >= spectate_retry_interval
+                : Time.Current - lastFrameReceivedTime >= frame_timeout;
 
             if (!needsRetry)
                 return;

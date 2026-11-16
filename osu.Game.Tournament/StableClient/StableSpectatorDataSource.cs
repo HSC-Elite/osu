@@ -34,6 +34,7 @@ namespace osu.Game.Tournament.StableClient
         {
             if (!registrations.TryGetValue(userId, out int count))
                 return;
+
             if (count > 1)
                 registrations[userId] = count - 1;
             else
@@ -59,6 +60,7 @@ namespace osu.Game.Tournament.StableClient
                 watchedStates[userId] = state;
                 OnUserBeganPlaying?.Invoke(userId, state);
             }
+
             OnNewFrames?.Invoke(userId, bundle);
         }
 

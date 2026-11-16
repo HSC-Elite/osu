@@ -229,6 +229,7 @@ namespace osu.Game.Tournament.StableClient.IPC
             var players = new List<MatchRoomPlayerInfo>();
             int redSlot = 0;
             int blueSlot = 0;
+
             for (int i = 0; i < match.SlotUserIds.Length; i++)
             {
                 int userId = match.SlotUserIds[i];
@@ -244,6 +245,7 @@ namespace osu.Game.Tournament.StableClient.IPC
                 int? slot = team == TeamColour.Red ? redSlot++ : team == TeamColour.Blue ? blueSlot++ : null;
                 players.Add(new MatchRoomPlayerInfo(userId, getUsername(userId), team, slot));
             }
+
             return players.ToArray();
         }
 
@@ -303,7 +305,7 @@ namespace osu.Game.Tournament.StableClient.IPC
                         Schedule(() =>
                         {
                             if (!cancellation.IsCancellationRequested && isCurrentBeatmap(generation, match.BeatmapId)
-                                && apiBeatmap?.BeatmapSet != null && !beatmaps.IsAvailableLocally(apiBeatmap))
+                                                                      && apiBeatmap?.BeatmapSet != null && !beatmaps.IsAvailableLocally(apiBeatmap))
                                 beatmapDownloader.Download(apiBeatmap.BeatmapSet);
                         });
                     });
@@ -458,7 +460,7 @@ namespace osu.Game.Tournament.StableClient.IPC
                             if (!GetActiveSpectatorHandlers().Contains(handler))
                                 return;
                             if (CurrentMatch.Value is { } currentMatch && handler.Username != null
-                                && RoomPlayers.Any(player => player.UserId == userId && player.Username != handler.Username))
+                                                                       && RoomPlayers.Any(player => player.UserId == userId && player.Username != handler.Username))
                                 updateRoomPlayers(currentMatch);
                             var handlerRuleset = handler.Ruleset.Value?.CreateInstance();
                             int? beatmapId = handler.Beatmap.Value?.BeatmapInfo.OnlineID;
@@ -479,6 +481,7 @@ namespace osu.Game.Tournament.StableClient.IPC
                                 if (GetActiveSpectatorHandlers().Contains(handler))
                                     SpectatorDataSource.ReceiveAction(userId, action);
                             }
+
                             if (action == ReplayAction.Completion)
                                 Schedule(applyAction);
                             else

@@ -205,8 +205,11 @@ namespace osu.Game.Tournament.StableClient
 
         private partial class EmptyResultsScreen : ResultsScreen
         {
-            public EmptyResultsScreen(ScoreInfo score) : base(score) { }
-            [BackgroundDependencyLoader] private void load() => this.Hide();
+            public EmptyResultsScreen(ScoreInfo score)
+                : base(score) { }
+
+            [BackgroundDependencyLoader]
+            private void load() => this.Hide();
         }
 
         private partial class EmptyGameplayLeaderboardProvider : Component, IGameplayLeaderboardProvider

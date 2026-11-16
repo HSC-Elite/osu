@@ -215,6 +215,7 @@ namespace osu.Game.Tournament.StableClient.Screens
                 banchoClient.OnMatchUpdated -= addOrUpdateMatch;
                 banchoClient.OnMatchDisbanded -= removeMatch;
             }
+
             base.Dispose(isDisposing);
         }
     }
