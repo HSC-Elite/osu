@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Text.RegularExpressions;
 using osu.Framework.Allocation;
@@ -80,6 +81,10 @@ namespace osu.Game.Tournament.StableClient.IPC
         private readonly List<StableBanchoMessage> receivedMessages = new List<StableBanchoMessage>();
         private static readonly Regex match_history_regex = new Regex(@"https?://\S*/(?<id>\d+)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+        private bool disposed;
+        private int roomGeneration;
+        private CancellationTokenSource? beatmapLookupCancellation;
+
         private int lastBeatmapId;
         private long? lastMatchHistoryFetchId;
 
@@ -136,10 +141,13 @@ namespace osu.Game.Tournament.StableClient.IPC
             client.OnMatchUpdated += onMatchUpdated;
             client.OnMatchDisbanded += onMatchDisbanded;
             client.OnMessageReceived += onMessageReceived;
-            ladder.PlayersPerTeam.BindValueChanged(_ => Schedule(refreshTrackedPlayers), true);
+            ladder.PlayersPerTeam.BindValueChanged(onPlayersPerTeamChanged, true);
 
             CurrentMatch.BindValueChanged(e =>
             {
+                if (disposed)
+                    return;
+
                 if (e.NewValue != null)
                 {
                     if (e.OldValue?.Id != e.NewValue.Id)
@@ -157,6 +165,9 @@ namespace osu.Game.Tournament.StableClient.IPC
 
             beatmapAvailabilityTracker.Availability.BindValueChanged(avail =>
             {
+                if (disposed)
+                    return;
+
                 if (avail.NewValue.State == DownloadState.LocallyAvailable && lastBeatmapId > 0)
                 {
                     var local = beatmaps.QueryBeatmap(b => b.OnlineID == lastBeatmapId);
@@ -164,7 +175,13 @@ namespace osu.Game.Tournament.StableClient.IPC
                     if (local != null)
                     {
                         Logger.Log($"StableMatchIPCInfo: beatmap {lastBeatmapId} became locally available, refreshing spectator handlers.");
-                        Schedule(() => workingBeatmap.Value = beatmaps.GetWorkingBeatmap(local));
+                        int generation = roomGeneration;
+                        int beatmapId = lastBeatmapId;
+                        Schedule(() =>
+                        {
+                            if (isCurrentBeatmap(generation, beatmapId))
+                                workingBeatmap.Value = beatmaps.GetWorkingBeatmap(local);
+                        });
 
                         foreach (var handler in GetActiveSpectatorHandlers())
                             handler.RefreshBeatmapAvailability();
@@ -172,7 +189,11 @@ namespace osu.Game.Tournament.StableClient.IPC
                         if (CurrentMatch.Value?.InProgress == true && CurrentMatch.Value.BeatmapId == lastBeatmapId)
                         {
                             Logger.Log($"StableMatchIPCInfo: beatmap {lastBeatmapId} is now playable locally, waiting for spectator players.");
-                            Schedule(() => State.Value = TourneyState.WaitingForClients);
+                            Schedule(() =>
+                            {
+                                if (isCurrentBeatmap(generation, beatmapId) && CurrentMatch.Value?.InProgress == true)
+                                    State.Value = TourneyState.WaitingForClients;
+                            });
                         }
                     }
                 }
@@ -181,7 +202,7 @@ namespace osu.Game.Tournament.StableClient.IPC
 
         private void onMatchUpdated(MultiplayerMatch match) => Schedule(() =>
         {
-            if (CurrentMatch.Value?.Id != match.Id)
+            if (disposed || CurrentMatch.Value?.Id != match.Id)
                 return;
 
             CurrentMatch.Value = match;
@@ -189,7 +210,7 @@ namespace osu.Game.Tournament.StableClient.IPC
 
         private void onMatchDisbanded(int matchId) => Schedule(() =>
         {
-            if (CurrentMatch.Value?.Id != matchId)
+            if (disposed || CurrentMatch.Value?.Id != matchId)
                 return;
 
             CurrentMatch.Value = null;
@@ -233,6 +254,10 @@ namespace osu.Game.Tournament.StableClient.IPC
 
             if (forceUpdate || match.BeatmapId != lastBeatmapId)
             {
+                beatmapLookupCancellation?.Cancel();
+                beatmapLookupCancellation?.Dispose();
+                var cancellation = beatmapLookupCancellation = new CancellationTokenSource();
+                int generation = roomGeneration;
                 lastBeatmapId = match.BeatmapId;
 
                 beatmapAvailabilityTracker.PlaylistItem.Value = new PlaylistItem(new APIBeatmap { OnlineID = match.BeatmapId });
@@ -245,14 +270,17 @@ namespace osu.Game.Tournament.StableClient.IPC
                 }
                 else
                 {
-                    beatmapLookupCache.GetBeatmapAsync(match.BeatmapId).ContinueWith(t =>
+                    beatmapLookupCache.GetBeatmapAsync(match.BeatmapId, cancellation.Token).ContinueWith(t =>
                     {
-                        var apiBeatmap = t.GetResultSafely();
+                        if (!t.IsCompletedSuccessfully)
+                            return;
 
-                        if (apiBeatmap != null && lastBeatmapId == match.BeatmapId)
+                        var apiBeatmap = t.GetResultSafely();
+                        Schedule(() =>
                         {
-                            Schedule(() => Beatmap.Value = new TournamentBeatmap(apiBeatmap));
-                        }
+                            if (!cancellation.IsCancellationRequested && isCurrentBeatmap(generation, match.BeatmapId) && apiBeatmap != null)
+                                Beatmap.Value = new TournamentBeatmap(apiBeatmap);
+                        });
                     });
                 }
 
@@ -266,15 +294,18 @@ namespace osu.Game.Tournament.StableClient.IPC
                 {
                     workingBeatmap.Value = new DummyWorkingBeatmap(audio, textures);
 
-                    beatmapLookupCache.GetBeatmapAsync(match.BeatmapId).ContinueWith(t =>
+                    beatmapLookupCache.GetBeatmapAsync(match.BeatmapId, cancellation.Token).ContinueWith(t =>
                     {
-                        var apiBeatmap = t.GetResultSafely();
+                        if (!t.IsCompletedSuccessfully)
+                            return;
 
-                        if (apiBeatmap?.BeatmapSet != null)
+                        var apiBeatmap = t.GetResultSafely();
+                        Schedule(() =>
                         {
-                            if (!beatmaps.IsAvailableLocally(apiBeatmap))
+                            if (!cancellation.IsCancellationRequested && isCurrentBeatmap(generation, match.BeatmapId)
+                                && apiBeatmap?.BeatmapSet != null && !beatmaps.IsAvailableLocally(apiBeatmap))
                                 beatmapDownloader.Download(apiBeatmap.BeatmapSet);
-                        }
+                        });
                     });
                 }
             }
@@ -318,8 +349,16 @@ namespace osu.Game.Tournament.StableClient.IPC
             return wasInProgress ? TourneyState.Ranking : TourneyState.Idle;
         }
 
+        private bool isCurrentBeatmap(int generation, int beatmapId)
+            => !disposed && roomGeneration == generation && CurrentMatch.Value?.BeatmapId == beatmapId;
+
         private void resetRoomState()
         {
+            roomGeneration++;
+            beatmapLookupCancellation?.Cancel();
+            beatmapLookupCancellation?.Dispose();
+            beatmapLookupCancellation = null;
+            beatmapAvailabilityTracker.PlaylistItem.Value = null;
             SpectatorDataSource.Reset();
             clearSpectatorHandlers();
             HasActiveMatch.Value = false;
@@ -338,6 +377,9 @@ namespace osu.Game.Tournament.StableClient.IPC
 
         private void onMessageReceived(bMessage message) => Schedule(() =>
         {
+            if (disposed)
+                return;
+
             var stableMessage = new StableBanchoMessage(
                 message.SendingClient,
                 message.Message,
@@ -365,6 +407,7 @@ namespace osu.Game.Tournament.StableClient.IPC
             if (string.IsNullOrEmpty(credentialsUsername) || string.IsNullOrEmpty(credentialsPasswordHash))
                 return;
 
+            int generation = roomGeneration;
             Task.Run(async () =>
             {
                 try
@@ -377,7 +420,7 @@ namespace osu.Game.Tournament.StableClient.IPC
                     {
                         Schedule(() =>
                         {
-                            if (lastMatchHistoryFetchId != matchId)
+                            if (disposed || roomGeneration != generation || lastMatchHistoryFetchId != matchId)
                                 return;
                             if (ChatChannel.Value != null)
                                 chatManager.LeaveChannel(ChatChannel.Value);
@@ -444,15 +487,21 @@ namespace osu.Game.Tournament.StableClient.IPC
                         spectatorHandlers[i] = handler;
                         Scheduler.Add(() =>
                         {
-                            game.Add(handler);
+                            if (!disposed && GetActiveSpectatorHandlers().Contains(handler))
+                                game.Add(handler);
                         });
                     }
                 }
             }
         }
 
+        private void onPlayersPerTeamChanged(ValueChangedEvent<int> _) => Schedule(refreshTrackedPlayers);
+
         private void refreshTrackedPlayers()
         {
+            if (disposed)
+                return;
+
             if (CurrentMatch.Value != null)
                 updateSpectatorHandlers(CurrentMatch.Value);
             else
@@ -512,6 +561,15 @@ namespace osu.Game.Tournament.StableClient.IPC
 
         protected override void Dispose(bool isDisposing)
         {
+            disposed = true;
+            roomGeneration++;
+            beatmapLookupCancellation?.Cancel();
+            beatmapLookupCancellation?.Dispose();
+            beatmapLookupCancellation = null;
+
+            if (ladder != null)
+                ladder.PlayersPerTeam.ValueChanged -= onPlayersPerTeamChanged;
+
             if (client != null)
             {
                 client.OnMatchCreated -= onMatchUpdated;
@@ -521,6 +579,9 @@ namespace osu.Game.Tournament.StableClient.IPC
             }
 
             clearSpectatorHandlers();
+            beatmapAvailabilityTracker.Expire();
+            if (ChatChannel.Value != null)
+                chatManager.LeaveChannel(ChatChannel.Value);
             base.Dispose(isDisposing);
         }
 
