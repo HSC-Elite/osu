@@ -151,7 +151,7 @@ namespace osu.Game.Rulesets.UI
 
             IsPaused.ValueChanged += paused =>
             {
-                if (HasReplayLoaded.Value)
+                if (HasReplayLoaded.Value || HasTestPlayerInput)
                     return;
 
                 KeyBindingInputManager.UseParentInput = !paused.NewValue;
@@ -568,6 +568,13 @@ namespace osu.Game.Rulesets.UI
         /// </summary>
         /// <param name="replayScore">The replay, null for local input.</param>
         public abstract void SetReplayScore(Score replayScore);
+
+        /// <summary>
+        /// Supplies test player inputs without changing playback identity or the recording target.
+        /// </summary>
+        public virtual void SetReplayInput(Replay replay) => throw new NotSupportedException();
+
+        protected bool HasTestPlayerInput { get; set; }
 
         /// <summary>
         /// Sets a replay to be used to record gameplay.

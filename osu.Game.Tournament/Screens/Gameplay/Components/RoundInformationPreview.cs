@@ -28,6 +28,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
         protected readonly TournamentSpriteText MapCountText;
         private static readonly Color4 boarder_color = Color4Extensions.FromHex("#808080");
 
+        private BanPickFlowSubscription? flowSubscription;
+
         private const float cover_width = 50f;
 
         protected readonly Bindable<TournamentMatch?> CurrentMatch = new Bindable<TournamentMatch?>();
@@ -147,10 +149,31 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
         private void matchChanged(ValueChangedEvent<TournamentMatch?> match)
         {
             if (match.OldValue != null)
+            {
                 match.OldValue.PicksBans.CollectionChanged -= picksBansOnCollectionChanged;
-            if (match.NewValue != null)
-                match.NewValue.PicksBans.CollectionChanged += picksBansOnCollectionChanged;
+                match.OldValue.Round.ValueChanged -= roundChanged;
+                match.OldValue.FirstPickTeam.ValueChanged -= firstTeamChanged;
+            }
 
+            if (match.NewValue != null)
+            {
+                match.NewValue.PicksBans.CollectionChanged += picksBansOnCollectionChanged;
+                match.NewValue.Round.ValueChanged += roundChanged;
+                match.NewValue.FirstPickTeam.ValueChanged += firstTeamChanged;
+            }
+
+            bindRound();
+        }
+
+        private void roundChanged(ValueChangedEvent<TournamentRound?> _) => bindRound();
+        private void firstTeamChanged(ValueChangedEvent<TeamColour> _) => Scheduler.AddOnce(updateState);
+
+        private void bindRound()
+        {
+            flowSubscription?.Dispose();
+            flowSubscription = CurrentMatch.Value?.Round.Value is TournamentRound round
+                ? new BanPickFlowSubscription(round, () => Scheduler.AddOnce(updateState))
+                : null;
             Scheduler.AddOnce(updateState);
         }
 
@@ -175,42 +198,22 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
             if (CurrentMatch.Value?.Round.Value == null)
                 return;
 
-            var currentPicksBans = CurrentMatch.Value.PicksBans.ToList();
+            var match = CurrentMatch.Value;
+            var round = match.Round.Value;
+            var slots = BanPickFlow.Resolve(round, match.PicksBans, match.FirstPickTeam.Value);
 
-            foreach (var group in CurrentMatch.Value.Round.Value.BanPickFlowGroups)
+            foreach (var group in round.BanPickFlowGroups)
             {
                 var currentMapDetail = new MapDetailContent();
-                List<BeatmapChoice?> currentChoices = new List<BeatmapChoice?>();
-
-                for (int i = 0; i < group.TotalStep; i++)
-                {
-                    var find = currentPicksBans.FirstOrDefault(p => p.Type == group.Steps[i % group.Steps.Count].CurrentAction.Value);
-
-                    if (find != null)
-                    {
-                        currentChoices.Add(find);
-                        currentPicksBans.Remove(find);
-                    }
-                    else
-                        break;
-                }
-
-                while (currentChoices.Count < group.TotalStep)
-                {
-                    currentChoices.Add(null);
-                }
-
-                currentMapDetail.UpdateBeatmap(currentChoices);
+                currentMapDetail.UpdateBeatmap(slots.Where(s => s.Group == group).Select(s => s.Choice));
                 MapContentContainer.Add(currentMapDetail);
                 MapContentContainer.Add(createDivideLine());
             }
 
-            var TBMap = CurrentMatch.Value.Round.Value?.Beatmaps.FirstOrDefault(map => map.Mods == "TB");
+            var tbMap = round.Beatmaps.FirstOrDefault(map => map.Mods == "TB");
 
-            if (TBMap != null)
-            {
-                MapContentContainer.Add(new TbMapBox(TBMap));
-            }
+            if (round.SeparateTiebreaker.Value && !slots.Any(s => s.Step.CurrentAction.Value == ChoiceType.TB) && tbMap != null)
+                MapContentContainer.Add(new TbMapBox(tbMap));
         }
 
         protected virtual void UpdateMapCount()
@@ -262,6 +265,20 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
                 Top = 37f
             }
         };
+
+        protected override void Dispose(bool isDisposing)
+        {
+            flowSubscription?.Dispose();
+
+            if (CurrentMatch.Value != null)
+            {
+                CurrentMatch.Value.PicksBans.CollectionChanged -= picksBansOnCollectionChanged;
+                CurrentMatch.Value.Round.ValueChanged -= roundChanged;
+                CurrentMatch.Value.FirstPickTeam.ValueChanged -= firstTeamChanged;
+            }
+
+            base.Dispose(isDisposing);
+        }
 
         private partial class MapDetailContent : CompositeDrawable
         {

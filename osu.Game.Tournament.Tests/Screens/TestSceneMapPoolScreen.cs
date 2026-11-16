@@ -21,7 +21,7 @@ namespace osu.Game.Tournament.Tests.Screens
         [BackgroundDependencyLoader]
         private void load()
         {
-            Add(screen = new TestMapPoolScreen { Width = 0.7f });
+            Add(CreateScreenPreview(screen = new TestMapPoolScreen()));
         }
 
         [SetUpSteps]
@@ -170,7 +170,7 @@ namespace osu.Game.Tournament.Tests.Screens
 
             AddStep("update displayed maps", () => Ladder.SplitMapPoolByMods.Value = false);
 
-            AddStep("start bans from blue team", () => screen.ChildrenOfType<TourneyButton>().First(btn => btn.Text == "Blue Ban").TriggerClick());
+            AddStep("start bans from blue team", () => screen.ControlPanel.ChildrenOfType<TourneyButton>().First(btn => btn.Text == "Blue Ban").TriggerClick());
 
             AddStep("ban map", () => clickBeatmapPanel(0));
             checkTotalPickBans(1);
@@ -214,7 +214,7 @@ namespace osu.Game.Tournament.Tests.Screens
 
             AddStep("update displayed maps", () => Ladder.SplitMapPoolByMods.Value = false);
 
-            AddStep("start bans from blue team", () => screen.ChildrenOfType<TourneyButton>().First(btn => btn.Text == "Blue Ban").TriggerClick());
+            AddStep("start bans from blue team", () => screen.ControlPanel.ChildrenOfType<TourneyButton>().First(btn => btn.Text == "Blue Ban").TriggerClick());
 
             AddStep("ban map", () => clickBeatmapPanel(0));
             checkTotalPickBans(1);
@@ -269,7 +269,7 @@ namespace osu.Game.Tournament.Tests.Screens
 
             AddStep("update displayed maps", () => Ladder.SplitMapPoolByMods.Value = false);
 
-            AddStep("start bans with red team", () => screen.ChildrenOfType<TourneyButton>().First(btn => btn.Text == "Red Ban").TriggerClick());
+            AddStep("start bans with red team", () => screen.ControlPanel.ChildrenOfType<TourneyButton>().First(btn => btn.Text == "Red Ban").TriggerClick());
 
             AddStep("first ban", () => clickBeatmapPanel(0));
             AddAssert("red ban registered",
@@ -359,6 +359,30 @@ namespace osu.Game.Tournament.Tests.Screens
                 Beatmap = CreateSampleBeatmap(),
                 Mods = mods
             });
+        }
+
+        [Test]
+        public void TestFiniteFlowRequiresManualModeAfterCompletion()
+        {
+            AddStep("one pick flow", () => setBanPickFlow((ChoiceType.Pick, TeamColour.Red)));
+            AddStep("load two maps", () =>
+            {
+                Ladder.CurrentMatch.Value!.Round.Value!.Beatmaps.Clear();
+                addBeatmap();
+                addBeatmap();
+                Ladder.SplitMapPoolByMods.Value = false;
+            });
+            AddStep("select red pick", () => screen.ControlPanel.ChildrenOfType<TourneyButton>().First(b => b.Text == "Red Pick").TriggerClick());
+            AddStep("pick first map", () => clickBeatmapPanel(0));
+            checkTotalPickBans(1);
+            AddAssert("flow position recorded", () => Ladder.CurrentMatch.Value!.PicksBans[0].FlowStepIndex, () => Is.EqualTo(0));
+            AddStep("click after completion", () => clickBeatmapPanel(1));
+            checkTotalPickBans(1);
+            AddStep("select manual blue pick", () => screen.ControlPanel.ChildrenOfType<TourneyButton>().First(b => b.Text == "Blue Pick").TriggerClick());
+            AddStep("pick extra map", () => clickBeatmapPanel(1));
+            checkTotalPickBans(2);
+            checkLastPick(ChoiceType.Pick, TeamColour.Blue);
+            AddAssert("extra is outside schedule", () => Ladder.CurrentMatch.Value!.PicksBans[1].FlowStepIndex, () => Is.EqualTo(-1));
         }
 
         private void setBanPickFlow(params (ChoiceType type, TeamColour team)[] choices)

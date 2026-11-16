@@ -108,6 +108,17 @@ namespace osu.Game.Graphics
             }
         }
 
+        public static Color4 ForTournamentRank(ScoreRank rank) => Color4Extensions.FromHex(rank switch
+        {
+            ScoreRank.SH or ScoreRank.XH => "#F2F2F2",
+            ScoreRank.X => "#FAC001",
+            ScoreRank.S => "#E17B16",
+            ScoreRank.A => "#38AD68",
+            ScoreRank.B => "#236DC2",
+            ScoreRank.C => "#942BA5",
+            _ => "#BF0A0B",
+        });
+
         /// <summary>
         /// Retrieves the colour for a <see cref="HitResult"/>.
         /// </summary>

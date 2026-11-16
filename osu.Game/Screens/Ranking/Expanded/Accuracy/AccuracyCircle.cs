@@ -94,6 +94,34 @@ namespace osu.Game.Screens.Ranking.Expanded.Accuracy
         private ResultsScreen? resultsScreen { get; set; }
 
         private CircularProgress accuracyCircle = null!;
+
+        /// <summary>
+        /// The rank currently reached by the animated accuracy gauge.
+        /// </summary>
+        public ScoreRank CurrentRank
+        {
+            get
+            {
+                if (score.Rank == ScoreRank.F)
+                    return ScoreRank.F;
+
+                double progress = accuracyCircle?.Progress ?? 0;
+
+                if (progress >= accuracyX - VIRTUAL_SS_PERCENTAGE)
+                    return getRank(ScoreRank.X);
+                if (progress >= accuracyS)
+                    return getRank(ScoreRank.S);
+                if (progress >= accuracyA)
+                    return getRank(ScoreRank.A);
+                if (progress >= accuracyB)
+                    return getRank(ScoreRank.B);
+                if (progress >= accuracyC)
+                    return getRank(ScoreRank.C);
+
+                return getRank(ScoreRank.D);
+            }
+        }
+
         private GradedCircles gradedCircles = null!;
         private Container<RankBadge> badges = null!;
         private RankText rankText = null!;

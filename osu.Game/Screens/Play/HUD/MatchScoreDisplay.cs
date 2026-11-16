@@ -121,6 +121,8 @@ namespace osu.Game.Screens.Play.HUD
             Team2Score.BindValueChanged(_ => updateScores(), true);
         }
 
+        protected virtual float ScoreDifferenceScale => 1_500_000;
+
         private long previousDiffScore = 0;
 
         private void updateScores() => Scheduler.AddOnce(() =>
@@ -152,7 +154,7 @@ namespace osu.Game.Screens.Play.HUD
             long diff = Math.Max(Team1Score.Value, Team2Score.Value) - Math.Min(Team1Score.Value, Team2Score.Value);
 
             losingBar.ResizeWidthTo(0, 400, Easing.OutQuint);
-            winningBar.ResizeWidthTo(Math.Min(0.4f, MathF.Pow(diff / 1500000f, 0.5f) / 2), 400, Easing.OutQuint);
+            winningBar.ResizeWidthTo(Math.Min(0.4f, MathF.Pow(diff / ScoreDifferenceScale, 0.5f) / 2), 400, Easing.OutQuint);
 
             ScoreDiffText.Alpha = diff != 0 ? 1 : 0;
             ScoreDiffText.Current.Value = -diff;

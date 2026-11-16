@@ -16,7 +16,6 @@ namespace osu.Game.Tournament.Screens
     public abstract partial class BeatmapInfoScreen : TournamentMatchScreen
     {
         protected readonly SongBar SongBar;
-        protected ControlPanel ControlPanel;
 
         private Sprite supporterSprite = null!;
         private Sprite logoSprite = null!;
@@ -32,50 +31,7 @@ namespace osu.Game.Tournament.Screens
 
         protected BeatmapInfoScreen()
         {
-            AddRangeInternal(
-            [
-                SongBar = CreateSongBar(),
-                ControlPanel = new ControlPanel(true)
-                {
-                    /*Children = new Drawable[]
-                    {
-                        new TournamentSpriteText
-                        {
-                            Text = "Set Mods"
-                        },
-                        new TourneyButton
-                        {
-                            RelativeSizeAxes = Axes.X,
-                            Text = "Reset",
-                            Action = () => setMods(LegacyMods.None, string.Empty)
-                        },
-                        new TourneyButton
-                        {
-                            RelativeSizeAxes = Axes.X,
-                            Text = "Set FM",
-                            Action = () => setMods(LegacyMods.FreeMod, "FM")
-                        },
-                        new TourneyButton
-                        {
-                            RelativeSizeAxes = Axes.X,
-                            Text = "Set HR",
-                            Action = () => setMods(LegacyMods.HardRock, "HR")
-                        },
-                        new TourneyButton
-                        {
-                            RelativeSizeAxes = Axes.X,
-                            Text = "Set HD",
-                            Action = () => setMods(LegacyMods.Hidden, "HD")
-                        },
-                        new TourneyButton
-                        {
-                            RelativeSizeAxes = Axes.X,
-                            Text = "Set DT",
-                            Action = () => setMods(LegacyMods.DoubleTime, "DT")
-                        },
-                    }*/
-                }
-            ]);
+            AddInternal(SongBar = CreateSongBar());
         }
 
         [BackgroundDependencyLoader]
@@ -105,7 +61,7 @@ namespace osu.Game.Tournament.Screens
                     },
                 ];
 
-                AddStageContentRange(logoContents);
+                AddRangeInternal(logoContents);
 
                 LoadComponentsAsync(logoContents, _ =>
                 {

@@ -99,7 +99,15 @@ namespace osu.Game.Screens.Ranking
 
         protected ResultsScreen(ScoreInfo? score)
         {
-            Score = score;
+            if (score?.Date < DateTimeOffset.FromUnixTimeMilliseconds(0))
+            {
+                Score = score.DeepClone();
+                Score.Date = DateTimeOffset.Now;
+            }
+            else
+            {
+                Score = score;
+            }
 
             SelectedScore.Value = score;
         }

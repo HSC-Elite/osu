@@ -25,6 +25,7 @@ using osu.Game.Scoring.Legacy;
 using osu.Game.Screens.Play.PlayerSettings;
 using osu.Game.Screens.Ranking;
 using osu.Game.Screens.Ranking.Expanded;
+using osu.Game.Screens.Tournament.GameplayScreenResultsScreen;
 using osu.Game.Skinning;
 using osu.Game.Users;
 
@@ -191,12 +192,18 @@ namespace osu.Game.Screens.Play
         // Don't re-import replay scores as they're already present in the database.
         protected override Task ImportScore(Score score) => Task.CompletedTask;
 
-        protected override ResultsScreen CreateResults(ScoreInfo score) => new SoloResultsScreen(score)
+        protected override ResultsScreen CreateResults(ScoreInfo score)
         {
-            // Only show the relevant button otherwise things look silly.
-            AllowWatchingReplay = !isAutoplayPlayback,
-            AllowRetry = isAutoplayPlayback,
-        };
+            if (OsuGameBase.IsTournament)
+                return new TournamentResultsScreen(score, true);
+
+            return new SoloResultsScreen(score)
+            {
+                // Only show the relevant button otherwise things look silly.
+                AllowWatchingReplay = !isAutoplayPlayback,
+                AllowRetry = isAutoplayPlayback,
+            };
+        }
 
         public bool OnPressed(KeyBindingPressEvent<GlobalAction> e)
         {

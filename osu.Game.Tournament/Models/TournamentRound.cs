@@ -22,6 +22,9 @@ namespace osu.Game.Tournament.Models
 
         public readonly BindableList<BanPickFlowGroup> BanPickFlowGroups = new BindableList<BanPickFlowGroup>();
 
+        public readonly BindableBool SeparateTiebreaker = new BindableBool(true);
+        public readonly Bindable<int?> BanPickFlowBestOf = new Bindable<int?>();
+
         [JsonProperty]
         public readonly BindableList<RoundBeatmap> Beatmaps = new BindableList<RoundBeatmap>();
 

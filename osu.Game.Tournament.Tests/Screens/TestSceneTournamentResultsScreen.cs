@@ -8,6 +8,8 @@ using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
+using osu.Framework.Graphics.Shapes;
+using osu.Framework.Extensions.Color4Extensions;
 using osu.Framework.Screens;
 using osu.Framework.Testing;
 using osu.Game.Beatmaps;
@@ -23,10 +25,10 @@ using osu.Game.Screens.Play;
 using osu.Game.Screens.Play.Leaderboards;
 using osu.Game.Screens.Ranking;
 using osu.Game.Screens.Ranking.Expanded.Accuracy;
+using osu.Game.Screens.Tournament.GameplayScreenResultsScreen;
 using osu.Game.Tests.Resources;
 using osu.Game.Tests.Visual;
 using osu.Game.Tests.Visual.Ranking;
-using osu.Game.Tournament.Screens.Gameplay.GameplayScreenResultsScreen;
 using osuTK;
 using Realms;
 
@@ -75,6 +77,7 @@ namespace osu.Game.Tournament.Tests.Screens
         [TestCase(0.75, ScoreRank.C, 11)]
         [TestCase(0.5, ScoreRank.D, 21)]
         [TestCase(0.2, ScoreRank.D, 51)]
+        [TestCase(0.01, ScoreRank.D, 100)]
         public void TestResultsWithPlayer(double accuracy, ScoreRank rank, int missCount)
         {
             TestResultsScreen? screen = null;
@@ -96,6 +99,37 @@ namespace osu.Game.Tournament.Tests.Screens
             AddAssert("no rank badges displayed", () => this.ChildrenOfType<RankBadge>().All(b => !b.IsPresent));
         }
 
+        [TestCase(false, true)]
+        [TestCase(true, true)]
+        [TestCase(false, false)]
+        [TestCase(true, false)]
+        public void TestPerfectCombo(bool mirrored, bool fullCombo)
+        {
+            TestResultsScreen? screen = null;
+            var score = TestResources.CreateTestScoreInfo();
+            score.Statistics[HitResult.Miss] = 0;
+            score.MaxCombo = score.GetMaximumAchievableCombo() - (fullCombo ? 0 : 1);
+
+            Container badge() => screen!.ChildrenOfType<Container>().Single(c => c.Name == "Perfect badge");
+
+            loadResultsScreen(() => screen = createResultsScreen(score, mirrored));
+            AddUntilStep("perfect badge loaded", () => screen?.ChildrenOfType<Container>().Any(c => c.Name == "Perfect badge") == true);
+            AddAssert("maximum achievable combo is positive", () => score.GetMaximumAchievableCombo() > 0);
+            AddAssert("perfect highlight matches full combo", () =>
+                badge().ChildrenOfType<Box>().Single().Colour.AverageColour == Color4Extensions.FromHex(fullCombo ? "#FFC300" : "#383838"));
+            AddAssert("perfect label displayed", () => badge().ChildrenOfType<OsuSpriteText>().Single().Text.ToString() == "PERFECT");
+            AddUntilStep("perfect badge clears circle", () =>
+            {
+                var circle = screen!.ChildrenOfType<AccuracyCircle>().Single().ScreenSpaceDrawQuad.AABBFloat;
+                var bounds = badge().ScreenSpaceDrawQuad.AABBFloat;
+                float centreX = circle.Left + circle.Width / 2;
+                float centreY = circle.Top + circle.Height / 2;
+                float dx = Math.Clamp(centreX, bounds.Left, bounds.Right) - centreX;
+                float dy = Math.Clamp(centreY, bounds.Top, bounds.Bottom) - centreY;
+                return dx * dx + dy * dy >= circle.Width * circle.Width / 4;
+            });
+        }
+
         [TestCase(false)]
         [TestCase(true)]
         public void TestMirroredLayout(bool mirrored)
@@ -105,9 +139,18 @@ namespace osu.Game.Tournament.Tests.Screens
             loadResultsScreen(() => screen = createResultsScreen(TestResources.CreateTestScoreInfo(), mirrored));
             AddUntilStep("result circle loaded", () => screen?.ChildrenOfType<AccuracyCircle>().Any() == true);
             AddAssert("requested layout selected", () => screen?.Mirrored == mirrored);
-            AddAssert("hit statistics on the outside", () => screen?.ChildrenOfType<GridContainer>().Single(c => c.Name == "Hit statistics").Anchor == (mirrored ? Anchor.CentreLeft : Anchor.CentreRight));
-            AddAssert("mods opposite statistics", () => screen?.ChildrenOfType<Container>().Single(m => m.Name == "Mods").Anchor == (mirrored ? Anchor.CentreRight : Anchor.CentreLeft));
-            AddAssert("circle shifted towards mods", () => screen?.ChildrenOfType<AccuracyCircle>().Single().X == (mirrored ? 42 : -42));
+            AddAssert("hit statistics on the outside", () =>
+            {
+                var circle = screen!.ChildrenOfType<AccuracyCircle>().Single().ScreenSpaceDrawQuad.Centre;
+                var statistics = screen.ChildrenOfType<GridContainer>().Single(c => c.Name == "Hit statistics").ScreenSpaceDrawQuad.Centre;
+                return mirrored ? statistics.X < circle.X : statistics.X > circle.X;
+            });
+            AddAssert("mods opposite statistics", () =>
+            {
+                var circle = screen!.ChildrenOfType<AccuracyCircle>().Single().ScreenSpaceDrawQuad.Centre;
+                var mods = screen.ChildrenOfType<Container>().Single(m => m.Name == "Mods");
+                return mods.Children.All(mod => mirrored ? mod.ScreenSpaceDrawQuad.Centre.X > circle.X : mod.ScreenSpaceDrawQuad.Centre.X < circle.X);
+            });
             AddAssert("circle does not cover statistics", () =>
             {
                 var circle = screen!.ChildrenOfType<AccuracyCircle>().Single().ScreenSpaceDrawQuad.AABBFloat;
@@ -146,7 +189,13 @@ namespace osu.Game.Tournament.Tests.Screens
                 provider.Entries.Add(otherEntry);
             });
             AddAssert("another player's placement ignored", () => badge().Alpha == 0);
-            AddAssert("placement follows mirrored layout", () => badge().X == (mirrored ? 299 : 76));
+            AddAssert("placement follows mirrored layout", () =>
+            {
+                var perfect = screen!.ChildrenOfType<Container>().Single(c => c.Name == "Perfect badge");
+                return mirrored
+                    ? badge().ScreenSpaceDrawQuad.Centre.X > perfect.ScreenSpaceDrawQuad.Centre.X
+                    : badge().ScreenSpaceDrawQuad.Centre.X < perfect.ScreenSpaceDrawQuad.Centre.X;
+            });
             AddStep("player arrives after results loaded", () => provider.Entries.Add(entry));
             AddAssert("unset position remains hidden", () => badge().Alpha == 0);
 

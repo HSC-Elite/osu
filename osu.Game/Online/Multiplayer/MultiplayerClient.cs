@@ -41,6 +41,11 @@ namespace osu.Game.Online.Multiplayer
         public Action<Room, string>? PresentMatch { protected get; set; }
 
         /// <summary>
+        /// Invoked on the update thread when a multiplayer invitation is received.
+        /// </summary>
+        public event Action<APIUser, Room, string>? InvitationReceived;
+
+        /// <summary>
         /// Invoked when any change occurs to the multiplayer room.
         /// </summary>
         public virtual event Action? RoomUpdated;
@@ -608,6 +613,8 @@ namespace osu.Game.Online.Multiplayer
             Room? apiRoom = await getRoomAsync(roomID).ConfigureAwait(false);
 
             if (apiUser == null || apiRoom == null) return;
+
+            Scheduler.Add(() => InvitationReceived?.Invoke(apiUser, apiRoom, password));
 
             PostNotification?.Invoke(new MultiplayerInvitationNotification(apiUser, apiRoom)
             {

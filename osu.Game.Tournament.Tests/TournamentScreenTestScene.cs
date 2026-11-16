@@ -5,6 +5,7 @@ using System;
 using osu.Framework.Allocation;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
+using osu.Game.Tournament.Screens;
 using osuTK;
 
 namespace osu.Game.Tournament.Tests
@@ -16,7 +17,32 @@ namespace osu.Game.Tournament.Tests
         [BackgroundDependencyLoader]
         private void load()
         {
-            base.Content.Add(Content);
+            base.Content.Add(new RefCountedBackbufferProvider
+            {
+                RelativeSizeAxes = Axes.Both,
+                Child = Content,
+            });
+        }
+
+        protected static Container CreateScreenPreview(TournamentStageScreen screen)
+        {
+            screen.IsStageActive = true;
+            var preview = new Container { RelativeSizeAxes = Axes.Both };
+            preview.Add(new Container
+            {
+                RelativeSizeAxes = Axes.Both,
+                Width = 0.75f,
+                Child = screen,
+            });
+            screen.OnLoadComplete += _ => preview.Add(new Container
+            {
+                RelativeSizeAxes = Axes.Both,
+                Width = 0.25f,
+                Anchor = Anchor.TopRight,
+                Origin = Anchor.TopRight,
+                Child = screen.ControlPanel,
+            });
+            return preview;
         }
 
         private partial class TournamentScalingContainer : DrawSizePreservingFillContainer

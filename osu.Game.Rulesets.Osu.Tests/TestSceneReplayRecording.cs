@@ -7,6 +7,7 @@ using osu.Framework.Allocation;
 using osu.Framework.Audio;
 using osu.Framework.Timing;
 using osu.Game.Beatmaps;
+using osu.Game.Replays;
 using osu.Game.Rulesets.Osu.Objects;
 using osu.Game.Rulesets.Osu.Replays;
 using osu.Game.Rulesets.Osu.UI;
@@ -19,6 +20,8 @@ namespace osu.Game.Rulesets.Osu.Tests
     public partial class TestSceneReplayRecording : PlayerTestScene
     {
         protected override Ruleset CreatePlayerRuleset() => new OsuRuleset();
+
+        protected override TestPlayer CreatePlayer(Ruleset ruleset) => new TestPlayer(allowPause: true, showResults: false, pauseOnFocusLost: false);
 
         [Resolved]
         private AudioManager audioManager { get; set; } = null!;
@@ -76,6 +79,64 @@ namespace osu.Game.Rulesets.Osu.Tests
             seekTo(10015);
             AddStep("release C", () => InputManager.ReleaseKey(Key.C));
             AddAssert("smoke button press recorded to replay", () => Player.Score.Replay.Frames.OfType<OsuReplayFrame>().Any(f => f.Actions.SequenceEqual([OsuAction.Smoke])));
+        }
+
+        [Test]
+        public void TestReplayInputIsRecordedAsLocalPlay()
+        {
+            AddStep("attach test player input", () => Player.DrawableRuleset.SetReplayInput(new Replay
+            {
+                Frames =
+                {
+                    new OsuReplayFrame(-2000, OsuPlayfield.BASE_SIZE / 2),
+                    new OsuReplayFrame(0, OsuPlayfield.BASE_SIZE / 2, OsuAction.RightButton),
+                    new OsuReplayFrame(15, OsuPlayfield.BASE_SIZE / 2),
+                    new OsuReplayFrame(20000, OsuPlayfield.BASE_SIZE / 2),
+                }
+            }));
+            AddStep("pause gameplay", () => Player.DrawableRuleset.IsPaused.Value = true);
+            AddStep("resume gameplay", () => Player.DrawableRuleset.IsPaused.Value = false);
+            AddAssert("physical input remains blocked", () => !((DrawableOsuRuleset)Player.DrawableRuleset).KeyBindingInputManager.UseParentInput);
+            AddAssert("no replay handler attached", () => ((DrawableOsuRuleset)Player.DrawableRuleset).KeyBindingInputManager.ReplayInputHandler == null);
+            seekTo(100);
+            AddAssert("still local play", () => !Player.DrawableRuleset.HasReplayLoaded.Value && Player.DrawableRuleset.ReplayScore == null);
+            AddAssert("replay input judged", () => Player.ScoreProcessor.Combo.Value == 1);
+            AddAssert("input recorded", () => Player.Score.Replay.Frames.OfType<OsuReplayFrame>().Any(f => f.Actions.Contains(OsuAction.RightButton)));
+        }
+
+        [Test]
+        public void TestReplayInputSurvivesPauseAndResume()
+        {
+            AddStep("attach test player input", () => Player.DrawableRuleset.SetReplayInput(new Replay
+            {
+                Frames =
+                {
+                    new OsuReplayFrame(-2000, OsuPlayfield.BASE_SIZE / 2),
+                    new OsuReplayFrame(0, OsuPlayfield.BASE_SIZE / 2, OsuAction.RightButton),
+                    new OsuReplayFrame(1000, OsuPlayfield.BASE_SIZE / 2),
+                    new OsuReplayFrame(5000, OsuPlayfield.BASE_SIZE / 2, OsuAction.LeftButton),
+                    new OsuReplayFrame(5015, OsuPlayfield.BASE_SIZE / 2),
+                    new OsuReplayFrame(20000, OsuPlayfield.BASE_SIZE / 2),
+                }
+            }));
+            seekTo(100);
+            AddAssert("recorded button held", () => ((DrawableOsuRuleset)Player.DrawableRuleset).KeyBindingInputManager.PressedActions.Contains(OsuAction.RightButton));
+            AddStep("pause player", () => Assert.That(Player.Pause(), Is.True));
+            AddAssert("clock paused", () => Player.GameplayClockContainer.IsPaused.Value);
+            AddAssert("buttons released while paused", () => !((DrawableOsuRuleset)Player.DrawableRuleset).KeyBindingInputManager.PressedActions.Any());
+            AddStep("resume player", () => Player.Resume());
+            AddUntilStep("clock resumed without cursor click", () => !Player.GameplayClockContainer.IsPaused.Value);
+            AddAssert("recorded hold restored", () => ((DrawableOsuRuleset)Player.DrawableRuleset).KeyBindingInputManager.PressedActions.Contains(OsuAction.RightButton));
+            AddStep("send physical input", () =>
+            {
+                InputManager.MoveMouseTo(new osuTK.Vector2(10));
+                InputManager.PressKey(Key.C);
+            });
+            AddAssert("physical smoke blocked", () => !((DrawableOsuRuleset)Player.DrawableRuleset).KeyBindingInputManager.PressedActions.Contains(OsuAction.Smoke));
+            seekTo(5100);
+            AddAssert("second object judged after resume", () => Player.ScoreProcessor.Combo.Value == 2);
+            AddAssert("second press recorded", () => Player.Score.Replay.Frames.OfType<OsuReplayFrame>().Any(f => f.Actions.Contains(OsuAction.LeftButton)));
+            AddStep("release physical input", () => InputManager.ReleaseKey(Key.C));
         }
 
         [Test]

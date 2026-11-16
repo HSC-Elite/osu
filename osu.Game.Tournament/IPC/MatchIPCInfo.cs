@@ -8,6 +8,8 @@ using System.Threading;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Extensions;
+using osu.Framework.Extensions.Color4Extensions;
+using osu.Framework.Graphics.Colour;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Logging;
 using osu.Game.Beatmaps;
@@ -18,12 +20,14 @@ using osu.Game.Online.Chat;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Rulesets;
 using osu.Game.Screens.Play.Leaderboards;
+using osu.Game.Screens.Tournament;
 using osu.Game.Tournament.Models;
 using osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea;
+using osuTK.Graphics;
 
 namespace osu.Game.Tournament.IPC
 {
-    public partial class MatchIPCInfo : CompositeComponent
+    public partial class MatchIPCInfo : CompositeComponent, ITeamColorProvider
     {
         [Resolved]
         private IBindable<WorkingBeatmap> workingBeatmap { get; set; } = null!;
@@ -49,6 +53,7 @@ namespace osu.Game.Tournament.IPC
         public Bindable<TournamentBeatmap?> Beatmap { get; } = new Bindable<TournamentBeatmap?>();
         public Bindable<RulesetInfo?> Ruleset { get; } = new Bindable<RulesetInfo?>();
         public Bindable<LegacyMods> Mods { get; } = new Bindable<LegacyMods>();
+        public Bindable<TournamentScoringMode> ScoringMode { get; } = new Bindable<TournamentScoringMode>(TournamentScoringMode.Score);
         public Bindable<TourneyState> State { get; } = new Bindable<TourneyState>();
         public Bindable<Channel?> ChatChannel { get; } = new Bindable<Channel?>();
         public BindableLong Score1 { get; } = new BindableLong();
@@ -95,11 +100,16 @@ namespace osu.Game.Tournament.IPC
 
         private void onWorkingBeatmapChanged(ValueChangedEvent<WorkingBeatmap> _) => updateTrackLooping();
 
-        private void updateTrackLooping() => workingBeatmap.Value.PrepareTrackForPreview(State.Value != TourneyState.Idle);
+        private void updateTrackLooping() => workingBeatmap.Value.PrepareTrackForPreview(State.Value == TourneyState.Idle);
 
         protected override void Update()
         {
             base.Update();
+
+            int beatmapId = Beatmap.Value?.OnlineID ?? 0;
+            ScoringMode.Value = beatmapId > 0
+                ? Ladder.CurrentMatch.Value?.Round.Value?.Beatmaps.FirstOrDefault(b => b.ID == beatmapId || b.Beatmap?.OnlineID == beatmapId)?.ScoringMode ?? TournamentScoringMode.Score
+                : TournamentScoringMode.Score;
 
             if (State.Value == TourneyState.Playing)
                 updateScore();
@@ -174,7 +184,7 @@ namespace osu.Game.Tournament.IPC
             GameplayLeaderboardScore[] team1Score = GetTeamScore(TeamColour.Red).ToArray();
             GameplayLeaderboardScore[] team2Score = GetTeamScore(TeamColour.Blue).ToArray();
 
-            if (Ladder.ScoringMode.Value == TournamentScoringMode.PerformancePoint)
+            if (ScoringMode.Value == TournamentScoringMode.PerformancePoint)
             {
                 Score1.Value = team1Score.Sum(s => leaderboardProvider!.GetPlayerPerformancePoints((int)s.User.OnlineID));
                 Score2.Value = team2Score.Sum(s => leaderboardProvider!.GetPlayerPerformancePoints((int)s.User.OnlineID));
@@ -184,6 +194,7 @@ namespace osu.Game.Tournament.IPC
                 Score1.Value = team1Score.Sum(CalculateModMultiplier);
                 Score2.Value = team2Score.Sum(CalculateModMultiplier);
             }
+
             Team1Combo.Value = team1Score.Sum(s => s.Combo.Value);
             Team2Combo.Value = team2Score.Sum(s => s.Combo.Value);
         }
@@ -194,14 +205,24 @@ namespace osu.Game.Tournament.IPC
             return leaderboardProvider!.Scores.Where(u => teamIds.Any(t => t == u.User.OnlineID));
         }
 
-        protected virtual int[] GetTeamIds(TeamColour colour)
+        public virtual int[] GetTeamIds(TeamColour colour)
         {
             if (teamIdsCache.TryGetValue(colour, out int[]? ids))
                 return ids;
 
             return teamIdsCache[colour] = Ladder.CurrentMatch.Value?.GetTeamByColor(colour)?.Players
-                                                       .Select(p => p.OnlineID)
-                                                       .ToArray() ?? Array.Empty<int>();
+                                                .Select(p => p.OnlineID)
+                                                .ToArray() ?? Array.Empty<int>();
+        }
+
+        public ColourInfo GetTeamColor(int userId)
+        {
+            if (GetTeamIds(TeamColour.Red).Contains(userId))
+                return Color4Extensions.FromHex("#FB8B96");
+            if (GetTeamIds(TeamColour.Blue).Contains(userId))
+                return Color4Extensions.FromHex("#AFF0F7");
+
+            return Color4.White;
         }
 
         private long CalculateModMultiplier(GameplayLeaderboardScore score)

@@ -173,14 +173,6 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
             needsCalculation = false;
 
-            if (!timedDifficultyTask.IsCompletedSuccessfully || workingBeatmap == null || rulesetInfo == null || mods == null)
-                return;
-
-            List<TimedDifficultyAttributes>? attributes = timedDifficultyTask.GetResultSafely();
-
-            if (attributes == null || attributes.Count == 0)
-                return;
-
             if (workingBeatmap == null)
             {
                 try
@@ -192,6 +184,14 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                     return;
                 }
             }
+
+            if (!timedDifficultyTask.IsCompletedSuccessfully || workingBeatmap == null || rulesetInfo == null || mods == null)
+                return;
+
+            List<TimedDifficultyAttributes>? attributes = timedDifficultyTask.GetResultSafely();
+
+            if (attributes == null || attributes.Count == 0)
+                return;
 
             int attributeIndex = attributes.BinarySearch(new TimedDifficultyAttributes(currentFrame.Time, null));
 

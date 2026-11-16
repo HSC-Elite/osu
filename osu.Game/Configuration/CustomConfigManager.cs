@@ -22,6 +22,7 @@ namespace osu.Game.Configuration
         protected override void InitialiseDefaults()
         {
             base.InitialiseDefaults();
+            SetDefault(CustomSetting.TestPlayerReplayPath, string.Empty);
 
             //Dance settings
             SetDefault(CustomSetting.DanceMover, OsuDanceMover.Momentum);
@@ -67,6 +68,7 @@ namespace osu.Game.Configuration
 
     public enum CustomSetting
     {
+        TestPlayerReplayPath,
         //Dance settings
         DanceMover,
         DanceSpinnerMover,

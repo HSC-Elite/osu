@@ -19,7 +19,7 @@ using osuTK.Graphics;
 
 namespace osu.Game.Tournament.Screens.Schedule
 {
-    public partial class ScheduleScreen : TournamentScreen
+    public partial class ScheduleScreen : TournamentStageScreen
     {
         private readonly BindableList<TournamentMatch> allMatches = new BindableList<TournamentMatch>();
         private readonly Bindable<TournamentMatch?> currentMatch = new Bindable<TournamentMatch?>();
@@ -106,14 +106,7 @@ namespace osu.Game.Tournament.Screens.Schedule
                 }
             };
 
-            SetStageVideo(scheduleVideo);
-            SetStageContent(stageContent);
-        }
-
-        public override void Show()
-        {
-            ShowStageContent();
-            base.Show();
+            AddInternal(stageContent);
         }
 
         protected override void LoadComplete()

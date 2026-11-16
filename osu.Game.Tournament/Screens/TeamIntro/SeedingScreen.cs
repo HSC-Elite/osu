@@ -17,7 +17,7 @@ using osuTK;
 
 namespace osu.Game.Tournament.Screens.TeamIntro
 {
-    public partial class SeedingScreen : TournamentScreen
+    public partial class SeedingScreen : TournamentStageScreen
     {
         private Container mainContainer = null!;
         private Container stageContent = null!;
@@ -48,36 +48,33 @@ namespace osu.Game.Tournament.Screens.TeamIntro
                 }
             };
 
-            InternalChildren = new Drawable[]
+            ControlPanel = new ControlPanel(true)
             {
-                new ControlPanel
+                Children = new Drawable[]
                 {
-                    Children = new Drawable[]
+                    new TourneyButton
                     {
-                        new TourneyButton
-                        {
-                            RelativeSizeAxes = Axes.X,
-                            Text = "上一个队伍",
-                            Action = () => switchTeam(Direction.Previous)
-                        },
-                        new TourneyButton
-                        {
-                            RelativeSizeAxes = Axes.X,
-                            Text = "下一个队伍",
-                            Action = () => switchTeam(Direction.Next)
-                        },
-                        new SettingsTeamDropdown(LadderInfo.Teams)
-                        {
-                            LabelText = "指定队伍",
-                            Current = currentTeam,
-                        }
+                        RelativeSizeAxes = Axes.X,
+                        Text = "上一个队伍",
+                        Action = () => switchTeam(Direction.Previous)
+                    },
+                    new TourneyButton
+                    {
+                        RelativeSizeAxes = Axes.X,
+                        Text = "下一个队伍",
+                        Action = () => switchTeam(Direction.Next)
+                    },
+                    new SettingsTeamDropdown(LadderInfo.Teams)
+                    {
+                        LabelText = "指定队伍",
+                        Current = currentTeam,
                     }
                 }
             };
 
             currentTeam.BindValueChanged(teamChanged, true);
-            SetStageVideo(seedingVideo);
-            SetStageContent(stageContent);
+
+            AddInternal(stageContent);
         }
 
         private enum Direction
@@ -122,7 +119,6 @@ namespace osu.Game.Tournament.Screens.TeamIntro
 
         public override void Show()
         {
-            ShowStageContent();
             base.Show();
 
             // Changes could have been made on editor screen.

@@ -51,7 +51,7 @@ namespace osu.Game.Tournament.Screens.Showcase
         private OsuConfigManager config { get; set; } = null!;
 
         private NestedOsuGame? nestedGame;
-        private ShowCaseSideFlash? flash;
+        private Container? flashContainer;
 
         private readonly BindableFloat flashIntensity = new BindableFloat(2)
         {
@@ -83,7 +83,6 @@ namespace osu.Game.Tournament.Screens.Showcase
                 Loop = true,
                 RelativeSizeAxes = Axes.Both,
             };
-            SetStageVideo(showcaseVideo);
 
             stageContent = new Container
             {
@@ -153,7 +152,7 @@ namespace osu.Game.Tournament.Screens.Showcase
                 }
             });
 
-            SetStageContent(stageContent);
+            AddInternal(stageContent);
         }
 
         protected override void LoadComplete()
@@ -179,7 +178,7 @@ namespace osu.Game.Tournament.Screens.Showcase
                 {
                     nestedLazerSettingContainer.AutoSizeAxes = Axes.Y;
                     showcaseContainer.Clear(true);
-                    if (StageShowing)
+                    if (IsStageActive)
                         startInnerLazer();
                 }
                 else
@@ -203,7 +202,6 @@ namespace osu.Game.Tournament.Screens.Showcase
 
         public override void Show()
         {
-            ShowStageContent();
             base.Show();
 
             if (useOsuLazer.Value)
@@ -212,7 +210,7 @@ namespace osu.Game.Tournament.Screens.Showcase
 
         private void startInnerLazer() => Scheduler.AddOnce(() =>
         {
-            if (nestedGame != null)
+            if (!IsStageActive || nestedGame != null)
                 return;
 
             nestedGame = new NestedOsuGame(host.Storage, new ForwardingAPIAccess(api), config)
@@ -234,10 +232,15 @@ namespace osu.Game.Tournament.Screens.Showcase
                 mods.BindTarget = nestedGame.Dependencies.Get<Bindable<IReadOnlyList<Mod>>>();
             };
 
-            StageContent!.Add(flash = new ShowCaseSideFlash());
+            var flash = new ShowCaseSideFlash();
             flash.FlashIntensity.BindTo(flashIntensity);
             flash.FlashColor.BindTo(flashColor);
             flash.FlashKiaiOnly.BindTo(flashKiaiOnly);
+
+            stageContent.Add(flashContainer = new ShowcaseFlashContainer(this)
+            {
+                Child = flash,
+            });
         });
 
         private void closeInnerLazer()
@@ -248,12 +251,12 @@ namespace osu.Game.Tournament.Screens.Showcase
                 tournamentGame.ReconnectOnlineClients();
             }
 
-            if (flash != null)
-                StageContent?.Remove(flash, true);
+            if (flashContainer != null)
+                stageContent.Remove(flashContainer, true);
 
             musicController = null;
             nestedGame = null;
-            flash = null;
+            flashContainer = null;
         }
 
         private GetBeatmapRequest? beatmapLookupRequest;
@@ -319,6 +322,18 @@ namespace osu.Game.Tournament.Screens.Showcase
         IClock IBeatSyncProvider.Clock => ((IBeatSyncProvider?)nestedGame)?.Clock ?? Clock;
 
         ChannelAmplitudes IHasAmplitudes.CurrentAmplitudes => ((IBeatSyncProvider?)nestedGame)?.CurrentAmplitudes ?? ChannelAmplitudes.Empty;
+
+        private partial class ShowcaseFlashContainer : Container
+        {
+            [Cached(typeof(IBeatSyncProvider))]
+            private readonly IBeatSyncProvider provider;
+
+            public ShowcaseFlashContainer(IBeatSyncProvider provider)
+            {
+                this.provider = provider;
+                RelativeSizeAxes = Axes.Both;
+            }
+        }
 
         private partial class ShowCaseSideFlash : MenuSideFlashes
         {

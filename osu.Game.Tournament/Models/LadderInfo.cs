@@ -18,8 +18,6 @@ namespace osu.Game.Tournament.Models
     {
         public Bindable<RulesetInfo?> Ruleset = new Bindable<RulesetInfo?>();
 
-        public Bindable<TournamentScoringMode> ScoringMode = new Bindable<TournamentScoringMode>(TournamentScoringMode.Score);
-
         public BindableList<TournamentMatch> Matches = new BindableList<TournamentMatch>();
         public BindableList<TournamentRound> Rounds = new BindableList<TournamentRound>();
         public BindableList<TournamentTeam> Teams = new BindableList<TournamentTeam>();
@@ -58,8 +56,6 @@ namespace osu.Game.Tournament.Models
         public Bindable<bool> InvertScoreColour = new BindableBool();
 
         public Bindable<bool> UseAlternateChatSource = new BindableBool();
-
-        public Bindable<bool> UseExternalStageDisplay = new BindableBool();
 
         public BindableList<ModColor> ModColors = new BindableList<ModColor>();
 

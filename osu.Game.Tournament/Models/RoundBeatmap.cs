@@ -13,6 +13,8 @@ namespace osu.Game.Tournament.Models
 
         public string Note = string.Empty;
 
+        public TournamentScoringMode ScoringMode = TournamentScoringMode.Score;
+
         public LegacyMods AllowFreeMods = LegacyMods.None;
 
         [JsonProperty("BeatmapInfo")]

@@ -28,7 +28,7 @@ namespace osu.Game.Tournament.Tests.Screens
             Add(new OsuContextMenuContainer
             {
                 RelativeSizeAxes = Axes.Both,
-                Child = new DrawingsScreen()
+                Child = CreateScreenPreview(new DrawingsScreen())
             });
         }
     }

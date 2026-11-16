@@ -11,11 +11,9 @@ using osu.Framework.Extensions;
 using osu.Framework.Graphics;
 using osu.Framework.Logging;
 using osu.Framework.Threading;
-using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.Legacy;
 using osu.Game.Rulesets;
 using osu.Game.Rulesets.Difficulty;
-using osu.Game.Rulesets.Mods;
 using osu.Game.Scoring;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.Models;
@@ -54,7 +52,7 @@ namespace osu.Game.Tournament.Components
         {
             bindScoresToIPC();
             CurrentlyListening.BindTo(ipc.HasActiveMatch);
-            ladder.ScoringMode.BindValueChanged(_ => updateScores(), true);
+            ipc.ScoringMode.BindValueChanged(_ => updateScores(), true);
 
             ipc.State.BindValueChanged(state =>
             {
@@ -171,7 +169,7 @@ namespace osu.Game.Tournament.Components
             int[] redTeamIds = getTeamIds(TeamColour.Red);
             int[] blueTeamIds = getTeamIds(TeamColour.Blue);
 
-            if (ladder.ScoringMode.Value == TournamentScoringMode.Score)
+            if (ipc.ScoringMode.Value == TournamentScoringMode.Score)
             {
                 score1 = scores.Where(s => redTeamIds.Contains(s.UserId)).Sum(s => calculateLegacyScore(s.ScoreInfo));
                 score2 = scores.Where(s => blueTeamIds.Contains(s.UserId)).Sum(s => calculateLegacyScore(s.ScoreInfo));

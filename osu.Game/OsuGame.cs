@@ -75,6 +75,7 @@ using osu.Game.Screens.Play;
 using osu.Game.Screens.Play.Leaderboards;
 using osu.Game.Screens.Ranking;
 using osu.Game.Screens.Select;
+using osu.Game.Screens.Tournament.GameplayScreenResultsScreen;
 using osu.Game.Seasonal;
 using osu.Game.Skinning;
 using osu.Game.Updater;
@@ -903,7 +904,7 @@ namespace osu.Game
                         break;
 
                     case ScorePresentType.Results:
-                        screen.Push(new SoloResultsScreen(databasedScore.ScoreInfo));
+                        screen.Push(IsTournament ? new TournamentResultsScreen(databasedScore.ScoreInfo, true) : new SoloResultsScreen(databasedScore.ScoreInfo));
                         break;
                 }
             }, validScreens: validScreens);

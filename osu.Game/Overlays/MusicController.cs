@@ -543,7 +543,7 @@ namespace osu.Game.Overlays
 
         private void onTrackCompleted()
         {
-            if (!CurrentTrack.Looping && !beatmap.Disabled && AllowTrackControl.Value)
+            if (!CurrentTrack.Looping && !beatmap.Disabled && AllowTrackControl.Value && !OsuGameBase.IsTournament)
                 NextTrack(allowProtectedTracks: true);
         }
 

@@ -90,6 +90,29 @@ namespace osu.Game.Rulesets.Osu.UI
 
         protected override ReplayInputHandler CreateReplayInputHandler(Replay replay) => new OsuFramedReplayInputHandler(replay);
 
+        public override void SetReplayInput(Replay replay)
+        {
+            if (HasReplayLoaded.Value || HasTestPlayerInput)
+                throw new InvalidOperationException("An input source is already attached.");
+
+            var driver = new OsuReplayInputDriver(replay, KeyBindingInputManager, Playfield.GamefieldToScreenSpace);
+            HasTestPlayerInput = true;
+            KeyBindingInputManager.AllowGameplayInputs = false;
+            KeyBindingInputManager.AllowUserCursorMovement = false;
+            KeyBindingInputManager.UseParentInput = false;
+            UseResumeOverlay = false;
+
+            // Run on the local gameplay clock, like Autopilot/Relax. This deliberately
+            // does not attach a ReplayInputHandler or take control of the frame clock.
+            Playfield.OnUpdate += _ => driver.Update(FrameStableClock.CurrentTime);
+            IsPaused.BindValueChanged(paused =>
+            {
+                if (paused.NewValue)
+                    driver.Release();
+            });
+            Playfield.Cursor?.Show();
+        }
+
         protected override ReplayRecorder CreateReplayRecorder(Score score) => new OsuReplayRecorder(score);
 
         public override double GameplayStartTime

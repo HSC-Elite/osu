@@ -13,7 +13,6 @@ using osu.Framework.Platform;
 using osu.Game;
 using osu.Game.IPC;
 using osu.Game.Tournament;
-using osu.Game.Tournament.MultiWindow;
 using SDL;
 using Velopack;
 
@@ -77,9 +76,6 @@ namespace osu.Desktop
 
             string gameName = base_game_name;
             bool tournamentClient = true;
-            TournamentWindowRole tournamentWindowRole = TournamentWindowRole.Primary;
-            string? tournamentSyncLocalPipe = null;
-            string? tournamentSyncRemotePipe = null;
 
             foreach (string arg in args)
             {
@@ -98,19 +94,6 @@ namespace osu.Desktop
                         tournamentClient = false;
                         break;
 
-                    case "--tournament-control-window":
-                    case "--tournament-stage-window":
-                        tournamentWindowRole = TournamentWindowRole.Control;
-                        break;
-
-                    case "--tournament-sync-local":
-                        tournamentSyncLocalPipe = val;
-                        break;
-
-                    case "--tournament-sync-remote":
-                        tournamentSyncRemotePipe = val;
-                        break;
-
                     case "--debug-client-id":
                         if (!DebugUtils.IsDebugBuild)
                             throw new InvalidOperationException("Cannot use this argument in a non-debug build.");
@@ -121,12 +104,6 @@ namespace osu.Desktop
                         gameName = $"{base_game_name}-{clientID}";
                         break;
                 }
-            }
-
-            if (tournamentClient && tournamentWindowRole == TournamentWindowRole.Primary)
-            {
-                tournamentSyncLocalPipe ??= $"tournament-main";
-                tournamentSyncRemotePipe ??= $"tournament-control";
             }
 
             var hostOptions = new HostOptions
@@ -143,7 +120,7 @@ namespace osu.Desktop
                         return;
 
                     // we want to allow multiple instances to be started when in debug.
-                    if (!DebugUtils.IsDebugBuild && tournamentWindowRole != TournamentWindowRole.Control)
+                    if (!DebugUtils.IsDebugBuild)
                     {
                         Logger.Log(@"osu! does not support multiple running instances.", LoggingTarget.Runtime, LogLevel.Error);
                         return;
@@ -165,26 +142,7 @@ namespace osu.Desktop
                 }
 
                 if (tournamentClient)
-                {
-                    if (tournamentWindowRole == TournamentWindowRole.Control)
-                    {
-                        host.Run(new TournamentControlGame
-                        {
-                            LocalSyncPipeName = tournamentSyncLocalPipe,
-                            RemoteSyncPipeName = tournamentSyncRemotePipe,
-                        });
-                    }
-                    else
-                    {
-                        host.Run(new TournamentGame
-                        {
-                            IsFirstRun = isFirstRun,
-                            WindowRole = tournamentWindowRole,
-                            LocalSyncPipeName = tournamentSyncLocalPipe,
-                            RemoteSyncPipeName = tournamentSyncRemotePipe,
-                        });
-                    }
-                }
+                    host.Run(new TournamentGame { IsFirstRun = isFirstRun });
                 else
                 {
                     host.Run(new OsuGameDesktop(args)

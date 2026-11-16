@@ -51,11 +51,11 @@ namespace osu.Game.Tournament.Tests.Screens
         [BackgroundDependencyLoader]
         private void load()
         {
-            Add(new SeedingScreen
+            Add(CreateScreenPreview(new SeedingScreen
             {
                 FillMode = FillMode.Fit,
                 FillAspectRatio = 16 / 9f
-            });
+            }));
         }
 
         [Test]

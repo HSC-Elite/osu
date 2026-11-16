@@ -23,6 +23,9 @@ namespace osu.Game.Tournament.Models
         public Bindable<TeamColour?> Winner = new Bindable<TeamColour?>();
 
         public int BeatmapID;
+
+        // A stable position keeps later stages intact when an earlier choice is removed.
+        public int? FlowStepIndex;
     }
 
     [JsonConverter(typeof(StringEnumConverter))]

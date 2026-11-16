@@ -22,8 +22,6 @@ namespace osu.Game.Tournament.Components
 
         protected override Container<Drawable> Content => buttons;
 
-        public IEnumerable<Drawable> PanelItems => buttons.Children;
-
         public ControlPanel(bool stageScreen = false)
         {
             RelativeSizeAxes = stageScreen ? Axes.Both : Axes.Y;

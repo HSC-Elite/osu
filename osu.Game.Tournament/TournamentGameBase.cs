@@ -23,7 +23,6 @@ using osu.Game.Configuration;
 using osu.Game.Database;
 using osu.Game.Graphics;
 using osu.Game.Online;
-using osu.Game.Online.API;
 using osu.Game.Online.API.Requests;
 using osu.Game.Online.Metadata;
 using osu.Game.Online.Spectator;
@@ -32,11 +31,11 @@ using osu.Game.Tournament.StableClient.IPC;
 using osu.Game.Online.Multiplayer;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Screens.OnlinePlay;
+using osu.Game.Screens.Tournament;
 using osu.Game.Tournament.Components;
 using osu.Game.Tournament.Configuration;
 using osu.Game.Tournament.IO;
 using osu.Game.Tournament.IPC;
-using osu.Game.Tournament.MultiWindow;
 using osu.Game.Tournament.Models;
 using osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea;
 using osu.Game.Users;
@@ -55,11 +54,6 @@ namespace osu.Game.Tournament
         private MatchIPCInfo ipc = null!;
         private TournamentMatchScoreProcessor scoreProcessor = null!;
         private BeatmapLookupCache beatmapCache = null!;
-
-        [Cached]
-        protected readonly TournamentStageState StageState = new TournamentStageState();
-
-        public TournamentWindowRole WindowRole { get; init; } = TournamentWindowRole.Primary;
 
         [Resolved]
         private GameHost host { get; set; } = null!;
@@ -81,9 +75,9 @@ namespace osu.Game.Tournament
         internal void ReconnectOnlineClients()
         {
             Task.WhenAll(
-                MultiplayerClient.Reconnect(),
-                SpectatorClient.Reconnect(),
-                dependencies.Get<MetadataClient>().Reconnect())
+                    MultiplayerClient.Reconnect(),
+                    SpectatorClient.Reconnect(),
+                    dependencies.Get<MetadataClient>().Reconnect())
                 .FireAndForget();
         }
 
@@ -95,25 +89,12 @@ namespace osu.Game.Tournament
             return new ProductionEndpointConfiguration();
         }
 
-        protected override IAPIProvider CreateAPIProvider(EndpointConfiguration endpoints)
-        {
-            if (WindowRole != TournamentWindowRole.Control)
-                return base.CreateAPIProvider(endpoints);
-
-            var dummyAPI = new DummyAPIAccess();
-            dummyAPI.Logout();
-            return dummyAPI;
-        }
-
         public override void SetHost(GameHost host)
         {
             base.SetHost(host);
 
             if (host.Window != null)
-            {
-                string suffix = WindowRole == TournamentWindowRole.Control ? " [Control]" : string.Empty;
-                host.Window.Title = $"HSC - Tournamnet 20w14∞ [{randomTitle}] {versionSniffer} 版本:{Version} [stable 比赛用] {suffix}";
-            }
+                host.Window.Title = $"HSC - Tournamnet 20w14∞ [{randomTitle}] {versionSniffer} 版本:{Version} [stable 比赛用]";
         }
 
         private static readonly string[] titles =
@@ -143,7 +124,7 @@ namespace osu.Game.Tournament
         }
 
         [BackgroundDependencyLoader]
-        private void load(Storage baseStorage)
+        private void load(Storage baseStorage, GameHost host)
         {
             Add(initialisationText = new TournamentSpriteText
             {
@@ -178,6 +159,9 @@ namespace osu.Game.Tournament
 
             // Transfer any runtime changes back to configuration file.
             SkinManager.CurrentSkinInfo.ValueChanged += skin => configSkin.Value = skin.NewValue.ID.ToString();
+
+            host.MaximumInactiveHz = 300;
+            host.UpdateThread.InactiveHz = 600;
         }
 
         protected override void LoadComplete()
@@ -284,8 +268,6 @@ namespace osu.Game.Tournament
 
                     SaveChanges();
                 });
-
-                ladder.FrameRate.BindValueChanged(f => host.MaximumInactiveHz = Math.Max(f.NewValue, 60), true);
             }
             catch (Exception e)
             {
@@ -305,6 +287,7 @@ namespace osu.Game.Tournament
                 dependencies.CacheAs((StableMatchIPCInfo)ipc);
                 dependencies.CacheAs<ISpectatorDataSource>(((StableMatchIPCInfo)ipc).SpectatorDataSource);
                 dependencies.CacheAs(ipc);
+                dependencies.CacheAs<ITeamColorProvider>(ipc);
                 dependencies.Cache(scoreProcessor = new TournamentMatchScoreProcessor());
                 Add(ipc);
                 Add(scoreProcessor);
@@ -521,12 +504,12 @@ namespace osu.Game.Tournament
         public async Task DownloadAllRoundBeatmapOsuFile(bool forceRedownload, IProgress<BeatmapDownloadProgress>? progress = null, CancellationToken cancellationToken = default)
         {
             TournamentBeatmap[] allRoundBeatmaps = ladder.Rounds
-                                                           .SelectMany(r => r.Beatmaps)
-                                                           .Where(b => b.ID != 0 && b.Beatmap != null && b.Beatmap.OnlineID != 0)
-                                                           .Select(b => b.Beatmap!)
-                                                           .GroupBy(b => b.OnlineID)
-                                                           .Select(g => g.First())
-                                                           .ToArray();
+                                                         .SelectMany(r => r.Beatmaps)
+                                                         .Where(b => b.ID != 0 && b.Beatmap != null && b.Beatmap.OnlineID != 0)
+                                                         .Select(b => b.Beatmap!)
+                                                         .GroupBy(b => b.OnlineID)
+                                                         .Select(g => g.First())
+                                                         .ToArray();
 
             int failedMap = 0;
 

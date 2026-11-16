@@ -58,7 +58,7 @@ namespace osu.Game.Tests.Visual.OnlinePlay
         protected void Cache(object instance)
         {
             dependencies.Cache(instance);
-            if (instance is Drawable drawable)
+            if (instance is Drawable drawable && !drawableComponents.Contains(drawable))
                 drawableComponents.Add(drawable);
         }
 
@@ -66,7 +66,8 @@ namespace osu.Game.Tests.Visual.OnlinePlay
             where T : class
         {
             dependencies.CacheAs(instance);
-            if (instance is Drawable drawable)
+            // One component can be cached under multiple service interfaces.
+            if (instance is Drawable drawable && !drawableComponents.Contains(drawable))
                 drawableComponents.Add(drawable);
         }
     }

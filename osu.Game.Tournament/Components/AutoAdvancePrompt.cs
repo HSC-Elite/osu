@@ -6,6 +6,7 @@ using osu.Framework.Allocation;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Game.Graphics;
+using osuTK;
 
 namespace osu.Game.Tournament.Components
 {
@@ -32,11 +33,12 @@ namespace osu.Game.Tournament.Components
                     AutoSizeAxes = Axes.Y,
                     RelativeSizeAxes = Axes.X,
                     Direction = FillDirection.Vertical,
+                    Spacing = new Vector2(0, 5),
                     Children = new Drawable[]
                     {
                         promptText = new TournamentSpriteText
                         {
-                            Font = OsuFont.GetFont(size: 10),
+                            Font = OsuFont.GetFont(size: 18),
                         },
                         new TourneyButton
                         {

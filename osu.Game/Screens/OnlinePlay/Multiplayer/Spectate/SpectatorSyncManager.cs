@@ -55,6 +55,20 @@ namespace osu.Game.Screens.OnlinePlay.Multiplayer.Spectate
 
         private double? firstStartAttemptTime;
 
+        /// <summary>
+        /// Wait for the slowest player and maintain a replay buffer instead of following the fastest player.
+        /// </summary>
+        public bool FollowSlowest { get; set; }
+
+        public double MinimumBufferDuration { get; set; } = 1000;
+        public double BufferDuration { get; set; } = 3000;
+        public double BufferTimeout { get; set; } = 20000;
+
+        private readonly Dictionary<SpectatorPlayerClock, Func<double>> availableTimes = new Dictionary<SpectatorPlayerClock, Func<double>>();
+        private readonly Dictionary<SpectatorPlayerClock, double> blockedSince = new Dictionary<SpectatorPlayerClock, double>();
+        private readonly HashSet<SpectatorPlayerClock> excludedClocks = new HashSet<SpectatorPlayerClock>();
+        private bool buffering;
+
         public SpectatorSyncManager(GameplayClockContainer master)
         {
             masterClock = master;
@@ -63,11 +77,14 @@ namespace osu.Game.Screens.OnlinePlay.Multiplayer.Spectate
         /// <summary>
         /// Create a new managed <see cref="SpectatorPlayerClock"/>.
         /// </summary>
+        /// <param name="getAvailableTime">Latest available replay time, or positive infinity when all frames have arrived.</param>
         /// <returns>The newly created <see cref="SpectatorPlayerClock"/>.</returns>
-        public SpectatorPlayerClock CreateManagedClock()
+        public SpectatorPlayerClock CreateManagedClock(Func<double>? getAvailableTime = null)
         {
             var clock = new SpectatorPlayerClock(masterClock);
             playerClocks.Add(clock);
+            if (getAvailableTime != null)
+                availableTimes.Add(clock, getAvailableTime);
             return clock;
         }
 
@@ -78,6 +95,9 @@ namespace osu.Game.Screens.OnlinePlay.Multiplayer.Spectate
         public void RemoveManagedClock(SpectatorPlayerClock clock)
         {
             playerClocks.Remove(clock);
+            availableTimes.Remove(clock);
+            blockedSince.Remove(clock);
+            excludedClocks.Remove(clock);
             Logger.Log($"Removing managed clock from {nameof(SpectatorSyncManager)} ({playerClocks.Count} remain)");
             clock.IsRunning = false;
         }
@@ -174,6 +194,50 @@ namespace osu.Game.Screens.OnlinePlay.Multiplayer.Spectate
             }
         }
 
+        private bool shouldWaitForSlowest()
+        {
+            bool mustWait = false;
+            double requiredBuffer = buffering ? Math.Max(MinimumBufferDuration, BufferDuration) : MinimumBufferDuration;
+
+            foreach (var clock in playerClocks)
+            {
+                double available = availableTimes.TryGetValue(clock, out var getAvailableTime) ? getAvailableTime() : double.PositiveInfinity;
+                double buffer = available - masterClock.CurrentTime;
+
+                if (excludedClocks.Contains(clock))
+                {
+                    // A recovered player must have both caught up and replenished its buffer before it can hold up others again.
+                    if (clock.WaitingOnFrames || clock.IsCatchingUp || buffer < Math.Max(MinimumBufferDuration, BufferDuration))
+                        continue;
+
+                    excludedClocks.Remove(clock);
+                    Logger.Log($"{nameof(SpectatorSyncManager)}: recovered player rejoined synchronisation");
+                }
+
+                if (!clock.WaitingOnFrames && !clock.IsCatchingUp && buffer >= requiredBuffer)
+                {
+                    blockedSince.Remove(clock);
+                    continue;
+                }
+
+                // This component uses the screen clock, not the paused gameplay clock.
+                if (!blockedSince.TryGetValue(clock, out double since))
+                    blockedSince[clock] = since = Time.Current;
+
+                if (Time.Current - since >= BufferTimeout)
+                {
+                    excludedClocks.Add(clock);
+                    blockedSince.Remove(clock);
+                    Logger.Log($"{nameof(SpectatorSyncManager)}: player excluded from synchronisation after buffer timeout");
+                    continue;
+                }
+
+                mustWait = true;
+            }
+
+            return buffering = mustWait;
+        }
+
         /// <summary>
         /// Updates the state of the master clock.
         /// </summary>
@@ -181,7 +245,9 @@ namespace osu.Game.Screens.OnlinePlay.Multiplayer.Spectate
         {
             // Clocks are removed as players complete the beatmap.
             // Once there are no clocks we want to make sure the track plays out to the end.
-            MasterClockState newState = playerClocks.Count == 0 || playerClocks.Any(s => !s.IsCatchingUp) ? MasterClockState.Synchronised : MasterClockState.TooFarAhead;
+            MasterClockState newState = FollowSlowest
+                ? (shouldWaitForSlowest() ? MasterClockState.TooFarAhead : MasterClockState.Synchronised)
+                : (playerClocks.Count == 0 || playerClocks.Any(s => !s.IsCatchingUp) ? MasterClockState.Synchronised : MasterClockState.TooFarAhead);
 
             if (masterState == newState)
                 return;

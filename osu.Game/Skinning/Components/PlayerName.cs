@@ -11,6 +11,7 @@ using osu.Game.Graphics.Sprites;
 using osu.Game.Online.API;
 using osu.Game.Online.API.Requests.Responses;
 using osu.Game.Screens.Play;
+using osu.Game.Screens.Tournament;
 
 namespace osu.Game.Skinning.Components
 {
@@ -28,7 +29,12 @@ namespace osu.Game.Skinning.Components
         [Resolved]
         private IAPIProvider api { get; set; } = null!;
 
+        [Resolved]
+        private ITeamColorProvider? teamColorProvider { get; set; }
+
         private IBindable<APIUser>? apiUser;
+
+        protected override bool OverrideUserTextColor => teamColorProvider != null;
 
         public PlayerName()
         {
@@ -48,11 +54,26 @@ namespace osu.Game.Skinning.Components
         private void load()
         {
             if (gameplayState != null)
+            {
                 text.Text = gameplayState.Score.ScoreInfo.User.Username;
+
+                if (teamColorProvider != null)
+                {
+                    SetTextColour(teamColorProvider.GetTeamColor(gameplayState.Score.ScoreInfo.UserID));
+                }
+            }
             else
             {
                 apiUser = api.LocalUser.GetBoundCopy();
-                apiUser.BindValueChanged(u => text.Text = u.NewValue.Username, true);
+                apiUser.BindValueChanged(u =>
+                {
+                    text.Text = u.NewValue.Username;
+
+                    if (teamColorProvider != null)
+                    {
+                        SetTextColour(teamColorProvider.GetTeamColor(u.NewValue.Id));
+                    }
+                }, true);
             }
         }
 

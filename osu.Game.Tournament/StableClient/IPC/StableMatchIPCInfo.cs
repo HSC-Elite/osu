@@ -491,7 +491,7 @@ namespace osu.Game.Tournament.StableClient.IPC
             }
         }
 
-        protected override int[] GetTeamIds(TeamColour colour)
+        public override int[] GetTeamIds(TeamColour colour)
             => RoomPlayers.Where(player => player.Team == colour).Select(player => player.UserId).ToArray();
 
         public override bool SupportsAuthoritativeScores => false;
