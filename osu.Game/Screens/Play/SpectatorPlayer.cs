@@ -20,6 +20,8 @@ namespace osu.Game.Screens.Play
 
         private readonly Score score;
 
+        public SpectatorFrameBuffer? FrameBuffer { get; set; }
+
         // Retained for derived multiplayer players; the base spectator message is intentionally not shown.
         public bool ShowSettingsOverlay { get; init; } = true;
 
@@ -47,9 +49,13 @@ namespace osu.Game.Screens.Play
         {
             base.StartGameplay();
 
-            // Start gameplay along with the very first arrival frame (the latest one).
-            score.Replay.Frames.Clear();
-            SpectatorClient.OnNewFrames += userSentFrames;
+            if (FrameBuffer != null)
+                FrameBuffer.Attach(bundle => userSentFrames(score.ScoreInfo.User.OnlineID, bundle));
+            else
+            {
+                score.Replay.Frames.Clear();
+                SpectatorClient.OnNewFrames += userSentFrames;
+            }
         }
 
         private void userSentFrames(int userId, FrameDataBundle bundle)
@@ -101,6 +107,7 @@ namespace osu.Game.Screens.Play
 
         public override bool OnExiting(ScreenExitEvent e)
         {
+            FrameBuffer?.Dispose();
             SpectatorClient.OnNewFrames -= userSentFrames;
 
             return base.OnExiting(e);
@@ -109,6 +116,8 @@ namespace osu.Game.Screens.Play
         protected override void Dispose(bool isDisposing)
         {
             base.Dispose(isDisposing);
+
+            FrameBuffer?.Dispose();
 
             if (SpectatorClient.IsNotNull())
                 SpectatorClient.OnNewFrames -= userSentFrames;

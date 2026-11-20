@@ -13,6 +13,7 @@ using osu.Framework.Graphics.Containers;
 using osu.Framework.Logging;
 using osu.Game.Beatmaps;
 using osu.Game.Graphics.UserInterface;
+using osu.Game.Online.Spectator;
 using osu.Game.Rulesets;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Scoring;
@@ -57,6 +58,8 @@ namespace osu.Game.Screens.OnlinePlay.Multiplayer.Spectate
         /// The currently-loaded score.
         /// </summary>
         public Score? Score { get; private set; }
+
+        public SpectatorFrameBuffer? FrameBuffer { get; set; }
 
         [Resolved]
         private BeatmapManager beatmapManager { get; set; } = null!;
@@ -123,6 +126,7 @@ namespace osu.Game.Screens.OnlinePlay.Multiplayer.Spectate
                 stack.Push(new MultiSpectatorPlayerLoader(Score, () =>
                 {
                     var player = CreatePlayer(Score, SpectatorPlayerClock);
+                    player.FrameBuffer = FrameBuffer;
                     player.OnGameplayStarted += () => OnGameplayStarted?.Invoke();
 
                     clockAdjustmentsFromMods.BindAdjustments(player.ClockAdjustmentsFromMods);
@@ -173,6 +177,7 @@ namespace osu.Game.Screens.OnlinePlay.Multiplayer.Spectate
         protected override void Dispose(bool isDisposing)
         {
             base.Dispose(isDisposing);
+            FrameBuffer?.Dispose();
             loadedTrack?.Dispose();
         }
 

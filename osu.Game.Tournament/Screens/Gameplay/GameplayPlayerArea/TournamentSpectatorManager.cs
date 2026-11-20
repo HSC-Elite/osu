@@ -482,6 +482,9 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
             clocksByUserId[userId] = clock;
             var presentation = playerPresentationFactory.Create(slot, gameplayState.Score, clock, provider);
+            if (presentation is TournamentPlayerGameplayScreen gameplayScreen)
+                gameplayScreen.PlayerArea.FrameBuffer = new SpectatorFrameBuffer(spectatorDataSource, userId);
+
             presentation.GameplayEnded += () => Schedule(() =>
             {
                 if (slotsByUserId.TryGetValue(userId, out var currentSlot) && currentSlot.GameplayPresentation == presentation)
