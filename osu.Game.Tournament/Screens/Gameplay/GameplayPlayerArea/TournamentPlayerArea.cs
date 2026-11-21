@@ -4,6 +4,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using osu.Framework.Allocation;
+using osu.Framework.Graphics;
 using osu.Game.Scoring;
 using osu.Game.Screens.OnlinePlay.Multiplayer.Spectate;
 using osu.Game.Screens.Play.Leaderboards;
@@ -11,6 +12,7 @@ using osu.Game.Screens.Ranking;
 using osu.Game.Screens.Tournament.GameplayScreenResultsScreen;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.Models;
+using osuTK.Graphics;
 
 namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 {
@@ -18,12 +20,28 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
     {
         private readonly IGameplayLeaderboardProvider leaderboard;
         private readonly bool mirrored;
+        private bool clockPaused;
 
         public TournamentPlayerArea(int userId, SpectatorPlayerClock clock, IGameplayLeaderboardProvider leaderboard, bool mirrored)
             : base(userId, clock)
         {
             this.leaderboard = leaderboard;
             this.mirrored = mirrored;
+        }
+
+        protected override void UpdateAfterChildren()
+        {
+            base.UpdateAfterChildren();
+
+            // IsRunning alone does not reflect a stopped master clock. Observe whether
+            // the player clock actually advanced, including while waiting for other players.
+            bool paused = PlayerLoaded && (!SpectatorPlayerClock.IsRunning || SpectatorPlayerClock.ElapsedFrameTime == 0);
+            if (paused == clockPaused)
+                return;
+
+            clockPaused = paused;
+            // This area uses the screen clock, so the fade continues while gameplay is paused.
+            this.FadeColour(paused ? new Color4(0.7f, 0.7f, 0.7f, 1) : Color4.White, 300, Easing.OutQuint);
         }
 
         protected override MultiSpectatorPlayer CreatePlayer(Score score, SpectatorPlayerClock clock)

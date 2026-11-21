@@ -56,7 +56,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                 PlayerArea.LoadScore(score);
         }
 
-        public override void MarkFailedOrQuit() => PlayerArea.FadeColour(Colour4.Gray, 400, Easing.OutQuint);
+        public override void MarkFailedOrQuit() => this.FadeColour(Colour4.Gray, 400, Easing.OutQuint);
 
         public override void ForceToResult()
         {
