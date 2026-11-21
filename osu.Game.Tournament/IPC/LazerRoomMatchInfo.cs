@@ -219,6 +219,7 @@ namespace osu.Game.Tournament.IPC
             client.UserKicked += onUserKicked;
             client.UserStateChanged += onUserStateChanged;
             client.ResultsReady += onResultsReady;
+            client.MatchEvent += onMatchEvent;
         }
 
         private void onUserJoined(MultiplayerRoomUser user) => updateUsers();
@@ -333,6 +334,21 @@ namespace osu.Game.Tournament.IPC
                 return;
 
             Scheduler.AddOnce(updateGameplayState);
+        }
+
+        private void onMatchEvent(MatchServerEvent ev)
+        {
+            if (joinedChatChannel == null)
+                return;
+
+            switch (ev)
+            {
+                case RollEvent rollEvent:
+                    var user = client.Room?.Users.SingleOrDefault(u => u.UserID == rollEvent.UserID)?.User ?? APIUser.UnknownUser(rollEvent.UserID);
+                    string text = $"{user.Username} 掷出了 {rollEvent.Result} 点（最大 {rollEvent.Max} 点）。";;
+                    joinedChatChannel.AddNewMessages(new InfoMessage(text));
+                    break;
+            }
         }
 
         private void updateGameplayState()
@@ -510,6 +526,7 @@ namespace osu.Game.Tournament.IPC
                 client.UserKicked -= onUserKicked;
                 client.UserStateChanged -= onUserStateChanged;
                 client.ResultsReady -= onResultsReady;
+                client.MatchEvent -= onMatchEvent;
             }
 
             if (joiningRoom)
