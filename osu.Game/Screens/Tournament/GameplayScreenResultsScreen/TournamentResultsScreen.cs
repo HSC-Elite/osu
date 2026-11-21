@@ -172,6 +172,7 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
             private Container placementBadge = null!;
             private StatisticCounter placementText = null!;
             private StatisticCounter performanceText = null!;
+            private StarRatingDisplay starRatingDisplay = null!;
             private AccuracyCircle accuracyCircle = null!;
             private Drawable header = null!;
             private Drawable beatmapInformation = null!;
@@ -179,7 +180,7 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
             private Box scoreStripBackground = null!;
             private GridContainer scoreStripText = null!;
             private ScoreRank? headerRank;
-            private CancellationTokenSource? performanceCancellation;
+            private CancellationTokenSource? calculationCancellation;
 
             public ResultCard(ScoreInfo? score, bool mirrored)
             {
@@ -224,24 +225,42 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                     },
                 };
 
-                if (!score.PP.HasValue && score.BeatmapInfo != null)
+                if (score.BeatmapInfo != null)
                 {
-                    performanceCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken ?? CancellationToken.None);
-                    var token = performanceCancellation.Token;
+                    calculationCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken ?? CancellationToken.None);
+                    var token = calculationCancellation.Token;
 
                     Task.Run(async () =>
                     {
                         var attributes = await difficultyCache.GetDifficultyAsync(score.BeatmapInfo, score.Ruleset, score.Mods, token).ConfigureAwait(false);
+                        token.ThrowIfCancellationRequested();
+
+                        if (attributes == null)
+                            return;
+
+                        Schedule(() =>
+                        {
+                            if (!token.IsCancellationRequested)
+                                starRatingDisplay.Current.Value = attributes.Value;
+                        });
+
+                        if (score.PP.HasValue)
+                            return;
+
                         var performanceCalculator = score.Ruleset.CreateInstance().CreatePerformanceCalculator();
 
                         // Calculation requires the beatmap and ruleset to be locally available.
-                        if (attributes?.DifficultyAttributes == null || performanceCalculator == null)
+                        if (attributes.Value.DifficultyAttributes == null || performanceCalculator == null)
                             return;
 
                         var result = await performanceCalculator.CalculateAsync(score, attributes.Value.DifficultyAttributes, token).ConfigureAwait(false);
 
                         token.ThrowIfCancellationRequested();
-                        Schedule(() => performanceText.SetValue(result.Total));
+                        Schedule(() =>
+                        {
+                            if (!token.IsCancellationRequested)
+                                performanceText.SetValue(result.Total);
+                        });
                     }, token);
                 }
             }
@@ -432,8 +451,8 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
 
             protected override void Dispose(bool isDisposing)
             {
-                performanceCancellation?.Cancel();
-                performanceCancellation?.Dispose();
+                calculationCancellation?.Cancel();
+                calculationCancellation?.Dispose();
                 unbindPositions();
                 leaderboardScores.UnbindAll();
                 placement.UnbindAll();
@@ -870,6 +889,8 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                 string difficulty = score.BeatmapInfo?.DifficultyName ?? string.Empty;
                 string artist = score.BeatmapInfo?.Metadata.Artist ?? string.Empty;
 
+                var starDifficulty = new StarDifficulty(score.BeatmapInfo?.StarRating ?? 0, 0);
+
                 return new FillFlowContainer
                 {
                     Name = "Beatmap information",
@@ -918,7 +939,7 @@ namespace osu.Game.Screens.Tournament.GameplayScreenResultsScreen
                                     {
                                         new Drawable[]
                                         {
-                                            new StarRatingDisplay(new StarDifficulty(score.BeatmapInfo?.StarRating ?? 0, 0), StarRatingDisplaySize.Small)
+                                            starRatingDisplay = new StarRatingDisplay(starDifficulty, StarRatingDisplaySize.Small)
                                             {
                                                 Anchor = Anchor.CentreLeft,
                                                 Origin = Anchor.CentreLeft,
