@@ -66,9 +66,32 @@ namespace osu.Game.Tournament.IPC
 
         public IBindableList<MatchRoomPlayerInfo> RoomPlayers => RoomPlayersInternal;
 
+        // IPC sources can override this when their state is controlled externally.
+        internal virtual bool UsesLocalGameplayCompletion => true;
+
+        internal bool ServerResultsReady { get; private set; }
+
+        protected void NotifyServerResultsReady()
+        {
+            if (State.Value is TourneyState.WaitingForClients or TourneyState.Playing or TourneyState.Ranking)
+                ServerResultsReady = true;
+        }
+
+        internal void NotifyGameplayCompleted()
+        {
+            if (UsesLocalGameplayCompletion && State.Value is TourneyState.WaitingForClients or TourneyState.Playing)
+                State.Value = TourneyState.Ranking;
+        }
+
         public MatchIPCInfo()
         {
-            State.BindValueChanged(s => Logger.Log($"Tourney State turn {s.OldValue} to {s.NewValue}"));
+            State.BindValueChanged(s =>
+            {
+                if (s.NewValue is TourneyState.Idle or TourneyState.WaitingForClients)
+                    ServerResultsReady = false;
+
+                Logger.Log($"Tourney State turn {s.OldValue} to {s.NewValue}");
+            });
         }
 
         protected override void LoadComplete()

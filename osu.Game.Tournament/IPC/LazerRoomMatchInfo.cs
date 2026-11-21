@@ -228,14 +228,7 @@ namespace osu.Game.Tournament.IPC
 
         private void onUserStateChanged(MultiplayerRoomUser user, MultiplayerUserState state) => updateUsers();
 
-        private void onResultsReady()
-        {
-            if (State.Value == TourneyState.Playing)
-            {
-                State.Value = TourneyState.Ranking;
-                Logger.Log("Switching to ranking");
-            }
-        }
+        private void onResultsReady() => NotifyServerResultsReady();
 
         private void onUserKicked(MultiplayerRoomUser user)
         {

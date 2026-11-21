@@ -68,6 +68,9 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         private readonly Dictionary<int, APIUser> userMap = new Dictionary<int, APIUser>();
         private readonly Dictionary<int, SpectatorGameplayState> gameplayStates = new Dictionary<int, SpectatorGameplayState>();
         private readonly Dictionary<int, SpectatorPlayerClock> clocksByUserId = new Dictionary<int, SpectatorPlayerClock>();
+        private readonly Dictionary<int, double> lastClockTimes = new Dictionary<int, double>();
+        private double stalledAfterResults;
+        private const double results_stall_timeout = 10000;
         private readonly HashSet<int> watchedUsers = new HashSet<int>();
         private readonly IBindableDictionary<int, SpectatorState> watchedUserStates = new BindableDictionary<int, SpectatorState>();
 
@@ -231,10 +234,14 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         {
             Logger.Log("go ranking");
 
+            var presentations = activePlayerPresentations.ToArray();
             Scheduler.AddDelayed(() =>
             {
-                foreach (var slot in slots.Where(s => s.HasGameplay))
-                    slot.ForceToResult();
+                if (ipc.State.Value != TourneyState.Ranking)
+                    return;
+
+                foreach (var presentation in presentations.Where(p => activePlayerPresentations.Contains(p)))
+                    presentation.ForceToResult();
             }, 5 * 1000);
         }
 
@@ -246,6 +253,41 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
             if (ipc.State.Value == TourneyState.WaitingForClients && HasActiveGameplay && AllGameplaySlotsLoaded)
                 ipc.State.Value = TourneyState.Playing;
+
+            updateResultsStall();
+        }
+
+        private void updateResultsStall()
+        {
+            if (!ipc.UsesLocalGameplayCompletion || !ipc.ServerResultsReady
+                                                 || ipc.State.Value is not (TourneyState.WaitingForClients or TourneyState.Playing))
+            {
+                stalledAfterResults = 0;
+                lastClockTimes.Clear();
+                return;
+            }
+
+            bool advanced = false;
+
+            foreach ((int userId, var clock) in clocksByUserId)
+            {
+                if (!lastClockTimes.TryGetValue(userId, out double previousTime) || clock.CurrentTime > previousTime)
+                    advanced = true;
+
+                lastClockTimes[userId] = clock.CurrentTime;
+            }
+
+            foreach (int userId in lastClockTimes.Keys.Except(clocksByUserId.Keys).ToArray())
+                lastClockTimes.Remove(userId);
+
+            stalledAfterResults = advanced ? 0 : stalledAfterResults + Time.Elapsed;
+            if (stalledAfterResults < results_stall_timeout)
+                return;
+
+            Logger.Log("Spectator clocks stalled after server results; forcing ranking.");
+            ipc.NotifyGameplayCompleted();
+            foreach (var presentation in activePlayerPresentations.ToArray())
+                presentation.ForceToResult();
         }
 
         private void addUser(int userId)
@@ -301,8 +343,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                 return leaderboardProvider;
 
             var players = slotsByUserId.Keys
-                                      .Select(id => findRoomPlayer(id) ?? new MatchRoomPlayerInfo(id, userMap.GetValueOrDefault(id)?.Username, null, null))
-                                      .ToArray();
+                                       .Select(id => findRoomPlayer(id) ?? new MatchRoomPlayerInfo(id, userMap.GetValueOrDefault(id)?.Username, null, null))
+                                       .ToArray();
 
             if (players.Length == 0)
                 return null;
@@ -488,7 +530,11 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             presentation.GameplayEnded += () => Schedule(() =>
             {
                 if (slotsByUserId.TryGetValue(userId, out var currentSlot) && currentSlot.GameplayPresentation == presentation)
+                {
                     removeManagedClock(userId);
+
+                    ipc.NotifyGameplayCompleted();
+                }
             });
 
             slot.StartGameplay(presentation);
@@ -525,6 +571,10 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
         private void PassGameplay(int userId)
         {
+            // Local playback completion must consume buffered frames before entering results.
+            if (ipc.UsesLocalGameplayCompletion)
+                return;
+
             if (slotsByUserId.TryGetValue(userId, out var slot))
             {
                 Scheduler.AddDelayed(() => slot.ForceToResult(), 5 * 1000);

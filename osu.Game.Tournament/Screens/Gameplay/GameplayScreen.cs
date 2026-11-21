@@ -627,8 +627,12 @@ namespace osu.Game.Tournament.Screens.Gameplay
                         break;
 
                     case TourneyState.Ranking:
-                        spectatorManager.OnRanking();
-                        scheduledContract = Scheduler.AddDelayed(contract, 10000);
+                        if (lastState != TourneyState.Ranking)
+                        {
+                            spectatorManager.OnRanking();
+                            scheduledContract = Scheduler.AddDelayed(contract, 10000);
+                        }
+
                         break;
 
                     case TourneyState.WaitingForClients:
