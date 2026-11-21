@@ -11,6 +11,7 @@ using osu.Framework.Graphics.Colour;
 using osu.Framework.Input.Handlers.Mouse;
 using osu.Framework.Logging;
 using osu.Framework.Platform;
+using osu.Game.Beatmaps;
 using osu.Game.Configuration;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Cursor;
@@ -107,6 +108,19 @@ namespace osu.Game.Tournament
 
             if (IsFirstRun)
                 LocalConfig.SetValue(OsuSetting.ReleaseStream, ReleaseStream.LazerMatch);
+        }
+
+        protected override void LoadComplete()
+        {
+            base.LoadComplete();
+
+            Beatmap.BindValueChanged(beatmapChanged, true);
+        }
+
+        private void beatmapChanged(ValueChangedEvent<WorkingBeatmap> beatmap)
+        {
+            beatmap.OldValue?.CancelAsyncLoad();
+            beatmap.NewValue?.BeginAsyncLoad();
         }
 
         [Resolved]
