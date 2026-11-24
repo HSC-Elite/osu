@@ -248,7 +248,7 @@ namespace osu.Game.Tournament
         };
 
         private ScreenButton button<T>(string text, Key? shortcut = null) where T : TournamentScreen
-            => new ScreenButton(typeof(T), shortcut) { Text = text, RequestSelection = SetScreen };
+            => new ScreenButton(typeof(T), shortcut) { Text = text, RequestSelection = type => setScreen(type, switchStageImmediately: false) };
 
         public void SetScreen(Drawable screen)
         {
@@ -262,10 +262,23 @@ namespace osu.Game.Tournament
             updateButtons();
         }
 
-        public void SetScreen(Type screenType)
+        public void SetScreen(Type screenType) => setScreen(screenType, switchStageImmediately: true);
+
+        private void setScreen(Type screenType, bool switchStageImmediately)
         {
-            if (!screens.TryGetValue(screenType, out var target) || ActiveScreen == target)
+            if (!screens.TryGetValue(screenType, out var target))
                 return;
+
+            if (ActiveScreen == target)
+            {
+                if (target is TournamentStageScreen selectedStage)
+                {
+                    switchStage(selectedStage);
+                    updateButtons();
+                }
+
+                return;
+            }
 
             hideConsoleContent();
             temporaryScreen?.Expire();
@@ -273,7 +286,9 @@ namespace osu.Game.Tournament
 
             if (target is TournamentStageScreen stage)
             {
-                switchStage(stage);
+                if (switchStageImmediately)
+                    switchStage(stage);
+
                 consoleContent = controlPanels[stage];
             }
             else
