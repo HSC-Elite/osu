@@ -558,6 +558,9 @@ namespace osu.Game.Tournament.Screens.Gameplay
             spectatorManager.RefreshRoster(playerSlots);
         }
 
+        [Resolved]
+        private TournamentGameBase gameBase { get; set; } = null!;
+
         private void updateState()
         {
             try
@@ -597,6 +600,8 @@ namespace osu.Game.Tournament.Screens.Gameplay
                         CurrentMatch.Value.Team2Score.Value++;
                         lastPick?.Winner.Value = TeamColour.Blue;
                     }
+
+                    gameBase.SaveChanges();
                 }
 
                 switch (State.Value)

@@ -34,6 +34,9 @@ namespace osu.Game.Tournament.Screens.MapPool
         [Resolved]
         private TournamentSceneManager? sceneManager { get; set; }
 
+        [Resolved]
+        private TournamentGameBase gameBase { get; set; } = null!;
+
         private bool selectionEnabled = true;
         private readonly Bindable<TeamColour> firstPickTeam = new Bindable<TeamColour>();
         private TournamentSpriteText flowStatus = null!;
@@ -377,12 +380,14 @@ namespace osu.Game.Tournament.Screens.MapPool
 
             if (IsStageActive && LadderInfo.AutoProgressScreens.Value)
             {
-                if (pickType == ChoiceType.Pick && CurrentMatch.Value.PicksBans.Any(i => i.Type == ChoiceType.Pick) || pickType == ChoiceType.TB)
+                if ((pickType == ChoiceType.Pick && CurrentMatch.Value.PicksBans.Any(i => i.Type == ChoiceType.Pick)) || pickType == ChoiceType.TB)
                 {
                     scheduledScreenChange?.Cancel();
                     sceneManager?.ShowAutoAdvance(scheduledScreenChange = new AutoAdvancePrompt(() => { sceneManager?.SetScreen(typeof(GameplayScreen)); }, 10000));
                 }
             }
+
+            gameBase.SaveChanges();
 
             setNextMode();
         }

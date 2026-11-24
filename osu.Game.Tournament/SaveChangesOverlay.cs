@@ -94,6 +94,8 @@ namespace osu.Game.Tournament
         {
             base.LoadComplete();
             scheduleNextCheck();
+
+            tournamentGame.OnSave += onSave;
         }
 
         private async Task checkForChanges()
@@ -135,10 +137,21 @@ namespace osu.Game.Tournament
         private void saveChanges()
         {
             tournamentGame.SaveChanges();
+        }
+
+        private void onSave()
+        {
             lastSerialisedLadder = tournamentGame.GetSerialisedLadder();
 
             saveChangesButton.Enabled.Value = false;
             saveChangesButton.Background.FadeColour(saveChangesButton.BackgroundColour, 500);
+        }
+
+        protected override void Dispose(bool isDisposing)
+        {
+            base.Dispose(isDisposing);
+
+            tournamentGame.OnSave -= onSave;
         }
 
         private partial class AutoSaveCountDown : ClockDisplay

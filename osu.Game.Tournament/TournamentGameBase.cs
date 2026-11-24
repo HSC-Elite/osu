@@ -52,6 +52,8 @@ namespace osu.Game.Tournament
         private TournamentMatchScoreProcessor scoreProcessor = null!;
         private BeatmapLookupCache beatmapCache = null!;
 
+        public event Action? OnSave;
+
         [Resolved]
         private GameHost host { get; set; } = null!;
 
@@ -468,6 +470,8 @@ namespace osu.Game.Tournament
             using (var stream = storage.CreateFileSafely(BRACKET_FILENAME))
             using (var sw = new StreamWriter(stream))
                 sw.Write(serialisedLadder);
+
+            OnSave?.Invoke();
         }
 
         public string GetSerialisedLadder()
