@@ -37,8 +37,11 @@ namespace osu.Game.Graphics.UserInterface
         }
 
         [BackgroundDependencyLoader]
-        private void load(AudioManager audio)
+        private void load(AudioManager audio, SilentControlsContainer? silentControls)
         {
+            if (silentControls != null)
+                return;
+
             sampleClick = audio.Samples.Get($@"UI/{SampleSet.GetResourceName()}-select")
                           ?? audio.Samples.Get($@"UI/{HoverSampleSet.Default.GetResourceName()}-select");
 

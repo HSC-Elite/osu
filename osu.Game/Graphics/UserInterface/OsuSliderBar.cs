@@ -32,15 +32,16 @@ namespace osu.Game.Graphics.UserInterface
         /// </summary>
         public const int MAX_DECIMAL_DIGITS = 5;
 
-        private Sample sample = null!;
+        private Sample? sample;
 
         private double lastSampleTime;
         private T lastSampleValue;
 
         [BackgroundDependencyLoader]
-        private void load(AudioManager audio)
+        private void load(AudioManager audio, SilentControlsContainer? silentControls)
         {
-            sample = audio.Samples.Get(@"UI/notch-tick");
+            if (silentControls == null)
+                sample = audio.Samples.Get(@"UI/notch-tick");
         }
 
         protected override void LoadComplete()
@@ -60,7 +61,7 @@ namespace osu.Game.Graphics.UserInterface
 
         private void playSample(T value)
         {
-            if (!PlaySamplesOnAdjust)
+            if (!PlaySamplesOnAdjust || sample == null)
                 return;
 
             if (Clock.CurrentTime - lastSampleTime <= 30)

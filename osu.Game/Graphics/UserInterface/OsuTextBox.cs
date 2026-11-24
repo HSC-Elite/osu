@@ -81,7 +81,7 @@ namespace osu.Game.Graphics.UserInterface
         }
 
         [BackgroundDependencyLoader(true)]
-        private void load(OverlayColourProvider? colourProvider, OsuColour colour, AudioManager audio)
+        private void load(OverlayColourProvider? colourProvider, OsuColour colour, AudioManager audio, SilentControlsContainer? silentControls)
         {
             BackgroundUnfocused = colourProvider?.Background5 ?? Color4.Black.Opacity(0.5f);
             BackgroundFocused = colourProvider?.Background4 ?? OsuColour.Gray(0.3f).Opacity(0.8f);
@@ -91,6 +91,9 @@ namespace osu.Game.Graphics.UserInterface
             caret?.SelectionColour = selectionColour;
 
             Placeholder.Colour = colourProvider?.Foreground1 ?? new Color4(180, 180, 180, 255);
+
+            if (silentControls != null)
+                return;
 
             // Note that `KeyBindingRow` uses similar logic for input feedback, so remember to update there if changing here.
             var textAddedSamples = new Sample?[4];
@@ -291,9 +294,7 @@ namespace osu.Game.Graphics.UserInterface
 
         private SampleChannel? getSampleChannel(FeedbackSampleType feedbackSampleType)
         {
-            var samples = sampleMap[feedbackSampleType];
-
-            if (samples.Length == 0)
+            if (!sampleMap.TryGetValue(feedbackSampleType, out var samples) || samples.Length == 0)
                 return null;
 
             return samples[RNG.Next(0, samples.Length)]?.GetChannel();

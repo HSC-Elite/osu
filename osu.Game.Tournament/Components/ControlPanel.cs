@@ -6,6 +6,7 @@ using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Containers;
+using osu.Game.Graphics.UserInterface;
 using osuTK;
 using osuTK.Graphics;
 
@@ -15,7 +16,7 @@ namespace osu.Game.Tournament.Components
     /// An element anchored to the right-hand area of a screen that provides streamer level controls.
     /// Should be off-screen.
     /// </summary>
-    public partial class ControlPanel : Container
+    public partial class ControlPanel : SilentControlsContainer
     {
         private readonly FillFlowContainer buttons;
 

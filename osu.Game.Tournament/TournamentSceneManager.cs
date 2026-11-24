@@ -15,6 +15,7 @@ using osu.Framework.Threading;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Containers;
 using osu.Game.Graphics.Sprites;
+using osu.Game.Graphics.UserInterface;
 using osu.Game.Overlays;
 using osu.Game.Tournament.Components;
 using osu.Game.Tournament.Configuration;
@@ -113,7 +114,7 @@ namespace osu.Game.Tournament
                             },
                         },
                     },
-                    new Container
+                    new SilentControlsContainer
                     {
                         RelativeSizeAxes = Axes.Y,
                         Width = CONTROL_AREA_WIDTH,

@@ -1,8 +1,6 @@
 ﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
-#nullable disable
-
 using osu.Framework.Allocation;
 using osu.Framework.Audio;
 using osu.Framework.Audio.Sample;
@@ -36,8 +34,8 @@ namespace osu.Game.Graphics.UserInterface
         protected readonly Nub Nub;
 
         protected readonly OsuTextFlowContainer LabelTextFlowContainer;
-        private Sample sampleChecked;
-        private Sample sampleUnchecked;
+        private Sample? sampleChecked;
+        private Sample? sampleUnchecked;
 
         public OsuCheckbox(bool nubOnRight = true, float nubSize = Nub.DEFAULT_EXPANDED_SIZE)
         {
@@ -81,8 +79,11 @@ namespace osu.Game.Graphics.UserInterface
         }
 
         [BackgroundDependencyLoader]
-        private void load(AudioManager audio)
+        private void load(AudioManager audio, SilentControlsContainer? silentControls)
         {
+            if (silentControls != null)
+                return;
+
             sampleChecked = audio.Samples.Get(@"UI/check-on");
             sampleUnchecked = audio.Samples.Get(@"UI/check-off");
         }

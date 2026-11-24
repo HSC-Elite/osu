@@ -1,8 +1,6 @@
 ﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
-#nullable disable
-
 using osu.Framework.Allocation;
 using osu.Framework.Audio;
 using osu.Framework.Audio.Sample;
@@ -20,7 +18,7 @@ namespace osu.Game.Graphics.UserInterface
     {
         public readonly Bindable<bool> Enabled = new Bindable<bool>(true);
 
-        private Sample sampleHover;
+        private Sample? sampleHover;
 
         protected readonly HoverSampleSet SampleSet;
 
@@ -31,8 +29,11 @@ namespace osu.Game.Graphics.UserInterface
         }
 
         [BackgroundDependencyLoader]
-        private void load(AudioManager audio)
+        private void load(AudioManager audio, SilentControlsContainer? silentControls)
         {
+            if (silentControls != null)
+                return;
+
             sampleHover = audio.Samples.Get($@"UI/{SampleSet.GetResourceName()}-hover")
                           ?? audio.Samples.Get($@"UI/{HoverSampleSet.Default.GetResourceName()}-hover");
         }
