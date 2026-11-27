@@ -26,6 +26,7 @@ namespace osu.Game.Tournament.Configuration
             SetDefault(StorageConfig.SpectatorMinimumBuffer, 1000, 0, 10000);
             SetDefault(StorageConfig.SpectatorBuffer, 3000, 0, 30000);
             SetDefault(StorageConfig.SpectatorBufferTimeout, 20000, 1000, 120000);
+            SetDefault(StorageConfig.TeamSpeakIdentity, string.Empty);
         }
     }
 
@@ -36,5 +37,6 @@ namespace osu.Game.Tournament.Configuration
         SpectatorMinimumBuffer,
         SpectatorBuffer,
         SpectatorBufferTimeout,
+        TeamSpeakIdentity,
     }
 }

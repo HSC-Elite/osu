@@ -29,6 +29,7 @@ using osu.Game.Online.Multiplayer;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Screens.OnlinePlay;
 using osu.Game.Screens.Tournament;
+using osu.Game.Tournament.Audio;
 using osu.Game.Tournament.Components;
 using osu.Game.Tournament.Configuration;
 using osu.Game.Tournament.IO;
@@ -150,6 +151,10 @@ namespace osu.Game.Tournament
             beatmapCache = dependencies.Get<BeatmapLookupCache>();
 
             Add(ongoingOperationTracker);
+
+            var teamSpeak = new TeamSpeakSession();
+            dependencies.Cache(teamSpeak);
+            Add(teamSpeak);
 
             LocalConfig.BindWith(OsuSetting.Skin, configSkin);
 

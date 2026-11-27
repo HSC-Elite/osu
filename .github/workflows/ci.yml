@@ -25,9 +25,16 @@ jobs:
       - name: Checkout framework
         uses: actions/checkout@v6
         with:
-          repository: shanden-tournament/osu-framework
+          repository: HSC-Elite/osu-framework
           path: osu-framework
           ref: shanden-custom
+
+      - name: Checkout TeamSpeak client library
+        uses: actions/checkout@v6
+        with:
+          repository: HSC-Elite/TS3AudioBot
+          ref: master
+          path: TS3AudioBot
 
       - name: Install .NET 8.0.x
         uses: actions/setup-dotnet@v5
@@ -97,9 +104,16 @@ jobs:
       - name: Checkout framework
         uses: actions/checkout@v6
         with:
-          repository: shanden-tournament/osu-framework
+          repository: HSC-Elite/osu-framework
           path: osu-framework
           ref: shanden-custom
+
+      - name: Checkout TeamSpeak client library
+        uses: actions/checkout@v6
+        with:
+          repository: HSC-Elite/TS3AudioBot
+          ref: master
+          path: TS3AudioBot
 
       - name: Install .NET 8.0.x
         uses: actions/setup-dotnet@v5

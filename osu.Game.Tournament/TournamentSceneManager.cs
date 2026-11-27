@@ -30,6 +30,7 @@ using osu.Game.Tournament.Screens.Schedule;
 using osu.Game.Tournament.Screens.Setup;
 using osu.Game.Tournament.Screens.Showcase;
 using osu.Game.Tournament.Screens.TeamIntro;
+using osu.Game.Tournament.Screens.TeamSpeak;
 using osu.Game.Tournament.Screens.TeamWin;
 using osuTK;
 using osuTK.Graphics;
@@ -87,7 +88,7 @@ namespace osu.Game.Tournament
 
             foreach (var screen in new TournamentScreen[]
                      {
-                         new SetupScreen(), new RoomSelectScreen(), new LadderScreen(), new LadderEditorScreen(),
+                         new SetupScreen(), new TeamSpeakConsoleScreen(), new RoomSelectScreen(), new LadderScreen(), new LadderEditorScreen(),
                          new TeamEditorScreen(), new ModColorEditorScreen(), new ModMultiplierSettingsEditorScreen(),
                          new RoundEditorScreen(), new OsuGameScreen(),
                          new ScheduleScreen(), new TeamIntroScreen(), new SeedingScreen(), new MapPoolScreen(),
@@ -144,6 +145,7 @@ namespace osu.Game.Tournament
                                                 {
                                                     heading("Console"),
                                                     button<SetupScreen>("Setup"),
+                                                    button<TeamSpeakConsoleScreen>("TeamSpeak"),
                                                     button<RoomSelectScreen>("Select Room"),
                                                     button<LadderScreen>("Bracket", Key.B),
                                                     button<TeamEditorScreen>("Team Editor"),
@@ -189,6 +191,12 @@ namespace osu.Game.Tournament
                                 {
                                     RelativeSizeAxes = Axes.Both,
                                     ChildrenEnumerable = screens.Values.OfType<TournamentStageScreen>(),
+                                },
+                                new TeamSpeakSpeakerOverlay
+                                {
+                                    Anchor = Anchor.TopLeft,
+                                    Origin = Anchor.TopLeft,
+                                    Position = new Vector2(16),
                                 },
                                 chatContainer = new Container
                                 {

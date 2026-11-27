@@ -1,0 +1,11 @@
+<Project>
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'win-x64' Or ('$(RuntimeIdentifier)' == '' And '$(OS)' == 'Windows_NT' And '$(PlatformTarget)' != 'x86')">
+    <TeamSpeakOpusArchitecture>x64</TeamSpeakOpusArchitecture>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'win-x86' Or ('$(RuntimeIdentifier)' == '' And '$(OS)' == 'Windows_NT' And '$(PlatformTarget)' == 'x86')">
+    <TeamSpeakOpusArchitecture>x86</TeamSpeakOpusArchitecture>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(TeamSpeakOpusArchitecture)' != ''">
+    <None Include="$(MSBuildThisFileDirectory)..\..\TS3AudioBot\TS3AudioBot\lib\$(TeamSpeakOpusArchitecture)\libopus.dll" Link="libopus.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

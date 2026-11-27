@@ -20,4 +20,5 @@
     <ProjectReference Include="..\osu.Game.Tests\osu.Game.Tests.csproj" />
     <ProjectReference Include="..\osu.Game.Tournament\osu.Game.Tournament.csproj" />
   </ItemGroup>
+  <Import Project="..\osu.Game.Tournament\TeamSpeakOpus.props" />
 </Project>

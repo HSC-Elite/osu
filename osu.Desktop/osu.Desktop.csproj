@@ -35,4 +35,5 @@
   <ItemGroup Label="Windows Icons">
     <Content Include="*.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+  <Import Project="..\osu.Game.Tournament\TeamSpeakOpus.props" />
 </Project>
