@@ -127,13 +127,29 @@ namespace osu.Game.Tournament.IPC
         {
             base.Update();
 
-            int beatmapId = Beatmap.Value?.OnlineID ?? 0;
-            ScoringMode.Value = beatmapId > 0
-                ? Ladder.CurrentMatch.Value?.Round.Value?.Beatmaps.FirstOrDefault(b => b.ID == beatmapId || b.Beatmap?.OnlineID == beatmapId)?.ScoringMode ?? TournamentScoringMode.Score
-                : TournamentScoringMode.Score;
+            ScoringMode.Value = getScoringMode();
 
             if (State.Value == TourneyState.Playing)
                 updateScore();
+        }
+
+        private TournamentScoringMode getScoringMode()
+        {
+            int beatmapId = Beatmap.Value?.OnlineID ?? 0;
+            var beatmaps = Ladder.CurrentMatch.Value?.Round.Value?.Beatmaps;
+
+            if (beatmapId > 0 && beatmaps != null)
+            {
+                for (int i = 0; i < beatmaps.Count; i++)
+                {
+                    var beatmap = beatmaps[i];
+
+                    if (beatmap.ID == beatmapId || beatmap.Beatmap?.OnlineID == beatmapId)
+                        return beatmap.ScoringMode;
+                }
+            }
+
+            return TournamentScoringMode.Score;
         }
 
         private void onBeatmapChanged(ValueChangedEvent<TournamentBeatmap?> beatmap)
@@ -200,28 +216,46 @@ namespace osu.Game.Tournament.IPC
             if (leaderboardProvider == null)
                 return;
 
-            GameplayLeaderboardScore[] team1Score = GetTeamScore(TeamColour.Red).ToArray();
-            GameplayLeaderboardScore[] team2Score = GetTeamScore(TeamColour.Blue).ToArray();
+            var (score1, combo1) = getTeamTotals(TeamColour.Red);
+            var (score2, combo2) = getTeamTotals(TeamColour.Blue);
 
-            if (ScoringMode.Value == TournamentScoringMode.PerformancePoint)
+            Score1.Value = score1;
+            Score2.Value = score2;
+            Team1Combo.Value = combo1;
+            Team2Combo.Value = combo2;
+        }
+
+        private (long Score, int Combo) getTeamTotals(TeamColour colour)
+        {
+            bool usePerformancePoints = ScoringMode.Value == TournamentScoringMode.PerformancePoint;
+            long totalScore = 0;
+            int totalCombo = 0;
+
+            foreach (var score in GetTeamScore(colour))
             {
-                Score1.Value = team1Score.Sum(s => leaderboardProvider!.GetPlayerPerformancePoints((int)s.User.OnlineID));
-                Score2.Value = team2Score.Sum(s => leaderboardProvider!.GetPlayerPerformancePoints((int)s.User.OnlineID));
-            }
-            else
-            {
-                Score1.Value = team1Score.Sum(CalculateModMultiplier);
-                Score2.Value = team2Score.Sum(CalculateModMultiplier);
+                long playerScore = usePerformancePoints
+                    ? leaderboardProvider!.GetPlayerPerformancePoints(score.User.OnlineID)
+                    : calculateModMultiplier(score);
+
+                totalScore = checked(totalScore + playerScore);
+                totalCombo = checked(totalCombo + score.Combo.Value);
             }
 
-            Team1Combo.Value = team1Score.Sum(s => s.Combo.Value);
-            Team2Combo.Value = team2Score.Sum(s => s.Combo.Value);
+            return (totalScore, totalCombo);
         }
 
         protected virtual IEnumerable<GameplayLeaderboardScore> GetTeamScore(TeamColour colour)
         {
             int[] teamIds = GetTeamIds(colour);
-            return leaderboardProvider!.Scores.Where(u => teamIds.Any(t => t == u.User.OnlineID));
+            var scores = leaderboardProvider!.Scores;
+
+            for (int i = 0; i < scores.Count; i++)
+            {
+                var score = scores[i];
+
+                if (Array.IndexOf(teamIds, score.User.OnlineID) >= 0)
+                    yield return score;
+            }
         }
 
         public int[] GetTeamIds(TeamColour colour)
@@ -244,7 +278,7 @@ namespace osu.Game.Tournament.IPC
             return Color4.White;
         }
 
-        private long CalculateModMultiplier(GameplayLeaderboardScore score)
+        private long calculateModMultiplier(GameplayLeaderboardScore score)
         {
             if (!userMultiplierCache.TryGetValue(score.User.OnlineID, out double multiplier))
             {
