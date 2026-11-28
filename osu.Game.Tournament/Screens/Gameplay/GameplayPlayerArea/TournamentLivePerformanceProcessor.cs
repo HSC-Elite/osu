@@ -52,13 +52,15 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         private SpectatorState? spectatorState;
         private TournamentBeatmap? beatmap;
         private RulesetInfo? rulesetInfo;
-        private WorkingBeatmap? workingBeatmap;
+        private APIMod[]? apiMods;
         private Mod[]? mods;
-        private string? modsKey;
+        private ScoreInfo? scoreInfo;
+        private Ruleset? ruleset;
         private Task<List<TimedDifficultyAttributes>?>? timedDifficultyTask;
-        private int currentFrameIndex = -1;
-        private bool needsCalculation;
+        private TimedFrame? lastCalculatedFrame;
         private bool listening;
+
+        private bool isPpScoring => ipc.ScoringMode.Value == TournamentScoringMode.PerformancePoint;
 
         public TournamentLivePerformanceProcessor(int userId)
         {
@@ -84,20 +86,24 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
         private void onUserBeganPlaying(int incomingUserId, SpectatorState state)
         {
-            if (incomingUserId != userId)
-                return;
-
-            Schedule(() => reset(state));
-        }
-
-        private void onNewFrames(int incomingUserId, FrameDataBundle bundle)
-        {
-            if (incomingUserId != userId || bundle.Frames.Count == 0)
+            if (incomingUserId != userId || !isPpScoring)
                 return;
 
             Schedule(() =>
             {
-                if (!IsAlive)
+                if (isPpScoring)
+                    reset(state);
+            });
+        }
+
+        private void onNewFrames(int incomingUserId, FrameDataBundle bundle)
+        {
+            if (incomingUserId != userId || !isPpScoring || bundle.Frames.Count == 0)
+                return;
+
+            Schedule(() =>
+            {
+                if (!IsAlive || !isPpScoring)
                     return;
 
                 if (spectatorState == null && watchedUserStates.TryGetValue(userId, out var state))
@@ -113,8 +119,6 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                     frames[insertionIndex] = frame;
                 else
                     frames.Insert(~insertionIndex, frame);
-
-                needsCalculation = true;
             });
         }
 
@@ -122,7 +126,8 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
         {
             base.Update();
 
-            if (!watchedUserStates.TryGetValue(userId, out var currentState)
+            if (!isPpScoring
+                || !watchedUserStates.TryGetValue(userId, out var currentState)
                 || currentState.BeatmapID == null
                 || currentState.RulesetID == null
                 || currentState.State != SpectatedUserState.Playing)
@@ -135,8 +140,11 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
             if (spectatorState == null || spectatorState.BeatmapID != currentState.BeatmapID || spectatorState.RulesetID != currentState.RulesetID)
                 reset(currentState);
-            else
+            else if (!ReferenceEquals(spectatorState, currentState))
+            {
                 spectatorState = currentState;
+                lastCalculatedFrame = null;
+            }
 
             if (frames.Count == 0)
                 return;
@@ -152,40 +160,19 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
 
             frameIndex = Math.Clamp(frameIndex - 1, 0, frames.Count - 1);
 
-            if (frameIndex != currentFrameIndex)
-            {
-                currentFrameIndex = frameIndex;
-                needsCalculation = true;
-            }
-
-            if (!needsCalculation)
-                return;
-
             TimedFrame currentFrame = frames[frameIndex];
+
+            if (currentFrame == lastCalculatedFrame)
+                return;
 
             FrameHeader header = currentFrame.Header!;
 
-            if (!prepareDifficulty(currentState, header))
+            if (!prepareDifficulty(currentState, header) || timedDifficultyTask?.IsCompleted != true)
                 return;
 
-            if (timedDifficultyTask == null || !timedDifficultyTask.IsCompleted)
-                return;
+            lastCalculatedFrame = currentFrame;
 
-            needsCalculation = false;
-
-            if (workingBeatmap == null)
-            {
-                try
-                {
-                    workingBeatmap = beatmapManager.GetWorkingBeatmap(beatmap!);
-                }
-                catch (System.IO.FileNotFoundException)
-                {
-                    return;
-                }
-            }
-
-            if (!timedDifficultyTask.IsCompletedSuccessfully || workingBeatmap == null || rulesetInfo == null || mods == null)
+            if (!timedDifficultyTask.IsCompletedSuccessfully || ruleset == null)
                 return;
 
             List<TimedDifficultyAttributes>? attributes = timedDifficultyTask.GetResultSafely();
@@ -199,9 +186,29 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
                 attributeIndex = ~attributeIndex - 1;
 
             DifficultyAttributes difficultyAttributes = attributes[Math.Clamp(attributeIndex, 0, attributes.Count - 1)].Attributes;
-            ScoreInfo scoreInfo = createScoreInfo(header, currentState, workingBeatmap, rulesetInfo, mods);
-            PerformanceCalculator? calculator = rulesetInfo.CreateInstance().CreatePerformanceCalculator();
+            if (scoreInfo == null)
+            {
+                try
+                {
+                    var workingBeatmap = beatmapManager.GetWorkingBeatmap(beatmap!);
+                    scoreInfo = new ScoreInfo(workingBeatmap.BeatmapInfo, rulesetInfo!) { Mods = mods! };
+                }
+                catch (System.IO.FileNotFoundException)
+                {
+                    return;
+                }
+            }
 
+            scoreInfo.TotalScore = header.TotalScore;
+            scoreInfo.TotalScoreWithoutMods = header.TotalScoreWithoutMods ?? header.TotalScore;
+            scoreInfo.Accuracy = header.Accuracy;
+            scoreInfo.Combo = header.Combo;
+            scoreInfo.MaxCombo = header.MaxCombo;
+            scoreInfo.Statistics = header.Statistics;
+            scoreInfo.MaximumStatistics = currentState.MaximumStatistics;
+
+            // Some calculators retain intermediate results between calls.
+            var calculator = ruleset.CreatePerformanceCalculator();
             if (calculator != null)
                 PerformancePoints.Value = (long)Math.Round(calculator.Calculate(scoreInfo, difficultyAttributes).Total, MidpointRounding.AwayFromZero);
         }
@@ -218,37 +225,22 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             if (nextBeatmap == null || nextRuleset == null)
                 return false;
 
-            Ruleset ruleset = nextRuleset.CreateInstance();
-            APIMod[] apiMods = header.Mods ?? state.Mods.ToArray();
-            Mod[] nextMods = apiMods.Select(mod => mod.ToMod(ruleset)).ToArray();
-            string nextModsKey = string.Join("|", apiMods.OrderBy(mod => mod.Acronym).Select(mod => mod.ToString()));
+            IEnumerable<APIMod> nextApiMods = header.Mods ?? state.Mods;
 
-            if (beatmap?.OnlineID != nextBeatmap.OnlineID || rulesetInfo?.OnlineID != nextRuleset.OnlineID || modsKey != nextModsKey)
+            if (beatmap?.OnlineID != nextBeatmap.OnlineID || rulesetInfo?.OnlineID != nextRuleset.OnlineID
+                                                           || apiMods == null || !apiMods.SequenceEqual(nextApiMods))
             {
+                ruleset = nextRuleset.CreateInstance();
                 beatmap = nextBeatmap;
                 rulesetInfo = nextRuleset;
-                workingBeatmap = null;
-                mods = nextMods;
-                modsKey = nextModsKey;
-                timedDifficultyTask = difficultyCache.GetTimedDifficultyAttributesAsync(nextBeatmap, nextRuleset, nextMods);
-                needsCalculation = true;
+                apiMods = nextApiMods.ToArray();
+                mods = apiMods.Select(mod => mod.ToMod(ruleset)).ToArray();
+                scoreInfo = null;
+                timedDifficultyTask = difficultyCache.GetTimedDifficultyAttributesAsync(nextBeatmap, nextRuleset, mods);
             }
 
             return true;
         }
-
-        private static ScoreInfo createScoreInfo(FrameHeader header, SpectatorState state, WorkingBeatmap beatmap, RulesetInfo ruleset, Mod[] mods)
-            => new ScoreInfo(beatmap.BeatmapInfo, ruleset)
-            {
-                Mods = mods,
-                TotalScore = header.TotalScore,
-                TotalScoreWithoutMods = header.TotalScoreWithoutMods ?? header.TotalScore,
-                Accuracy = header.Accuracy,
-                Combo = header.Combo,
-                MaxCombo = header.MaxCombo,
-                Statistics = header.Statistics,
-                MaximumStatistics = state.MaximumStatistics,
-            };
 
         private void reset(SpectatorState? state)
         {
@@ -256,12 +248,12 @@ namespace osu.Game.Tournament.Screens.Gameplay.GameplayPlayerArea
             frames.Clear();
             beatmap = null;
             rulesetInfo = null;
-            workingBeatmap = null;
+            scoreInfo = null;
+            ruleset = null;
             mods = null;
-            modsKey = null;
+            apiMods = null;
             timedDifficultyTask = null;
-            currentFrameIndex = -1;
-            needsCalculation = true;
+            lastCalculatedFrame = null;
             PerformancePoints.Value = 0;
         }
 
